@@ -148,38 +148,25 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
     float v6; // [esp+20h] [ebp-108Ch]
     float v7; // [esp+24h] [ebp-1088h]
     char v8; // [esp+2Bh] [ebp-1081h]
-    float v9; // [esp+2Ch] [ebp-1080h] BYREF
-    float v10; // [esp+30h] [ebp-107Ch] BYREF
-    float v11; // [esp+34h] [ebp-1078h] BYREF
+    float v9[3]; // [esp+2Ch] [ebp-1080h] BYREF
     float v12; // [esp+38h] [ebp-1074h]
     char v13; // [esp+3Fh] [ebp-106Dh]
     float v14; // [esp+40h] [ebp-106Ch]
     float v15; // [esp+44h] [ebp-1068h]
     float v16; // [esp+48h] [ebp-1064h]
     float v17; // [esp+4Ch] [ebp-1060h]
-    float v18; // [esp+50h] [ebp-105Ch] BYREF
-    float v19; // [esp+54h] [ebp-1058h] BYREF
-    float v20; // [esp+58h] [ebp-1054h] BYREF
+    float v18[3]; // [esp+50h] [ebp-105Ch] BYREF
     float v21; // [esp+5Ch] [ebp-1050h] BYREF
     float v22; // [esp+60h] [ebp-104Ch] BYREF
     float v23; // [esp+64h] [ebp-1048h] BYREF
     char *src; // [esp+68h] [ebp-1044h]
     char dest[2052]; // [esp+6Ch] [ebp-1040h] BYREF
-    float v26; // [esp+870h] [ebp-83Ch] BYREF
-    float v27; // [esp+874h] [ebp-838h] BYREF
-    float v28; // [esp+878h] [ebp-834h] BYREF
-    float v29; // [esp+87Ch] [ebp-830h] BYREF
-    float v30; // [esp+880h] [ebp-82Ch] BYREF
-    float v31; // [esp+884h] [ebp-828h] BYREF
-    float out; // [esp+888h] [ebp-824h] BYREF
-    float v33; // [esp+88Ch] [ebp-820h] BYREF
-    float v34; // [esp+890h] [ebp-81Ch] BYREF
-    char nptr; // [esp+894h] [ebp-818h] BYREF
-    _BYTE v36[3]; // [esp+895h] [ebp-817h] BYREF
+    float v26[3]; // [esp+870h] [ebp-83Ch] BYREF
+    float v29[3]; // [esp+87Ch] [ebp-830h] BYREF
+    float out[3]; // [esp+888h] [ebp-824h] BYREF
+    char nptr[2048]; // [esp+894h] [ebp-818h] BYREF
     float v37; // [esp+109Ch] [ebp-10h]
-    float in; // [esp+10A0h] [ebp-Ch] BYREF
-    float v39; // [esp+10A4h] [ebp-8h] BYREF
-    float v40; // [esp+10A8h] [ebp-4h] BYREF
+    float in[3]; // [esp+10A0h] [ebp-Ch] BYREF
 
     if ( !params
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_bsp_load_obj.cpp", 4802, 0, "%s", "params") )
@@ -194,25 +181,25 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
     v21 = 0.0f;
     v22 = 0.0f;
     v23 = 0.0f;
-    v26 = 0.0f;
-    v27 = 0.0f;
-    v28 = 0.0f;
+    v26[0] = 0.0f;
+    v26[1] = 0.0f;
+    v26[2] = 0.0f;
     v17 = 0.0f;
-    in = 0.0f;
-    v39 = 0.0f;
-    v40 = 0.0f;
+    in[0] = 0.0f;
+    in[1] = 0.0f;
+    in[2] = 0.0f;
     v14 = 0.0f;
-    out = 0.0f;
-    v33 = 0.0f;
-    v34 = 0.0f;
+    out[0] = 0.0f;
+    out[1] = 0.0f;
+    out[2] = 0.0f;
     v6 = 0.0f;
-    v9 = 0.0f;
-    v10 = 0.0f;
-    v11 = 0.0f;
+    v9[0] = 0.0f;
+    v9[1] = 0.0f;
+    v9[2] = 0.0f;
     v13 = 0;
-    v18 = 0.0f;
-    v19 = 0.0f;
-    v20 = 0.0f;
+    v18[0] = 0.0f;
+    v18[1] = 0.0f;
+    v18[2] = 0.0f;
     v15 = 0.0f;
     while ( 1 )
     {
@@ -225,13 +212,13 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
             src = (char *)Com_Parse((const char **)&text);
             if ( !*src || *src == 125 )
                 break;
-            I_strncpyz(&nptr, src, 2048);
+            I_strncpyz(nptr, src, 2048);
             if ( I_stricmp(dest, "newsun") )
             {
                 if ( I_stricmp(dest, "exposure") )
                 {
                     if ( !I_stricmp(dest, "skyboxhdrscale") )
-                        v7 = atof(&nptr);
+                        v7 = atof(nptr);
                     if ( I_stricmp(dest, "ambient") )
                     {
                         if ( I_stricmp(dest, "_color") )
@@ -263,20 +250,20 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
                                                                             if ( I_stricmp(dest, "treeScatterIntensity") )
                                                                             {
                                                                                 if ( !I_stricmp(dest, "treeScatterAmount") )
-                                                                                    params->treeScatterAmount = atof(&nptr);
+                                                                                    params->treeScatterAmount = atof(nptr);
                                                                             }
                                                                             else
                                                                             {
-                                                                                params->treeScatterIntensity = atof(&nptr);
+                                                                                params->treeScatterIntensity = atof(nptr);
                                                                             }
                                                                         }
                                                                         else
                                                                         {
                                                                             s_world.skyBoxModel = (const char *)Hunk_Alloc(
-                                                                                                                                                        &v36[strlen(&nptr)] - v36 + 1,
+                                                                                                                                                        &nptr[strlen(nptr) + 1] - &nptr[1] + 1,
                                                                                                                                                         "R_ParseSunLight",
                                                                                                                                                         21);
-                                                                            p_nptr = &nptr;
+                                                                            p_nptr = nptr;
                                                                             skyBoxModel = (char *)s_world.skyBoxModel;
                                                                             do
                                                                             {
@@ -288,73 +275,73 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
                                                                     }
                                                                     else
                                                                     {
-                                                                        I_strncpyz(params->name, &nptr, 64);
+                                                                        I_strncpyz(params->name, nptr, 64);
                                                                     }
                                                                 }
                                                                 else
                                                                 {
-                                                                    sscanf(&nptr, "%f %f %f", &v21, &v22, &v23);
+                                                                    sscanf(nptr, "%f %f %f", &v21, &v22, &v23);
                                                                 }
                                                             }
                                                             else
                                                             {
-                                                                v15 = atof(&nptr);
+                                                                v15 = atof(nptr);
                                                             }
                                                         }
                                                         else
                                                         {
-                                                            sscanf(&nptr, "%f %f %f", &v18, &v19, &v20);
+                                                            sscanf(nptr, "%f %f %f", &v18[0], &v18[1], &v18[2]);
                                                         }
                                                     }
                                                     else
                                                     {
-                                                        v14 = atof(&nptr);
+                                                        v14 = atof(nptr);
                                                     }
                                                 }
                                                 else
                                                 {
-                                                    sscanf(&nptr, "%f %f %f", &in, &v39, &v40);
+                                                    sscanf(nptr, "%f %f %f", &in[0], &in[1], &in[2]);
                                                 }
                                             }
                                             else
                                             {
-                                                sscanf(&nptr, "%f %f %f", &v9, &v10, &v11);
+                                                sscanf(nptr, "%f %f %f", &v9[0], &v9[1], &v9[2]);
                                                 v13 = 1;
                                             }
                                         }
                                         else
                                         {
-                                            v6 = atof(&nptr);
+                                            v6 = atof(nptr);
                                         }
                                     }
                                     else
                                     {
-                                        sscanf(&nptr, "%f %f %f", &out, &v33, &v34);
+                                        sscanf(nptr, "%f %f %f", &out[0], &out[1], &out[2]);
                                     }
                                 }
                                 else
                                 {
-                                    sscanf(&nptr, "%f %f %f", &v29, &v30, &v31);
+                                    sscanf(nptr, "%f %f %f", &v29[0], &v29[1], &v29[2]);
                                 }
                             }
                             else
                             {
-                                v37 = atof(&nptr);
+                                v37 = atof(nptr);
                             }
                         }
                         else
                         {
-                            sscanf(&nptr, "%f %f %f", &v26, &v27, &v28);
+                            sscanf(nptr, "%f %f %f", &v26[0], &v26[1], &v26[2]);
                         }
                     }
                     else
                     {
-                        v17 = atof(&nptr);
+                        v17 = atof(nptr);
                     }
                 }
                 else
                 {
-                    v12 = atof(&nptr);
+                    v12 = atof(nptr);
                     if ( v12 < 0.0 )
                     {
                         v12 = 0.0f;
@@ -370,59 +357,59 @@ char *__cdecl R_ParseSunLight(SunLightParseParams *params, char *text)
     }
     if ( v8 == 1 )
     {
-        ColorSRGBtoLinear(&in, &in);
-        params->sunSettings[0].ambientColor[0] = in;
-        params->sunSettings[0].ambientColor[1] = v39;
-        params->sunSettings[0].ambientColor[2] = v40;
+        ColorSRGBtoLinear(in, in);
+        params->sunSettings[0].ambientColor[0] = in[0];
+        params->sunSettings[0].ambientColor[1] = in[1];
+        params->sunSettings[0].ambientColor[2] = in[2];
         params->sunSettings[0].ambientColor[3] = v14;
-        ColorSRGBtoLinear(&out, &out);
-        params->sunSettings[0].sunDiffuseColor[0] = out;
-        params->sunSettings[0].sunDiffuseColor[1] = v33;
-        params->sunSettings[0].sunDiffuseColor[2] = v34;
+        ColorSRGBtoLinear(out, out);
+        params->sunSettings[0].sunDiffuseColor[0] = out[0];
+        params->sunSettings[0].sunDiffuseColor[1] = out[1];
+        params->sunSettings[0].sunDiffuseColor[2] = out[2];
         params->sunSettings[0].sunDiffuseColor[3] = v6;
         if ( v13 )
         {
-            ColorSRGBtoLinear(&v9, &v9);
-            params->sunSettings[0].sunSpecularColor[0] = v9;
-            params->sunSettings[0].sunSpecularColor[1] = v10;
-            params->sunSettings[0].sunSpecularColor[2] = v11;
+            ColorSRGBtoLinear(v9, v9);
+            params->sunSettings[0].sunSpecularColor[0] = v9[0];
+            params->sunSettings[0].sunSpecularColor[1] = v9[1];
+            params->sunSettings[0].sunSpecularColor[2] = v9[2];
         }
         else
         {
-            params->sunSettings[0].sunSpecularColor[0] = out;
-            params->sunSettings[0].sunSpecularColor[1] = v33;
-            params->sunSettings[0].sunSpecularColor[2] = v34;
+            params->sunSettings[0].sunSpecularColor[0] = out[0];
+            params->sunSettings[0].sunSpecularColor[1] = out[1];
+            params->sunSettings[0].sunSpecularColor[2] = out[2];
         }
         params->sunSettings[0].sunSpecularColor[3] = v6;
-        ColorSRGBtoLinear(&v18, &v18);
-        params->sunSettings[0].groundColor[0] = v18;
-        params->sunSettings[0].groundColor[1] = v19;
-        params->sunSettings[0].groundColor[2] = v20;
+        ColorSRGBtoLinear(v18, v18);
+        params->sunSettings[0].groundColor[0] = v18[0];
+        params->sunSettings[0].groundColor[1] = v18[1];
+        params->sunSettings[0].groundColor[2] = v18[2];
         params->sunSettings[0].groundColor[3] = v15;
     }
     else
     {
-        ColorNormalize(&v26, &v26);
-        ColorNormalize(&v29, &v29);
-        ColorNormalize(&out, &out);
-        ColorSRGBtoLinear(&v26, &v26);
-        ColorSRGBtoLinear(&v29, &v29);
-        ColorSRGBtoLinear(&out, &out);
-        params->sunSettings[0].ambientColor[0] = v26;
-        params->sunSettings[0].ambientColor[1] = v27;
-        params->sunSettings[0].ambientColor[2] = v28;
+        ColorNormalize(v26, v26);
+        ColorNormalize(v29, v29);
+        ColorNormalize(out, out);
+        ColorSRGBtoLinear(v26, v26);
+        ColorSRGBtoLinear(v29, v29);
+        ColorSRGBtoLinear(out, out);
+        params->sunSettings[0].ambientColor[0] = v26[0];
+        params->sunSettings[0].ambientColor[1] = v26[1];
+        params->sunSettings[0].ambientColor[2] = v26[2];
         params->sunSettings[0].ambientColor[3] = v17;
-        params->sunSettings[0].sunDiffuseColor[0] = out;
-        params->sunSettings[0].sunDiffuseColor[1] = v33;
-        params->sunSettings[0].sunDiffuseColor[2] = v34;
+        params->sunSettings[0].sunDiffuseColor[0] = out[0];
+        params->sunSettings[0].sunDiffuseColor[1] = out[1];
+        params->sunSettings[0].sunDiffuseColor[2] = out[2];
         params->sunSettings[0].sunDiffuseColor[3] = (float)(1.0 - v37) * (float)(v6 - v17);
-        params->sunSettings[0].sunSpecularColor[0] = out;
-        params->sunSettings[0].sunSpecularColor[1] = v33;
-        params->sunSettings[0].sunSpecularColor[2] = v34;
+        params->sunSettings[0].sunSpecularColor[0] = out[0];
+        params->sunSettings[0].sunSpecularColor[1] = out[1];
+        params->sunSettings[0].sunSpecularColor[2] = out[2];
         params->sunSettings[0].sunSpecularColor[3] = (float)(1.0 - v37) * (float)(v6 - v17);
-        params->sunSettings[0].groundColor[0] = v29;
-        params->sunSettings[0].groundColor[1] = v30;
-        params->sunSettings[0].groundColor[2] = v31;
+        params->sunSettings[0].groundColor[0] = v29[0];
+        params->sunSettings[0].groundColor[1] = v29[1];
+        params->sunSettings[0].groundColor[2] = v29[2];
         params->sunSettings[0].groundColor[3] = (float)(v6 - v17) * v37;
     }
     params->sunSettings[0].angles[0] = v21;

@@ -342,7 +342,7 @@ void __cdecl Cmd_ExecSafeDvarSingleCommmandOnly(
     int i; // [esp+4h] [ebp-300Ch]
     char s0[4096]; // [esp+8h] [ebp-3008h] BYREF
     char s1[4096]; // [esp+1008h] [ebp-2008h] BYREF
-    char v8; // [esp+2008h] [ebp-1008h] BYREF
+    char v8[4096]; // [esp+2008h] [ebp-1008h] BYREF
 
     if ( !dvarWhitelistArray
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\qcommon\\cmd.cpp", 497, 0, "%s", "dvarWhitelistArray") )
@@ -351,11 +351,11 @@ void __cdecl Cmd_ExecSafeDvarSingleCommmandOnly(
     }
     if ( dvarWhitelistArray )
     {
-        v8 = 0;
+        v8[0] = 0;
         s1[0] = 0;
         s0[0] = 0;
-        sscanf(singleCommand, "%s %s %s", s0, s1, &v8);
-        if ( s0[0] && s1[0] && v8 && !I_stricmp(s0, "set") )
+        sscanf(singleCommand, "%s %s %s", s0, s1, v8);
+        if ( s0[0] && s1[0] && v8[0] && !I_stricmp(s0, "set") )
         {
             for ( i = 0; dvarWhitelistArray[i]; ++i )
             {

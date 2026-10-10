@@ -563,11 +563,15 @@ char CL_CompositeDrawEmblemPhysical(
     {
         CompositeEmblemLayer *layer = &layers[i];
         GfxImage *image;
-        float outlineSize = -0.5f;
+        float outlineSize = 0.0f;
+        // The quad's texture coordinates. IDA split them across outlineSize, image, layer and
+        // coords[0..2] (all floats on the i386 stack), so UV_Transform got &outlineSize.
+        float uv[4][2];
 
-        coords[0][0] = 0.5f; coords[0][1] = -0.5f;
-        coords[1][0] = -0.5f; coords[1][1] = 0.5f;
-        coords[2][0] = 0.5f;
+        uv[0][0] = -0.5f; uv[0][1] = -0.5f;
+        uv[1][0] = 0.5f; uv[1][1] = -0.5f;
+        uv[2][0] = 0.5f; uv[2][1] = 0.5f;
+        uv[3][0] = -0.5f; uv[3][1] = 0.5f;
 
         image = BG_EmblemsGetIconImage(layer->icon);
 
@@ -599,15 +603,15 @@ char CL_CompositeDrawEmblemPhysical(
             if (layer->flip)
                 matRotate[2][0] = -matRotate[2][0];
 
-            UV_Transform(matRotate, &outlineSize);
-            UV_Transform(matRotate, (float *)&layer->pos);
-            UV_Transform(matRotate, &coords[0][1]);
-            UV_Transform(matRotate, &coords[1][1]);
+            UV_Transform(matRotate, uv[0]);
+            UV_Transform(matRotate, uv[1]);
+            UV_Transform(matRotate, uv[2]);
+            UV_Transform(matRotate, uv[3]);
 
             for (int v = 0; v < 4; ++v)
             {
-                verts[v].st[0] = (&outlineSize)[v * 2 + 0];
-                verts[v].st[1] = (&outlineSize)[v * 2 + 1];
+                verts[v].st[0] = uv[v][0];
+                verts[v].st[1] = uv[v][1];
             }
 
             {

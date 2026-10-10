@@ -2771,6 +2771,7 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
     __int64 v162; // [esp+464h] [ebp-16Ch]
     float v163[3]; // [esp+46Ch] [ebp-164h] BYREF
     float4 tileUV; // [esp+478h] [ebp-158h] BYREF
+    float4 lanes; // the 16-byte stores below began 4 bytes short of a float4: on i386 lane 3 went to the next local
     float4 worldUV; // [esp+488h] [ebp-148h]
     int worldV; // [esp+498h] [ebp-138h]
     int worldU; // [esp+49Ch] [ebp-134h]
@@ -2907,12 +2908,20 @@ void    R_WaterSimulationSkinMesh(const WaterSimulationCmd *cmd)
                         ((float)(int)worldUV.u[1]),
                         (0.0),
                         (0.0),
-                        (float4 *)&tileUV.unitVec[1]);
+                        &lanes);
+                    tileUV.v[1] = lanes.v[0];
+                    tileUV.v[2] = lanes.v[1];
+                    tileUV.v[3] = lanes.v[2];
+                    worldUV.v[0] = lanes.v[3];
                     v162 = (unsigned int)v;
                     *(float *)&y = (float)(unsigned int)v;
                     v161 = (unsigned int)worldU;
                     *(float *)&x = (float)(unsigned int)worldU;
-                    Float4LoadFloats(x, y, (0.0), (0.0), (float4 *)v163);
+                    Float4LoadFloats(x, y, (0.0), (0.0), &lanes);
+                    v163[0] = lanes.v[0];
+                    v163[1] = lanes.v[1];
+                    v163[2] = lanes.v[2];
+                    tileUV.v[0] = lanes.v[3];
                     *(float4 *)&a[4] = *ReadValue(&v160, worldV - 1, worldUV.u[3] - 1, (unsigned int)Ptr32_Encode(dest));
                     v157 = *(_QWORD *)&a[4];
                     v158 = *(float *)&a[12];

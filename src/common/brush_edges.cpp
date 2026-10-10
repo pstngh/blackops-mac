@@ -1165,15 +1165,9 @@ int __cdecl ChooseEdgeToRemove(
     SimplePlaneIntersection *resultCycle[1024]; // [esp+1Ch] [ebp-3020h] BYREF
     SimplePlaneIntersection *v11[1024]; // [esp+101Ch] [ebp-2020h] BYREF
     SimplePlaneIntersection *v12[1025]; // [esp+201Ch] [ebp-1020h] BYREF
-    char v13; // [esp+3020h] [ebp-1Ch]
-    char v14; // [esp+3021h] [ebp-1Bh]
-    char v15; // [esp+3022h] [ebp-1Ah]
-    int resultCycleCount; // [esp+3024h] [ebp-18h] BYREF
-    unsigned int ptCount; // [esp+3028h] [ebp-14h] BYREF
-    unsigned int v18; // [esp+302Ch] [ebp-10h] BYREF
-    float perimiter1; // [esp+3030h] [ebp-Ch]
-    float perimiter2; // [esp+3034h] [ebp-8h]
-    float v21; // [esp+3038h] [ebp-4h]
+    char v13[3]; // [esp+3020h] [ebp-1Ch]
+    int resultCycleCount[3]; // [esp+3024h] [ebp-18h] BYREF
+    float perimiter[3]; // [esp+3030h] [ebp-Ch]
 
     CycleBFS = FindCycleBFS(
                              basePlane,
@@ -1183,7 +1177,7 @@ int __cdecl ChooseEdgeToRemove(
                              edges[1],
                              connectingPlane,
                              (const SimplePlaneIntersection **)resultCycle,
-                             &resultCycleCount);
+                             &resultCycleCount[0]);
     v7 = FindCycleBFS(
                  basePlane,
                  pts,
@@ -1192,7 +1186,7 @@ int __cdecl ChooseEdgeToRemove(
                  edges[2],
                  connectingPlane,
                  (const SimplePlaneIntersection **)v11,
-                 (int *)&ptCount);
+                 &resultCycleCount[1]);
     v8 = FindCycleBFS(
                  basePlane,
                  pts,
@@ -1201,7 +1195,7 @@ int __cdecl ChooseEdgeToRemove(
                  edges[2],
                  connectingPlane,
                  (const SimplePlaneIntersection **)v12,
-                 (int *)&v18);
+                 &resultCycleCount[2]);
     if ( (!CycleBFS || !v7 || !v8)
         && !Assert_MyHandler(
                     "c:\\projects_pc\\cod\\codsrc\\src\\qcommon\\../../common/brush_edges.cpp",
@@ -1212,14 +1206,14 @@ int __cdecl ChooseEdgeToRemove(
     {
         __debugbreak();
     }
-    perimiter1 = CyclePerimiter((const SimplePlaneIntersection **)resultCycle, resultCycleCount);
-    perimiter2 = CyclePerimiter((const SimplePlaneIntersection **)v11, ptCount);
-    v21 = CyclePerimiter((const SimplePlaneIntersection **)v12, v18);
-    v13 = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)resultCycle, resultCycleCount);
-    v14 = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)v11, ptCount);
-    v15 = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)v12, v18);
-    v9 = CycleLess(v13, v14, perimiter1, perimiter2, resultCycleCount, ptCount);
-    if ( CycleLess(*(&v13 + v9), v15, *(&perimiter1 + v9), v21, *(&resultCycleCount + v9), v18) )
+    perimiter[0] = CyclePerimiter((const SimplePlaneIntersection **)resultCycle, resultCycleCount[0]);
+    perimiter[1] = CyclePerimiter((const SimplePlaneIntersection **)v11, resultCycleCount[1]);
+    perimiter[2] = CyclePerimiter((const SimplePlaneIntersection **)v12, resultCycleCount[2]);
+    v13[0] = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)resultCycle, resultCycleCount[0]);
+    v13[1] = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)v11, resultCycleCount[1]);
+    v13[2] = TestConvexWithoutNearPoints((const SimplePlaneIntersection **)v12, resultCycleCount[2]);
+    v9 = CycleLess(v13[0], v13[1], perimiter[0], perimiter[1], resultCycleCount[0], resultCycleCount[1]);
+    if ( CycleLess(v13[v9], v13[2], perimiter[v9], perimiter[2], resultCycleCount[v9], resultCycleCount[2]) )
         v9 = 2;
     return 2 - v9;
 }
@@ -1234,7 +1228,7 @@ int __cdecl PartitionEdges(
                 int *partition)
 {
     const SimplePlaneIntersection *v8; // [esp+0h] [ebp-1020h]
-    SimplePlaneIntersection *resultCycle; // [esp+8h] [ebp-1018h] BYREF
+    SimplePlaneIntersection *resultCycle[1025]; // [esp+8h] [ebp-1018h] BYREF
     int v10; // [esp+100Ch] [ebp-14h]
     int i; // [esp+1010h] [ebp-10h]
     int resultCycleCount; // [esp+1014h] [ebp-Ch] BYREF
@@ -1255,7 +1249,7 @@ int __cdecl PartitionEdges(
                          edges[partition[i] - 1],
                          edges[v14],
                          connectingPlane,
-                         (const SimplePlaneIntersection **)&resultCycle,
+                         (const SimplePlaneIntersection **)resultCycle,
                          &resultCycleCount) )
             {
                 if ( i < v10 - 1 )

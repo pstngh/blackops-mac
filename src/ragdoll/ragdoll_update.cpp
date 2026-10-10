@@ -1774,9 +1774,7 @@ void    Ragdoll_DebugRender(RagdollBody *body)
     environment_rigid_body *envRigBody; // eax
     phys_vec3 v4; // [esp-2Ch] [ebp-6Ch] BYREF
     float v5; // [esp-10h] [ebp-50h]
-    unsigned int v6[2]; // [esp-Ch] [ebp-4Ch] BYREF
-    float z; // [esp-4h] [ebp-44h]
-    phys_vec3 world_pos; // [esp+0h] [ebp-40h]
+    phys_vec3 v6; // [esp-Ch] [ebp-4Ch] BYREF (IDA: v6[2], z, world_pos.x)
     environment_rigid_body *v9; // [esp+10h] [ebp-30h]
     environment_rigid_body **v10; // [esp+14h] [ebp-2Ch]
     int rigidBody; // [esp+18h] [ebp-28h]
@@ -1825,17 +1823,17 @@ void    Ragdoll_DebugRender(RagdollBody *body)
     else if ( !body->debug_hang_point )
     {
         v9 = *v10;
-        v6[0] = LODWORD(v9->m_mat.w.x);
-        v6[1] = LODWORD(v9->m_mat.w.y);
-        z = v9->m_mat.w.z;
-        world_pos.x = v9->m_mat.w.w;
-        v5 = z;
-        z = z + 60.0;
+        v6.x = v9->m_mat.w.x;
+        v6.y = v9->m_mat.w.y;
+        v6.z = v9->m_mat.w.z;
+        v6.w = v9->m_mat.w.w;
+        v5 = v6.z;
+        v6.z = v6.z + 60.0;
         envRigBody = phys_sys::get_environment_rigid_body();
         body->debug_hang_point = phys_sys::create_rbc_point(v9, envRigBody, 0);
         memset(&v4, 0, 12);
         //rigid_body_constraint_point::set(body->debug_hang_point, &v4, (const phys_vec3 *)v6);
-        body->debug_hang_point->set(&v4, (const phys_vec3 *)v6);
+        body->debug_hang_point->set(&v4, &v6);
         //rigid_body::set_flag(v9, 0x40u, 1);
         v9->set_flag(0x40, 1);
     }

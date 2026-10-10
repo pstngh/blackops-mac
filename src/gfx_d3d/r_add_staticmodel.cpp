@@ -948,23 +948,21 @@ void __cdecl R_DumpStaticModelLodInfo(const GfxStaticModelDrawInst *smodelDrawIn
 
 void __cdecl R_StaticModelWriteInfoHeader(int fileHandle)
 {
-    char dest; // [esp+10h] [ebp-1008h] BYREF
-    _BYTE v2[4103]; // [esp+11h] [ebp-1007h] BYREF
+    char dest[4104]; // [esp+10h] [ebp-1008h] BYREF
 
-    *(unsigned int *)&v2[4099] = 4096;
+    *(unsigned int *)&dest[4100] = 4096;
     Com_sprintf(
-        &dest,
+        dest,
         0x1000u,
         "index,name,radius,numLods,lodDist,lodPixels720p,1PixelDist720p,scaledDist,posx,posy,posz,pixels\n");
-    FS_Write(&dest, &v2[strlen(&dest)] - v2, fileHandle);
+    FS_Write(dest, &dest[strlen(dest) + 1] - &dest[1], fileHandle);
 }
 
 
 void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst *smodelDrawInst, float dist)
 {
     long double len; // [esp+4Ch] [ebp-1028h]
-    char dest; // [esp+5Ch] [ebp-1018h] BYREF
-    _BYTE v5[4103]; // [esp+5Dh] [ebp-1017h] BYREF
+    char dest[4104]; // [esp+5Ch] [ebp-1018h] BYREF
     float v6; // [esp+1064h] [ebp-10h]
     XModel *model; // [esp+1068h] [ebp-Ch]
     float v8; // [esp+106Ch] [ebp-8h]
@@ -979,7 +977,7 @@ void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst
     //}
     static float radius2pixels = 720.0f / tanf(22.5f); // KISAKTODO: should this be in radians?
 
-    *(unsigned int *)&v5[4099] = 4096;
+    *(unsigned int *)&dest[4100] = 4096;
     model = smodelDrawInst->model;
     if ( !model
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\gfx_d3d\\r_add_staticmodel.cpp", 826, 0, "%s", "xmodel") )
@@ -1022,7 +1020,7 @@ void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst
     ++g_dumpStaticModelCount;
     if ( smodelDrawInst->placement.scale > 0.0 && dist > 0.0 )
         Com_sprintf(
-            &dest,
+            dest,
             0x1000u,
             "%d,%s,%.1f,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
             g_dumpStaticModelCount,
@@ -1037,7 +1035,7 @@ void __cdecl R_StaticModelWriteInfo(int fileHandle, const GfxStaticModelDrawInst
             smodelDrawInst->placement.origin[1],
             smodelDrawInst->placement.origin[2],
             (float)(v8 / (float)(dist / smodelDrawInst->placement.scale)));
-    FS_Write(&dest, &v5[strlen(&dest)] - v5, fileHandle);
+    FS_Write(dest, &dest[strlen(dest) + 1] - &dest[1], fileHandle);
 }
 
 void R_EndDumpStaticModelLodInfo()

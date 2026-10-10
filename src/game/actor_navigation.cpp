@@ -6546,18 +6546,19 @@ double  CustomSearchInfo_FindPathWithWidth::EvaluateHeuristic(
     // aislop
     // 
     // Compute delta vector from successor to goal
-    float dx = pSuccessor->constant.vOrigin[0] - vGoalPos[0];
-    float dy = pSuccessor->constant.vOrigin[1] - vGoalPos[1];
+    float delta[2];
+    delta[0] = pSuccessor->constant.vOrigin[0] - vGoalPos[0];
+    delta[1] = pSuccessor->constant.vOrigin[1] - vGoalPos[1];
 
     // Project delta onto the "perp" vector, subtract width, scale
-    float proj = (perp[0] * dx + perp[1] * dy) - width;
+    float proj = (perp[0] * delta[0] + perp[1] * delta[1]) - width;
     float factor = expf(fabsf(proj) * 0.0069077001f); // approximate exponential decay
 
     // Store factor in successor costFactor
     pSuccessor->transient.costFactor = factor;
 
     // Return 2D distance to goal multiplied by the factor
-    return Vec2Length(&dx) * factor;
+    return Vec2Length(delta) * factor;
 }
 
 double __thiscall CustomSearchInfo_FindPathWithLOS::EvaluateHeuristic(

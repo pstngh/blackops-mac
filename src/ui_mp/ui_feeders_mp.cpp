@@ -2343,7 +2343,7 @@ char __cdecl UI_Project_FeederItemColor(
             if ( column && column != 2 )
                 Vec4Copy(colorWhite, color);
             else
-                Vec4Copy((const float *)&sharedUiInfo.itemNum, color);
+                Vec4Copy(sharedUiInfo.itemColor, color);
             result = 1;
             break;
         case 58:
@@ -2358,7 +2358,7 @@ char __cdecl UI_Project_FeederItemColor(
         case 66:
         case 67:
             if ( !column || column == 2 || column == 4 )
-                Vec4Copy((const float *)&sharedUiInfo.itemNum, color);
+                Vec4Copy(sharedUiInfo.itemColor, color);
             result = 1;
             break;
         case 68:
@@ -2408,7 +2408,7 @@ char __cdecl UI_Project_FeederItemColor(
             if ( column && column != 2 )
                 Vec4Copy(colorWhite, color);
             else
-                Vec4Copy((const float *)&sharedUiInfo.itemNum, color);
+                Vec4Copy(sharedUiInfo.itemColor, color);
             result = 1;
             break;
         case 92:

@@ -2147,7 +2147,7 @@ int __cdecl UI_OwnerDrawWidth(int ownerDraw, Font_s *font, float scale)
     const char **ServerFilter; // eax
     char *v7; // eax
     char *v8; // eax
-    int filter; // [esp+8h] [ebp-Ch] BYREF
+    const char *filter[2]; // [esp+8h] [ebp-Ch] BYREF
     const char *s; // [esp+10h] [ebp-4h]
 
     s = 0;
@@ -2166,7 +2166,7 @@ int __cdecl UI_OwnerDrawWidth(int ownerDraw, Font_s *font, float scale)
     case 222:
         if ((unsigned int)ui_serverFilterType >= 2)
             ui_serverFilterType = 0;
-        ServerFilter = UI_GetServerFilter((const char **)&filter, ui_serverFilterType);
+        ServerFilter = UI_GetServerFilter(filter, ui_serverFilterType);
         v7 = va("EXE_SERVERFILTER %s", *ServerFilter);
         s = SEH_LocalizeTextMessage(v7, "server filter", LOCMSG_SAFE);
         break;

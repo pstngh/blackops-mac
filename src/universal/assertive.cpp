@@ -199,8 +199,7 @@ void __cdecl LoadMapFilesForDir(const char *dir)
     char *p_file; // [esp+18h] [ebp-1160h]
     char *cFileName; // [esp+1Ch] [ebp-115Ch]
     _WIN32_FIND_DATAA FindFileData; // [esp+20h] [ebp-1158h] BYREF
-    char file; // [esp+160h] [ebp-1018h] BYREF
-    _BYTE v9[3]; // [esp+161h] [ebp-1017h] BYREF
+    char file[2052]; // [esp+160h] [ebp-1018h] BYREF
     unsigned int baseAddress; // [esp+964h] [ebp-814h]
     _iobuf *fp; // [esp+968h] [ebp-810h]
     HANDLE hFindFile; // [esp+96Ch] [ebp-80Ch]
@@ -225,20 +224,20 @@ void __cdecl LoadMapFilesForDir(const char *dir)
             if ( baseAddress )
             {
                 v3 = Sys_DefaultInstallPath();
-                sprintf(&file, "%s\\%s", v3, FindFileData.cFileName);
-                fp = fopen(&file, "rb");
+                sprintf(file, "%s\\%s", v3, FindFileData.cFileName);
+                fp = fopen(file, "rb");
                 if ( fp )
                 {
                     cFileName = FindFileData.cFileName;
-                    p_file = &file;
+                    p_file = file;
                     do
                     {
                         v4 = *cFileName;
                         *p_file++ = *cFileName++;
                     }
                     while ( v4 );
-                    FindFileData.cAlternateFileName[&v9[strlen(&file)] - v9 + 12] = 0;
-                    ParseMapFile(fp, baseAddress, &file);
+                    file[strlen(file) - 4] = 0;
+                    ParseMapFile(fp, baseAddress, file);
                     fclose(fp);
                 }
             }

@@ -864,18 +864,14 @@ char __cdecl Xmodel_ParsePhysicsBrush(
     unsigned int sideCount; // [esp+138h] [ebp-69C0h] BYREF
     unsigned int n; // [esp+13Ch] [ebp-69BCh]
     _DWORD dst[33]; // [esp+140h] [ebp-69B8h] BYREF
-    float v29; // [esp+1C4h] [ebp-6934h]
-    float v30; // [esp+1C8h] [ebp-6930h]
-    float v31; // [esp+1CCh] [ebp-692Ch]
+    float v29[3]; // [esp+1C4h] [ebp-6934h]
     float plane[128]; // [esp+1D0h] [ebp-6928h] BYREF
     SimplePlaneIntersection OutPts[1024]; // [esp+3D0h] [ebp-6728h] BYREF
     int InPtCount; // [esp+63D0h] [ebp-728h]
     unsigned int j; // [esp+63D4h] [ebp-724h]
     _DWORD v36[32]; // [esp+63D8h] [ebp-720h] BYREF
     int basePlaneIndex; // [esp+6458h] [ebp-6A0h]
-    float v38; // [esp+645Ch] [ebp-69Ch]
-    float v39; // [esp+6460h] [ebp-698h]
-    float v40; // [esp+6464h] [ebp-694h]
+    float v38[3]; // [esp+645Ch] [ebp-69Ch]
     adjacencyWinding_t optionalOutWinding[32]; // [esp+6468h] [ebp-690h] BYREF
     int v42; // [esp+6AE8h] [ebp-10h]
     char *str; // [esp+6AECh] [ebp-Ch]
@@ -968,24 +964,24 @@ char __cdecl Xmodel_ParsePhysicsBrush(
         return 0;
     InPtCount = GetPlaneIntersections((const float (*)[4])plane, sideCount, OutPts, 0x400u);
     v44 = 0;
-    v29 = OutPts[0].xyz[0];
-    v30 = OutPts[0].xyz[1];
-    v31 = OutPts[0].xyz[2];
-    v38 = OutPts[0].xyz[0];
-    v39 = OutPts[0].xyz[1];
-    v40 = OutPts[0].xyz[2];
+    v29[0] = OutPts[0].xyz[0];
+    v29[1] = OutPts[0].xyz[1];
+    v29[2] = OutPts[0].xyz[2];
+    v38[0] = OutPts[0].xyz[0];
+    v38[1] = OutPts[0].xyz[1];
+    v38[2] = OutPts[0].xyz[2];
     for (j = 1; j < InPtCount; ++j)
     {
         for (k = 0; k < 3; ++k)
         {
-            if (*(&v29 + k) <= OutPts[j].xyz[k])
+            if (v29[k] <= OutPts[j].xyz[k])
             {
-                if (OutPts[j].xyz[k] > *(&v38 + k))
-                    *(&v38 + k) = OutPts[j].xyz[k];
+                if (OutPts[j].xyz[k] > v38[k])
+                    v38[k] = OutPts[j].xyz[k];
             }
             else
             {
-                *(&v29 + k) = OutPts[j].xyz[k];
+                v29[k] = OutPts[j].xyz[k];
             }
         }
     }
@@ -1025,13 +1021,13 @@ char __cdecl Xmodel_ParsePhysicsBrush(
         memset(geom->brush, 0, sizeof(BrushWrapper));
         geom->type = 2;
         brush = geom->brush;
-        brush->mins[0] = v29;
-        brush->mins[1] = v30;
-        brush->mins[2] = v31;
+        brush->mins[0] = v29[0];
+        brush->mins[1] = v29[1];
+        brush->mins[2] = v29[2];
         maxs = geom->brush->maxs;
-        *maxs = v38;
-        maxs[1] = v39;
-        maxs[2] = v40;
+        *maxs = v38[0];
+        maxs[1] = v38[1];
+        maxs[2] = v38[2];
         v25 = 0;
         for (k = 0; k < 3; ++k)
         {

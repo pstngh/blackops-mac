@@ -1536,9 +1536,7 @@ void __cdecl LiveStats_PublishNews(int controllerIndex)
                     targetValue = StringTable_GetColumnValueForRow(statsMilestonestable, rowNum, 2);
                     name = s_statsMilestonesCompleted[controllerIndex][j].name;
                     v17 = (unsigned int)Ptr32_Encode(&name[strlen(name) + 1]);
-                    v14 = (char *)&newRank + 3;
-                    while ( *++v14 )
-                        ;
+                    v14 = &statsName[strlen(statsName)];
                     v15 = s_statsMilestonesCompleted[controllerIndex][j].name;
                     memcpy(v14, v15, v17 - (unsigned int)Ptr32_Encode(v15));
                     v11 = va(

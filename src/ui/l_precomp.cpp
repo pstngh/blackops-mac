@@ -611,7 +611,6 @@ int __cdecl PC_Directive_include(source_s *source)
     char v2; // [esp+1Bh] [ebp-4B9h]
     char *v3; // [esp+20h] [ebp-4B4h]
     char *v4; // [esp+24h] [ebp-4B0h]
-    char v5; // [esp+2Bh] [ebp-4A9h]
     token_s *v6; // [esp+2Ch] [ebp-4A8h]
     char *v7; // [esp+40h] [ebp-494h]
     char v8; // [esp+47h] [ebp-48Dh]
@@ -641,13 +640,7 @@ int __cdecl PC_Directive_include(source_s *source)
             }
             while ( v8 );
             v7 = &token.string[strlen(token.string) + 1];
-            v6 = (token_s *)((char *)&includepath + 3);
-            do
-            {
-                v5 = v6->string[1];
-                v6 = (token_s *)((char *)v6 + 1);
-            }
-            while ( v5 );
+            v6 = (token_s *)&path[strlen(path)];
             memcpy(v6, &token, v7 - (char *)&token);
             script = LoadScriptFile(path);
         }

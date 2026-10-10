@@ -377,13 +377,12 @@ void __cdecl R_Cmd_SaveSun()
 void __cdecl R_SaveSunFromDvars(const char *sunName)
 {
     char *v1; // eax
-    char buffer; // [esp+10h] [ebp-2008h] BYREF
-    _BYTE v3[3]; // [esp+11h] [ebp-2007h] BYREF
+    char buffer[8192]; // [esp+10h] [ebp-2008h] BYREF
 
-    if ( Com_SaveDvarsToBuffer(sunDvarNames, 0x15u, &buffer, 0x2000u) )
+    if ( Com_SaveDvarsToBuffer(sunDvarNames, 0x15u, buffer, 0x2000u) )
     {
         v1 = va("sun/%s.sun", sunName);
-        FS_WriteFile(v1, &buffer, &v3[strlen(&buffer)] - v3);
+        FS_WriteFile(v1, buffer, &buffer[strlen(buffer) + 1] - &buffer[1]);
     }
 }
 

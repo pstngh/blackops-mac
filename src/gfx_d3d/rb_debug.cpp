@@ -291,10 +291,7 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
     unsigned __int8 colorBytes[7]; // [esp+35F4h] [ebp-2F8Ch] BYREF
     bool v30; // [esp+35FBh] [ebp-2F85h]
     float radius; // [esp+35FCh] [ebp-2F84h]
-    float colorFloat; // [esp+3600h] [ebp-2F80h] BYREF
-    float v33; // [esp+3604h] [ebp-2F7Ch]
-    float v34; // [esp+3608h] [ebp-2F78h]
-    float v35; // [esp+360Ch] [ebp-2F74h]
+    float colorFloat[4]; // [esp+3600h] [ebp-2F80h] BYREF
     _QWORD v36[482]; // [esp+3610h] [ebp-2F70h] BYREF
     int indexCount; // [esp+4524h] [ebp-205Ch]
     int j; // [esp+4528h] [ebp-2058h]
@@ -346,10 +343,10 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
             v48[i] = cos(v21);
             *v1 = sin(v21);
         }
-        colorFloat = sphere->color[0];
-        v33 = sphere->color[1];
-        v34 = sphere->color[2];
-        v35 = sphere->color[3];
+        colorFloat[0] = sphere->color[0];
+        colorFloat[1] = sphere->color[1];
+        colorFloat[2] = sphere->color[2];
+        colorFloat[3] = sphere->color[3];
         vertexCount = 0;
         for ( j = 1; j < sideCount / 2; ++j )
         {
@@ -381,10 +378,10 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
                                                         + (float)(*(float *)&v24[12 * vertexCount + 7720] * v53))
                                         + 1.0)
                         * 0.5;
-                colorFloat = v42 * sphere->color[0];
-                v33 = v42 * sphere->color[1];
-                v34 = v42 * sphere->color[2];
-                R_ConvertColorToBytes(&colorFloat, colorBytes);
+                colorFloat[0] = v42 * sphere->color[0];
+                colorFloat[1] = v42 * sphere->color[1];
+                colorFloat[2] = v42 * sphere->color[2];
+                R_ConvertColorToBytes(colorFloat, colorBytes);
                 *(float *)&v24[16 * vertexCount + 12] = 1.0f;
                 v50[vertexCount] = *(unsigned int *)colorBytes;
                 v15 = (float *)&v36[vertexCount];
@@ -418,10 +415,10 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
                                                 + (float)(*(float *)&v24[12 * vertexCount + 7720] * v53))
                                 + 1.0)
                 * 0.5;
-        colorFloat = v42 * sphere->color[0];
-        v33 = v42 * sphere->color[1];
-        v34 = v42 * sphere->color[2];
-        R_ConvertColorToBytes(&colorFloat, colorBytes);
+        colorFloat[0] = v42 * sphere->color[0];
+        colorFloat[1] = v42 * sphere->color[1];
+        colorFloat[2] = v42 * sphere->color[2];
+        R_ConvertColorToBytes(colorFloat, colorBytes);
         v50[vertexCount] = *(unsigned int *)colorBytes;
         v11 = (float *)&v36[vertexCount];
         *v11 = 0.0f;
@@ -442,10 +439,10 @@ void __cdecl RB_DrawDebugSphere(trDebugSphere_t *sphere)
                                                 + (float)(*(float *)&v24[12 * vertexCount + 7720] * v53))
                                 + 1.0)
                 * 0.5;
-        colorFloat = v42 * sphere->color[0];
-        v33 = v42 * sphere->color[1];
-        v34 = v42 * sphere->color[2];
-        R_ConvertColorToBytes(&colorFloat, colorBytes);
+        colorFloat[0] = v42 * sphere->color[0];
+        colorFloat[1] = v42 * sphere->color[1];
+        colorFloat[2] = v42 * sphere->color[2];
+        R_ConvertColorToBytes(colorFloat, colorBytes);
         v50[vertexCount] = *(unsigned int *)colorBytes;
         v7 = (unsigned int*)&v36[vertexCount];
         *v7 = 0;
@@ -715,7 +712,7 @@ void __cdecl RB_DrawCollisionPolygon(
                 bool faceDepthTest,
                 int debug_partition)
 {
-    float litColor[3]; // [esp+4h] [ebp-14h] BYREF
+    float litColor[4]; // [esp+4h] [ebp-14h] BYREF
     int vertIndex; // [esp+10h] [ebp-8h]
     GfxColor color; // [esp+14h] [ebp-4h] BYREF
 
@@ -725,6 +722,7 @@ void __cdecl RB_DrawCollisionPolygon(
         litColor[0] = *faceColor;
         litColor[1] = faceColor[1];
         litColor[2] = faceColor[2];
+        litColor[3] = faceColor[3];
     }
     else
     {

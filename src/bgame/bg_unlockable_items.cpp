@@ -2856,13 +2856,9 @@ bool __cdecl BG_UnlockablesIsItemEquippedInAnyCustomClass(int controllerIndex, i
         {
             String = Dvar_GetString(customClassName);
             v8 = (unsigned int)Ptr32_Encode(&String[strlen(String) + 1]);
-            p_isEquipped = &isEquipped;
-            while ( *++p_isEquipped )
-                ;
+            p_isEquipped = (bool *)&tempString[strlen(tempString)];
             memcpy(p_isEquipped, String, v8 - (unsigned int)Ptr32_Encode(String));
-            v4 = &isEquipped;
-            while ( *++v4 )
-                ;
+            v4 = (bool *)&tempString[strlen(tempString)];
             strcpy((char *)v4, "\n");
             isEquipped = 1;
         }

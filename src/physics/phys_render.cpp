@@ -604,7 +604,7 @@ void    render_brush(
     const phys_vec3 *v9; // eax
     float *v10; // [esp-14h] [ebp-580h]
     float v11; // [esp-Ch] [ebp-578h]
-    float v12[2]; // [esp-8h] [ebp-574h] BYREF
+    float v12[3]; // [esp-8h] [ebp-574h] BYREF
     float normal[3]; // [esp+4h] [ebp-568h] BYREF
     float p02[4]; // [esp+10h] [ebp-55Ch] BYREF
     float p01[4]; // [esp+20h] [ebp-54Ch] BYREF
@@ -965,7 +965,7 @@ void __cdecl render_box(const phys_vec3 *mins, const phys_vec3 *maxs, const floa
 void    render_gjk_geom(gjk_base_t *geom, const phys_mat44 *cg2w)
 {
     float edgeColor[4]; // [esp+34h] [ebp-F0h] BYREF
-    float color; // [esp+44h] [ebp-E0h] BYREF
+    float color[4]; // [esp+44h] [ebp-E0h] BYREF
     phys_vec3 mins; // [esp+58h] [ebp-CCh] BYREF
     phys_mat44 mat; // [esp+78h] [ebp-ACh] BYREF
     const gjk_obb_t *obb; // [esp+C4h] [ebp-60h]
@@ -987,10 +987,10 @@ void    render_gjk_geom(gjk_base_t *geom, const phys_mat44 *cg2w)
             render_box(geom->get_aabb_mn(), geom->get_aabb_mx(), cg2w, colorMdRed, 0);
             break;
         case GJK_BRUSH:
-            calc_color((unsigned int)Ptr32_Encode(geom->get_brush()), alpha_0, &color);
+            calc_color((unsigned int)Ptr32_Encode(geom->get_brush()), alpha_0, color);
             memset(edgeColor, 0, 12);
             edgeColor[3] = 1.0f;
-            render_brush(geom->get_brush(), cg2w, &color, 0, 0, 0, 1, edgeColor);
+            render_brush(geom->get_brush(), cg2w, color, 0, 0, 0, 1, edgeColor);
             break;
         case GJK_PARTITION:
             partition = (gjk_partition_t *)geom;
@@ -1510,17 +1510,15 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     float v32; // [esp-18h] [ebp-28h]
     float v33; // [esp-14h] [ebp-24h]
     float v34; // [esp-10h] [ebp-20h]
-    float x; // [esp-Ch] [ebp-1Ch] BYREF
-    float y; // [esp-8h] [ebp-18h]
-    float z; // [esp-4h] [ebp-14h]
+    phys_vec3 origin; // [esp-Ch] [ebp-1Ch] BYREF
     //phys_vec3 trans; // [esp+0h] [ebp-10h]
     //float retaddr; // [esp+10h] [ebp+0h]
     //
     //trans.y = a1;
     //trans.z = retaddr;
-    x = mat->w.x;
-    y = mat->w.y;
-    z = mat->w.z;
+    origin.x = mat->w.x;
+    origin.y = mat->w.y;
+    origin.z = mat->w.z;
     //trans.x = mat->w.w;
     v34 = scale * mat->x.x;
     v33 = scale * mat->x.y;
@@ -1528,13 +1526,13 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v29 = v34;
     v30 = v33;
     v31 = v32;
-    v28 = x + v34;
-    v27 = y + v33;
-    v26 = z + v32;
-    v25.x = x + v34;
-    v25.y = y + v33;
-    v25.z = z + v32;
-    render_line((const phys_vec3 *)&x, &v25, colorMdRed, 0, 0);
+    v28 = origin.x + v34;
+    v27 = origin.y + v33;
+    v26 = origin.z + v32;
+    v25.x = origin.x + v34;
+    v25.y = origin.y + v33;
+    v25.z = origin.z + v32;
+    render_line(&origin, &v25, colorMdRed, 0, 0);
     p_y = &mat->y;
     v23 = scale * mat->y.x;
     v22 = scale * mat->y.y;
@@ -1542,13 +1540,13 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v18 = v23;
     v19 = v22;
     v20 = v21;
-    v17 = x + v23;
-    v16 = y + v22;
-    v15 = z + v21;
-    v14.x = x + v23;
-    v14.y = y + v22;
-    v14.z = z + v21;
-    render_line((const phys_vec3 *)&x, &v14, colorMdGreen, 0, 0);
+    v17 = origin.x + v23;
+    v16 = origin.y + v22;
+    v15 = origin.z + v21;
+    v14.x = origin.x + v23;
+    v14.y = origin.y + v22;
+    v14.z = origin.z + v21;
+    render_line(&origin, &v14, colorMdGreen, 0, 0);
     p_z = &mat->z;
     v12 = scale * mat->z.x;
     v11 = scale * mat->z.y;
@@ -1556,13 +1554,13 @@ void    Phys_RenderBase(const phys_mat44 *mat, float scale)
     v7 = v12;
     v8 = v11;
     v9 = v10;
-    v6 = x + v12;
-    v5 = y + v11;
-    v4 = z + v10;
-    v3.x = x + v12;
-    v3.y = y + v11;
-    v3.z = z + v10;
-    render_line((const phys_vec3 *)&x, &v3, colorMdBlue, 0, 0);
+    v6 = origin.x + v12;
+    v5 = origin.y + v11;
+    v4 = origin.z + v10;
+    v3.x = origin.x + v12;
+    v3.y = origin.y + v11;
+    v3.z = origin.z + v10;
+    render_line(&origin, &v3, colorMdBlue, 0, 0);
 }
 
 void    Phys_JointDebugRender(int id)

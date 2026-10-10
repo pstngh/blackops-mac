@@ -2558,8 +2558,7 @@ void __cdecl CG_CompassDrawPlayer(
 {
     float yawVector[2]; // [esp+30h] [ebp-58h] BYREF
     bool clipped; // [esp+3Bh] [ebp-4Dh]
-    float outClipped; // [esp+3Ch] [ebp-4Ch] BYREF
-    float v9; // [esp+40h] [ebp-48h]
+    float outClipped[2]; // [esp+3Ch] [ebp-4Ch] BYREF
     float xy[2]; // [esp+44h] [ebp-44h] BYREF
     const cg_s *cgameGlob; // [esp+4Ch] [ebp-3Ch]
     float angle; // [esp+50h] [ebp-38h]
@@ -2649,8 +2648,8 @@ void __cdecl CG_CompassDrawPlayer(
             angle = 0.0f;
         goto LABEL_25;
     }
-    outClipped = 0.0f;
-    v9 = 0.0f;
+    outClipped[0] = 0.0f;
+    outClipped[1] = 0.0f;
     CG_CompassUpYawVector(cgameGlob, yawVector);
     clipped = CG_WorldPosToCompass(
                             (CompassType)compassType,
@@ -2660,11 +2659,11 @@ void __cdecl CG_CompassDrawPlayer(
                             cgameGlob->refdef.vieworg,
                             cgameGlob->predictedPlayerState.origin,
                             0,
-                            &outClipped);
+                            outClipped);
     if ( !clipped || compassClampIcons->current.enabled )
     {
-        x = outClipped;
-        y = v9;
+        x = outClipped[0];
+        y = outClipped[1];
         if ( compassType || !compassRotation->current.enabled )
             angle = AngleNormalize360(cgameGlob->compassNorthYaw - cgameGlob->predictedPlayerEntity.nextState.lerp.apos.trBase[1]);
         else
@@ -2876,8 +2875,7 @@ void    CG_CompassDrawTickertape(
     float textAlpha; // [esp+58h] [ebp-94h]
     float goalYawa; // [esp+64h] [ebp-88h]
     float goalYaw; // [esp+64h] [ebp-88h]
-    float v22; // [esp+68h] [ebp-84h] BYREF
-    float v23; // [esp+6Ch] [ebp-80h]
+    float v22[2]; // [esp+68h] [ebp-84h] BYREF
     int dist; // [esp+70h] [ebp-7Ch]
     float posDelta[2]; // [esp+74h] [ebp-78h]
     unsigned int *v26; // [esp+7Ch] [ebp-70h]
@@ -2987,16 +2985,16 @@ void    CG_CompassDrawTickertape(
                             || *(float *)(LODWORD(posDelta[0]) + 8) != 0.0 )
                         {
                             dist = LODWORD(colorMod[2]) + 274140;
-                            v22 = *(float *)LODWORD(posDelta[0]) - *(float *)(LODWORD(colorMod[2]) + 274140);
-                            v23 = *(float *)(LODWORD(posDelta[0]) + 4) - *(float *)(LODWORD(colorMod[2]) + 274144);
-                            goalYawa = Vec2Length(&v22);
+                            v22[0] = *(float *)LODWORD(posDelta[0]) - *(float *)(LODWORD(colorMod[2]) + 274140);
+                            v22[1] = *(float *)(LODWORD(posDelta[0]) + 4) - *(float *)(LODWORD(colorMod[2]) + 274144);
+                            goalYawa = Vec2Length(v22);
                             goalYaw = goalYawa * 0.0254;
                             if ( *(float *)&objective > goalYaw )
                             {
                                 *(float *)&objective = goalYaw;
                                 *(float *)&cent = *(float *)(LODWORD(colorMod[2]) + 274148) - *(float *)(LODWORD(posDelta[0]) + 8);
                             }
-                            v11 = v23;
+                            v11 = v22[1];
                             __libm_sse2_atan2(v12, v13);
                             *(float *)&v11 = v11;
                             textAlpha = AngleNormalize360(

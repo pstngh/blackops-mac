@@ -4746,7 +4746,7 @@ void R_SetDLightsConstants(
 
     // ---- Spot-light scratch (only populated if a spot is processed) ----
     float lightAttentuation[4] = {};                          // [0]=L.attenuation[3], [1..3]=pos view-rel
-    float lightDir[3]          = {};                          // = L.attenuation[0..2]
+    float lightDir[4]          = {};                          // = L.attenuation[0..3]
     float specularColor[3]     = {};                          // = L.diffuseColor * diffuseScale
     float lightOrigin[4]       = { 1.0f, 0.0f, 0.0f, 0.0f };  // [2..3] = spec[0..1] scaled
     float v60                  = 0.0f;                        // = spec[2] scaled
@@ -4810,6 +4810,7 @@ void R_SetDLightsConstants(
             lightDir[0] = L.attenuation[0] + 1.5287891e-5f;  // ~2^-16 epsilon
             lightDir[1] = L.attenuation[1];
             lightDir[2] = L.attenuation[2];
+            lightDir[3] = L.attenuation[3];  // IDA: lightAttentuation[0], the next float on the stack
             lightAttentuation[0] = L.attenuation[3];
 
             lightCosHalfFovInner = L.dir[0];

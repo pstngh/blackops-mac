@@ -364,16 +364,7 @@ XAnimParts *__cdecl XAnimLoadFile(char *name, void *(__cdecl *Alloc)(int), bool 
     unsigned __int8 *dataByte; // [esp+670h] [ebp-135Ch] BYREF
     int *v53; // [esp+674h] [ebp-1358h]
     int v54; // [esp+678h] [ebp-1354h]
-    int i; // [esp+67Ch] [ebp-1350h]
-    int v56; // [esp+680h] [ebp-134Ch]
-    int v57; // [esp+684h] [ebp-1348h]
-    int v58; // [esp+688h] [ebp-1344h]
-    int v59; // [esp+68Ch] [ebp-1340h]
-    int v60; // [esp+690h] [ebp-133Ch]
-    int v61; // [esp+694h] [ebp-1338h]
-    int v62; // [esp+698h] [ebp-1334h]
-    int v63; // [esp+69Ch] [ebp-1330h]
-    int v64; // [esp+6A0h] [ebp-132Ch]
+    int partCount[10]; // [esp+67Ch] [ebp-1350h]
     const char *fmt; // [esp+6A4h] [ebp-1328h]
     __int16 v66; // [esp+6A8h] [ebp-1324h]
     unsigned __int16 v67; // [esp+6ACh] [ebp-1320h]
@@ -597,16 +588,16 @@ XAnimParts *__cdecl XAnimLoadFile(char *name, void *(__cdecl *Alloc)(int), bool 
                             g_partTransArray = v87;
                             g_simpleQuatBits = (char *)dst;
                             parts->names = (unsigned __int16 *)Alloc(2 * numBones);
-                            i = 0;
-                            v56 = 0;
-                            v57 = 0;
-                            v58 = 0;
-                            v59 = 0;
-                            v60 = 0;
-                            v61 = 0;
-                            v62 = 0;
-                            v63 = 0;
-                            v64 = 0;
+                            partCount[0] = 0;
+                            partCount[1] = 0;
+                            partCount[2] = 0;
+                            partCount[3] = 0;
+                            partCount[4] = 0;
+                            partCount[5] = 0;
+                            partCount[6] = 0;
+                            partCount[7] = 0;
+                            partCount[8] = 0;
+                            partCount[9] = 0;
                             qsort(base, numBones, 2u, (int (__cdecl *)(const void *, const void *))XAnimCompareQuatParts);
                             for ( j = 0; j < numBones; ++j )
                             {
@@ -619,37 +610,37 @@ XAnimParts *__cdecl XAnimLoadFile(char *name, void *(__cdecl *Alloc)(int), bool 
                                 v85[2 * v8 + 1] = v7;
                                 parts->names[j] = v82[animPartIndex];
                                 PartQuatType = XAnimGetPartQuatType(animPartIndex);
-                                *(&i + PartQuatType) = j + 1;
+                                partCount[PartQuatType] = j + 1;
                             }
-                            if ( v56 < i )
-                                v34 = i;
+                            if ( partCount[1] < partCount[0] )
+                                v34 = partCount[0];
                             else
-                                v34 = v56;
-                            v56 = v34;
-                            if ( v57 < v34 )
-                                v33 = v56;
+                                v34 = partCount[1];
+                            partCount[1] = v34;
+                            if ( partCount[2] < v34 )
+                                v33 = partCount[1];
                             else
-                                v33 = v57;
-                            v57 = v33;
-                            if ( v58 < v33 )
-                                v32 = v57;
+                                v33 = partCount[2];
+                            partCount[2] = v33;
+                            if ( partCount[3] < v33 )
+                                v32 = partCount[2];
                             else
-                                v32 = v58;
-                            v58 = v32;
-                            if ( v59 < v32 )
-                                v31 = v58;
+                                v32 = partCount[3];
+                            partCount[3] = v32;
+                            if ( partCount[4] < v32 )
+                                v31 = partCount[3];
                             else
-                                v31 = v59;
-                            v59 = v31;
-                            v9 = truncate_cast<unsigned char>(i);
+                                v31 = partCount[4];
+                            partCount[4] = v31;
+                            v9 = truncate_cast<unsigned char>(partCount[0]);
                             parts->boneCount[0] = v9;
-                            v10 = truncate_cast<unsigned char>(v56 - i);
+                            v10 = truncate_cast<unsigned char>(partCount[1] - partCount[0]);
                             parts->boneCount[1] = v10;
-                            v11 = truncate_cast<unsigned char>(v57 - v56);
+                            v11 = truncate_cast<unsigned char>(partCount[2] - partCount[1]);
                             parts->boneCount[2] = v11;
-                            v12 = truncate_cast<unsigned char>(v58 - v57);
+                            v12 = truncate_cast<unsigned char>(partCount[3] - partCount[2]);
                             parts->boneCount[3] = v12;
-                            v13 = truncate_cast<unsigned char>(v59 - v58);
+                            v13 = truncate_cast<unsigned char>(partCount[4] - partCount[3]);
                             parts->boneCount[4] = v13;
                             memcpy(v86, (unsigned __int8 *)base, 2 * numBones);
                             qsort(v86, numBones, 2u, (int (__cdecl *)(const void *, const void *))XAnimCompareTransParts);
@@ -661,27 +652,27 @@ XAnimParts *__cdecl XAnimLoadFile(char *name, void *(__cdecl *Alloc)(int), bool 
                                 *(unsigned int *)&dest[8 * j + 128] = (unsigned int)Ptr32_Encode(v87[animPartIndex].trans);
                                 *(unsigned int *)&dest[8 * v15 + 132] = v14;
                                 PartQuatType = XAnimGetPartTransType(animPartIndex);
-                                *(&i + PartQuatType) = j + 1;
+                                partCount[PartQuatType] = j + 1;
                             }
-                            if ( v61 < v60 )
-                                v30 = v60;
+                            if ( partCount[6] < partCount[5] )
+                                v30 = partCount[5];
                             else
-                                v30 = v61;
-                            v61 = v30;
-                            if ( v62 < v30 )
-                                v29 = v61;
+                                v30 = partCount[6];
+                            partCount[6] = v30;
+                            if ( partCount[7] < v30 )
+                                v29 = partCount[6];
                             else
-                                v29 = v62;
-                            v62 = v29;
-                            if ( v63 < v29 )
-                                v28 = v62;
+                                v29 = partCount[7];
+                            partCount[7] = v29;
+                            if ( partCount[8] < v29 )
+                                v28 = partCount[7];
                             else
-                                v28 = v63;
-                            v63 = v28;
-                            parts->boneCount[5] = v60;
-                            parts->boneCount[6] = v61 - v60;
-                            parts->boneCount[7] = v62 - v61;
-                            parts->boneCount[8] = v63 - v62;
+                                v28 = partCount[8];
+                            partCount[8] = v28;
+                            parts->boneCount[5] = partCount[5];
+                            parts->boneCount[6] = partCount[6] - partCount[5];
+                            parts->boneCount[7] = partCount[7] - partCount[6];
+                            parts->boneCount[8] = partCount[8] - partCount[7];
                             v51 = 0;
                             v91 = 0;
                             v54 = 0;

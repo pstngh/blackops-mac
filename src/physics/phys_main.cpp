@@ -2898,9 +2898,7 @@ void __cdecl print_static_models_stats()
     float v7; // [esp+10034h] [ebp-1Ch]
     float v8; // [esp+10038h] [ebp-18h]
     float v9; // [esp+1003Ch] [ebp-14h]
-    float dims; // [esp+10040h] [ebp-10h] BYREF
-    float v11; // [esp+10044h] [ebp-Ch]
-    float v12; // [esp+10048h] [ebp-8h]
+    float dims[3]; // [esp+10040h] [ebp-10h] BYREF
     unsigned int num; // [esp+1004Ch] [ebp-4h]
 
     Com_Printf(20, "Static models %d\n\n", cm.numStaticModels);
@@ -2914,9 +2912,9 @@ void __cdecl print_static_models_stats()
     qsort(base, num, 4u, SortModelsFunc);
     refcount = 1;
     smodel = (cStaticModel_s *)Ptr32_Decode(base[0]);
-    dims = *(float *)Ptr32_Decode(base[0] + 68) - *(float *)Ptr32_Decode(base[0] + 56);
-    v11 = *(float *)Ptr32_Decode(base[0] + 72) - *(float *)Ptr32_Decode(base[0] + 60);
-    v12 = *(float *)Ptr32_Decode(base[0] + 76) - *(float *)Ptr32_Decode(base[0] + 64);
+    dims[0] = *(float *)Ptr32_Decode(base[0] + 68) - *(float *)Ptr32_Decode(base[0] + 56);
+    dims[1] = *(float *)Ptr32_Decode(base[0] + 72) - *(float *)Ptr32_Decode(base[0] + 60);
+    dims[2] = *(float *)Ptr32_Decode(base[0] + 76) - *(float *)Ptr32_Decode(base[0] + 64);
     for ( j = 1; j < (int)num; ++j )
     {
         v1 = (cStaticModel_s *)Ptr32_Decode(base[j]);
@@ -2926,21 +2924,21 @@ void __cdecl print_static_models_stats()
             v7 = smodel->absmax[0] - smodel->absmin[0];
             v8 = smodel->absmax[1] - smodel->absmin[1];
             v9 = smodel->absmax[2] - smodel->absmin[2];
-            dims = v7 + dims;
-            v11 = v8 + v11;
-            v12 = v9 + v12;
+            dims[0] = v7 + dims[0];
+            dims[1] = v8 + dims[1];
+            dims[2] = v9 + dims[2];
         }
         else
         {
-            print_smodel(smodel, refcount, &dims);
+            print_smodel(smodel, refcount, dims);
             smodel = v1;
-            dims = v1->absmax[0] - v1->absmin[0];
-            v11 = v1->absmax[1] - v1->absmin[1];
-            v12 = v1->absmax[2] - v1->absmin[2];
+            dims[0] = v1->absmax[0] - v1->absmin[0];
+            dims[1] = v1->absmax[1] - v1->absmin[1];
+            dims[2] = v1->absmax[2] - v1->absmin[2];
             refcount = 1;
         }
     }
-    print_smodel(smodel, refcount, &dims);
+    print_smodel(smodel, refcount, dims);
 }
 
 int __cdecl SortModelsFunc(const void *a, const void *b)

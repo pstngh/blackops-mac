@@ -1214,12 +1214,12 @@ void __cdecl UI_DrawNetFilter(
 {
     const char **ServerFilter; // eax
     const char *v7; // eax
-    int filter; // [esp+1Ch] [ebp-Ch] BYREF
+    const char *filter[2]; // [esp+1Ch] [ebp-Ch] BYREF
     const char *pszTeanslation; // [esp+24h] [ebp-4h]
 
     if ( ui_serverFilterType < 0 || ui_serverFilterType > numServerFilters )
         ui_serverFilterType = 0;
-    ServerFilter = UI_GetServerFilter((const char **)&filter, ui_serverFilterType);
+    ServerFilter = UI_GetServerFilter(filter, ui_serverFilterType);
     v7 = va("EXE_SERVERFILTER %s", *ServerFilter);
     pszTeanslation = SEH_LocalizeTextMessage(v7, "server filter", LOCMSG_SAFE);
     UI_DrawText(

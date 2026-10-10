@@ -2144,8 +2144,7 @@ void __cdecl Actor_EntInfo(gentity_s *self, float *source)
     float pos[3]; // [esp+B8h] [ebp-8F4h] BYREF
     float fact; // [esp+C4h] [ebp-8E8h]
     int cycleTime; // [esp+C8h] [ebp-8E4h]
-    float timingColor[3]; // [esp+CCh] [ebp-8E0h] BYREF
-    float v40; // [esp+D8h] [ebp-8D4h]
+    float timingColor[4]; // [esp+CCh] [ebp-8E0h] BYREF
     float vAngles[3]; // [esp+DCh] [ebp-8D0h] BYREF
     float fBaseYaw; // [esp+E8h] [ebp-8C4h]
     float vColor[4]; // [esp+ECh] [ebp-8C0h] BYREF
@@ -2336,7 +2335,7 @@ void __cdecl Actor_EntInfo(gentity_s *self, float *source)
                 {
                     cycleTime = 1000;
                     fact = 0.0f;
-                    v40 = 1.0f;
+                    timingColor[3] = 1.0f;
 
                     static int endTime;
                     static int direction = 1;
@@ -2405,14 +2404,14 @@ void __cdecl Actor_EntInfo(gentity_s *self, float *source)
                             timingColor[0] = colorBlue[0];
                             timingColor[1] = 0.0;
                             timingColor[2] = 1.0;
-                            v40 = 1.0;
+                            timingColor[3] = 1.0;
                         }
                         else if ( actor->codeGoalSrc == AI_GOAL_SRC_FRIENDLY_CHAIN )
                         {
                             timingColor[0] = colorGreen[0];
                             timingColor[1] = 1.0;
                             timingColor[2] = 0.0;
-                            v40 = 1.0;
+                            timingColor[3] = 1.0;
                         }
                         else
                         {
@@ -2424,9 +2423,9 @@ void __cdecl Actor_EntInfo(gentity_s *self, float *source)
                             }
                             else
                             {
-                                memset(timingColor, 0, sizeof(timingColor));
+                                memset(timingColor, 0, sizeof(float) * 3);
                             }
-                            v40 = 1.0;
+                            timingColor[3] = 1.0;
                         }
                         G_DebugCircle(pos, actor->codeGoal.radius, timingColor, 0, 1, 0);
                     }

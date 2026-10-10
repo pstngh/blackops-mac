@@ -1667,9 +1667,7 @@ void    RB_GenericFilterFX(const GfxViewInfo *viewInfo)
 {
   const char *v2; // eax
   const char *v3; // eax
-  float v4; // [esp+3Ch] [ebp-228h] BYREF
-  int v5; // [esp+40h] [ebp-224h] OVERLAPPED
-  int v6; // [esp+44h] [ebp-220h]
+  float v4[4]; // [esp+3Ch] [ebp-228h] BYREF
   float colorBlack[4]; // [esp+48h] [ebp-21Ch]
   float Intensity; // [esp+58h] [ebp-20Ch]
   float v9; // [esp+5Ch] [ebp-208h]
@@ -2160,11 +2158,11 @@ LABEL_18:
                 colorBlack[1] = p_genericFilter->passParam[i][j][4] * p_genericFilter->passFlareOcclusion[i][j];
                 if ( !v112 )
                 {
-                  v4 = 0.0f;
-                  v5 = 0;// *(unsigned int *)&FLOAT_0_0;
-                  v6 = 0;// *(unsigned int *)&FLOAT_0_0;
-                  colorBlack[0] = 0.0f;
-                  R_ClearScreen(gfxCmdBufContext.state->prim.device, 1u, &v4, 0.0, 0, 0);
+                  v4[0] = 0.0f;
+                  v4[1] = 0.0f;
+                  v4[2] = 0.0f;
+                  v4[3] = 0.0f;
+                  R_ClearScreen(gfxCmdBufContext.state->prim.device, 1u, v4, 0.0, 0, 0);
                   v112 = 1;
                 }
                 gfxCmdBufSourceState.input.consts[180][0] = colorBlack[1];

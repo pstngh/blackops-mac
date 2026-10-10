@@ -2702,8 +2702,7 @@ void __cdecl Script_FeederBottom(int localClientNum, UiContext *dc, itemDef_s *i
 void __cdecl Script_SetDvarFromLocString(int localClientNum, UiContext *dc, itemDef_s *item, const char **args)
 {
     const char *VariantString; // eax
-    char string; // [esp+0h] [ebp-1C08h] BYREF
-    char pszInputBuffer[4095]; // [esp+1h] [ebp-1C07h] BYREF
+    char string[4096]; // [esp+0h] [ebp-1C08h] BYREF
     char dest[1024]; // [esp+1000h] [ebp-C08h] BYREF
     char out[1024]; // [esp+1400h] [ebp-808h] BYREF
     char dvarName[1024]; // [esp+1800h] [ebp-408h] BYREF
@@ -2732,17 +2731,17 @@ void __cdecl Script_SetDvarFromLocString(int localClientNum, UiContext *dc, item
         while ( !I_stricmp(out, ",") );
     }
     while ( !I_stricmp(out, ")") );
-    I_strncpyz(&string, out, 4096);
-    if ( string == 64 )
+    I_strncpyz(string, out, 4096);
+    if ( string[0] == 64 )
     {
-        src = SEH_LocalizeTextMessage(pszInputBuffer, "dvar string", LOCMSG_NOERR);
+        src = SEH_LocalizeTextMessage(&string[1], "dvar string", LOCMSG_NOERR);
         if ( src )
         {
             if ( *src )
-                I_strncpyz(&string, src, 4096);
+                I_strncpyz(string, src, 4096);
         }
     }
-    Dvar_SetCommand(dvarName, &string);
+    Dvar_SetCommand(dvarName, string);
     String_Parse((const char **)args, out, 1024);
     while ( !I_stricmp(out, ")") )
         String_Parse((const char **)args, out, 1024);

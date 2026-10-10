@@ -142,6 +142,7 @@ void __cdecl MemFile_EndSegment(MemoryFile *memFile)
     int err; // [esp+10h] [ebp-Ch]
     int len; // [esp+14h] [ebp-8h]
     int index; // [esp+18h] [ebp-4h]
+    lzo_uint lzoLen; // lzo_uint is size_t: 8 bytes on 64-bit, the length prefix is 4
 
     if ( memFile->memoryOverflow
         && !Assert_MyHandler(
@@ -188,8 +189,9 @@ void __cdecl MemFile_EndSegment(MemoryFile *memFile)
                     memFile->cacheBuffer,
                     memFile->cacheBufferUsed,
                     &memFile->buffer[memFile->bytesUsed],
-                    (lzo_uint*)out_len,
+                    &lzoLen,
                     workmem);
+                *out_len = lzoLen;
                 memFile->cacheBufferUsed = 0;
                 memFile->bytesUsed += *out_len;
                 //LargeLocal::~LargeLocal(&workmem_large_local);
@@ -329,6 +331,7 @@ void __cdecl MemFile_WriteDataFlushInternal(MemoryFile *memFile)
     LargeLocal workmem_large_local(0x2000); // [esp+0h] [ebp-10h] BYREF
     unsigned int *len; // [esp+8h] [ebp-8h]
     unsigned __int8 *workmem; // [esp+Ch] [ebp-4h]
+    lzo_uint lzoLen; // lzo_uint is size_t: 8 bytes on 64-bit, the length prefix is 4
 
     if ( !memFile->compress_enabled )
     {
@@ -363,8 +366,9 @@ LABEL_14:
             memFile->cacheBuffer,
             memFile->cacheBufferUsed,
             &memFile->buffer[memFile->bytesUsed],
-            (lzo_uint*)len,
+            &lzoLen,
             workmem);
+        *len = lzoLen;
         memFile->cacheBufferUsed = 0;
         memFile->bytesUsed += *len;
         //LargeLocal::~LargeLocal(&workmem_large_local);
@@ -459,6 +463,7 @@ void __cdecl MemFile_ReadData(MemoryFile *memFile, int byteCount, unsigned __int
     int cacheBufferAvail; // [esp+0h] [ebp-18h]
     unsigned int in_len; // [esp+8h] [ebp-10h]
     unsigned int len; // [esp+Ch] [ebp-Ch] BYREF
+    lzo_uint lzoLen; // lzo_uint is size_t: 8 bytes on 64-bit
     int size; // [esp+10h] [ebp-8h]
     int bytesLeft; // [esp+14h] [ebp-4h]
 
@@ -517,7 +522,8 @@ void __cdecl MemFile_ReadData(MemoryFile *memFile, int byteCount, unsigned __int
                     in_len = *(unsigned int *)&memFile->buffer[memFile->bytesUsed];
                     memFile->bytesUsed += 4;
                     //lzopro_lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, &len);
-                    lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, (lzo_uint*)&len, NULL);
+                    lzo1x_decompress(&memFile->buffer[memFile->bytesUsed], 0, memFile->cacheBuffer, &lzoLen, NULL);
+                    len = lzoLen;
                     memFile->cacheBufferAvail = len;
                     memFile->cacheBufferUsed = 0;
                     memFile->bytesUsed += in_len;

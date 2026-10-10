@@ -1511,7 +1511,7 @@ void __cdecl CG_CompassUpdateActors(int localClientNum)
     bool v8; // [esp+8h] [ebp-54h]
     bool v9; // [esp+Ch] [ebp-50h]
     clientInfo_t *localClientInfo; // [esp+1Ch] [ebp-40h]
-    float newPos[2]; // [esp+20h] [ebp-3Ch] BYREF
+    float newPos[3]; // [esp+20h] [ebp-3Ch] BYREF
     float clientPos[3]; // [esp+28h] [ebp-34h]
     int team; // [esp+34h] [ebp-28h]
     cg_s *cgameGlob; // [esp+38h] [ebp-24h]
@@ -1704,6 +1704,7 @@ void __cdecl CG_CompassUpdateActors(int localClientNum)
                 clientPos[2] = cgameGlob->refdef.vieworg[2];
                 newPos[0] = posDelta[0] + clientPos[0];
                 newPos[1] = posDelta[1] + clientPos[1];
+                newPos[2] = clientPos[0]; // CanLocalPlayerHearActorFootsteps reads newPos[2]: on i386 the next local, clientPos[0]
                 ActorUpdatePos(localClientNum, actor, newPos, index);
                 actor->lastYaw = (float)((int)(cgameGlob->nextSnap->ps.iCompassPlayerInfo & 0xFF000000) >> 24) * 1.40625;
                 actor->lastUpdate = cgameGlob->time;

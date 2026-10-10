@@ -490,9 +490,17 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 14 (the split-locals scan, Decisions session 14):
+- `CG_SP_trigger_multiple`/`_radius` (cg_spawn.cpp) pass a `char` parameter as `int *`
+  to `CG_InitTriggerWait`; unreachable (the flag is always 64, which takes the other branch).
+- `UI_FeederDoubleClickDlcMaps` reads a dvar name at `mapInfo::splitscreen` (an `int`;
+  IDA's struct is off there); PC has no DLC double-click.
+- `G_RunMissileInternal`'s `missileDebugAttractors` path reassigns the missile `ent` to the
+  attractor's entity before `G_RunThink(ent)` (decompile or original; debug dvar only).
+- `CL_CompositeDrawEmblemPhysical`'s matrix setup (rotation, scale through `pow`, flip) is a
+  reconstruction nobody checked against IDA; only its UV array was fixed.
+
 Seen in session 13:
-- Two more scalar locals passed as vectors (Decisions session 13, CanDamage):
-  `g_missile.cpp` ~3499 and `cg_compass.cpp` ~2992.
 - The GL layer's deviations from D3D9 (Decisions session 13), kept for Linux.
 
 Seen in session 11 (details in Next steps 2 and 3):
@@ -619,6 +627,43 @@ Pre-existing (wrong on every build):
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
 
+## Decisions (session 14)
+
+- **Split locals, every build** (the rest of session 13's CanDamage kind): IDA turns an
+  array into scalar locals and the code relies on the i386 frame: the first scalar's
+  address passed as a vector or buffer, `*(&x + i)`, or an inlined `strcat` that starts
+  at `(char *)&prevLocal + 3` (the byte before the buffer). Nothing keeps them adjacent
+  on arm64, and the recompiled i386 builds don't promise it either.
+  `tools/audit_splitlocals.py` finds them (each `&scalar` or `&pointer` local passed where
+  the callee, followed through its calls, reads past element 0; arrays passed or cast past
+  their size; pointer arithmetic on a local's address and walks from it; scalar struct
+  members; `#if 0` skipped): 146 sites before, 0 now plus 46 reviewed and listed in the
+  tool. Each fix is an array rebuilt from IDA's stack offsets. Those reached in play: the
+  player use list's bounds, the HUD stance icon and prone text colour (read past
+  `deltaTime`), view angles after a missile or gunner camera, the attack dogs'
+  `CM_CheckForTraps` (start point; `maxs` was `[2]`), missile attractors (`perp = delta -
+  forwardDist * forward`, normalized), script vehicles' path move direction, the
+  underwater bullet impact normal, the spot dlight's attenuation constant (a vec3
+  uploaded as a vec4), the generic filter's clear colour, the sound proximity trace, the
+  compass player arrow, the stats-milestone ticker text, the water simulation (two
+  16-byte stores 4 bytes short of a float4; a temporary now, its lanes copied where i386
+  put them). Menus: `setDvarFromLocString` (4 KB into a `char`), the server browser's
+  filter name (two pointers written through an `int`) and refresh time (64 bytes into a
+  `long double`), the Create-a-Class item colour (read `itemNum` and 3 floats, not
+  `itemColor`), "equipped in classes", playlist rotations, emblem layers (the UVs were
+  split across four locals; the hand rewrite transformed `layer->pos` in place each draw
+  and used a transformed UV as the outline size). Mods and raw-file loaders: merged weapon
+  files (split pointer arrays), the merged config parser, sun parsing, layered technique
+  sets, xanim part counts, collmap bounds, brush edge partitions, menu `#include`. The
+  rest are debug draws and dev tools. Where i386 read a neighbour, the value stays: the
+  compass friendlies' unknown z is `clientPos[0]` as before. Checked: the ASan client,
+  7 managed bots and the scripted player, 330 s over three maps (1-minute TDM rotations),
+  and 240 s more after the last fixes; the Create-a-Class, barracks, playercard and
+  server browser menus: no report.
+- **memfile LZO lengths**: `lzo_uint` is `size_t`, 8 bytes on 64-bit; the 4-byte lengths
+  passed by address overflowed, and the compressor's final length write zeroed the first
+  4 bytes of each block. Temporaries now (no MP memfile compresses).
+
 ## Decisions (session 13)
 
 - **Spec first** (src/gfx_gl/gl_spec.cpp, `KB_SPEC`): hooks in every D3D9 entry point
@@ -739,10 +784,8 @@ Pre-existing (wrong on every build):
 - **CanDamage's cone check** (g_combat_mp.cpp, every build): the decompile split each
   direction vector into three float locals and passed the first to `Vec3Normalize`,
   relying on the i386 stack layout; ASan caught the stack overflow on the server thread
-  (a grenade's `G_RadiusDamage` with bots). They are `float[3]` now. A scan found two
-  more of the kind, not fixed (a separate task): `g_missile.cpp` ~3499 (missile
-  attractors, `Vec3NormalizeTo(&perpDir[2], &perpDist)`) and `cg_compass.cpp` ~2992
-  (`Vec2Length(&v22)`).
+  (a grenade's `G_RadiusDamage` with bots). They are `float[3]` now. The rest of the
+  kind: Decisions session 14.
 - **KB_CMDS_GAMETIME=1** (linux_main.cpp; bench_views.py sets it): KB_CMDS times its
   entries by the client's server time instead of the wall clock, so two runs that
   load at different speeds take their screenshots at the same moment of the map.

@@ -48,7 +48,7 @@ void __cdecl UI_BuildServerDisplayList(int localClientNum, uiInfo_s *uiInfo, int
     char v21; // [esp+13h] [ebp-449h]
     char *motd; // [esp+18h] [ebp-444h]
     char *v23; // [esp+1Ch] [ebp-440h]
-    int filter; // [esp+30h] [ebp-42Ch] BYREF
+    const char *filter[2]; // [esp+30h] [ebp-42Ch] BYREF
     const char *mod; // [esp+38h] [ebp-424h]
     char info[1024]; // [esp+3Ch] [ebp-420h] BYREF
     int ping; // [esp+440h] [ebp-1Ch]
@@ -197,7 +197,7 @@ void __cdecl UI_BuildServerDisplayList(int localClientNum, uiInfo_s *uiInfo, int
                                     v17 = Info_ValueForKey(info, "gametype"),
                                     !I_stricmp(v17, v19->gameType)))
                             && (ui_serverFilterType <= 0
-                                || (v20 = UI_GetServerFilter((const char**)&filter, ui_serverFilterType)[1],
+                                || (v20 = UI_GetServerFilter(filter, ui_serverFilterType)[1],
                                     v18 = Info_ValueForKey(info, "game"),
                                     !I_stricmp(v18, v20))))
                         {
@@ -745,7 +745,7 @@ void __cdecl UI_DrawServerRefreshDate(
     const char *v8; // eax
     char *v9; // eax
     const char *VariantString; // eax
-    long double v11; // [esp+1Ch] [ebp-48Ch] OVERLAPPED BYREF
+    char v11[72]; // [esp+1Ch] [ebp-48Ch] OVERLAPPED BYREF
     int offset; // [esp+64h] [ebp-444h]
     char hackString[1028]; // [esp+68h] [ebp-440h] BYREF
     int replaceCounts[2]; // [esp+470h] [ebp-38h] BYREF
@@ -811,9 +811,9 @@ void __cdecl UI_DrawServerRefreshDate(
     {
         v9 = va("ui_lastServerRefresh_%i", ui_netSource->current.integer);
         VariantString = Dvar_GetVariantString(v9);
-        I_strncpyz((char *)&v11 + 4, VariantString, 64);
+        I_strncpyz(&v11[4], VariantString, 64);
         string = UI_SafeTranslateString("EXE_REFRESHTIME");
-        string = UI_ReplaceConversionString((char *)string, (const char *)&v11 + 4);
+        string = UI_ReplaceConversionString((char *)string, &v11[4]);
         UI_DrawText(
             &scrPlaceView[contextIndex],
             (char *)string,

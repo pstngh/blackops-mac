@@ -2678,32 +2678,24 @@ void __cdecl Playlist_SetSVMapRotation()
                         gametypeEntryPrevious = Playlist_FindGametype(v6->gametype);
                         if ( !gametypeEntryPrevious || I_strcmp(gametypeEntryPrevious->scriptName, gametypeEntry->scriptName) )
                         {
-                            v16 = (char *)&gametypeEntryPrevious + 3;
-                            while ( *++v16 )
-                                ;
+                            v16 = &token[strlen(token)];
                             strcpy(v16, " gametype ");
                             strncat(token, gametypeEntry->scriptName, gametype_len);
                         }
                     }
                     else
                     {
-                        v18 = (char *)&gametypeEntryPrevious + 3;
-                        while ( *++v18 )
-                            ;
+                        v18 = &token[strlen(token)];
                         strcpy(v18, "gametype ");
                         strncat(token, gametypeEntry->scriptName, gametype_len);
                     }
-                    v14 = (char *)&gametypeEntryPrevious + 3;
-                    while ( *++v14 )
-                        ;
+                    v14 = &token[strlen(token)];
                     strcpy(v14, " map ");
                     strncat(token, entry->mapname, mapname_len);
                     if ( (unsigned int)(&rotation[strlen(rotation) + 1] - &rotation[1] + &token[strlen(token) + 1] - &token[1]) >= 0x400 )
                         break;
                     v12 = &token[strlen(token) + 1];
-                    v11 = (char *)&entry + 3;
-                    while ( *++v11 )
-                        ;
+                    v11 = &rotation[strlen(rotation)];
                     memcpy(v11, token, v12 - token);
                     token[0] = 0;
                 }
@@ -2730,15 +2722,11 @@ void __cdecl Playlist_SetSVMapRotationCurrent(int entryNum)
         gametypeEntry = Playlist_FindGametype(entry->gametype);
         if ( gametypeEntry )
         {
-            v4 = (char *)&playlistId + 3;
-            while ( *++v4 )
-                ;
+            v4 = &token[strlen(token)];
             strcpy(v4, "gametype ");
             strncat(token, gametypeEntry->scriptName, strlen(gametypeEntry->scriptName));
         }
-        v2 = (char *)&playlistId + 3;
-        while ( *++v2 )
-            ;
+        v2 = &token[strlen(token)];
         strcpy(v2, " map ");
         strncat(token, entry->mapname, strlen(entry->mapname));
         Dvar_SetStringByName("sv_mapRotationCurrent", token);
