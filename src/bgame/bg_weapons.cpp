@@ -467,6 +467,23 @@ void __cdecl BG_GetSpreadForWeapon(
         *minSpread = (float)(perk_weapSpreadMultiplier->current.value * 1.0) * *minSpread;
         *maxSpread = (float)(perk_weapSpreadMultiplier->current.value * 1.0) * *maxSpread;
     }
+    // kb_staticCrosshair: a human player's shots land inside the fixed crosshair, whatever the
+    // stance, movement or firing; shotguns keep their pellet spread (the user's choice). A
+    // spread already smaller (vehicle guns, Steady Aim prone) stays.
+    if ( kb_staticCrosshair->current.enabled && weapDef->weapClass != WEAPCLASS_SPREAD && BG_KbHumanPlayer(ps) )
+    {
+        if ( *minSpread > KB_CROSSHAIR_SPREAD )
+            *minSpread = KB_CROSSHAIR_SPREAD;
+        if ( *maxSpread > KB_CROSSHAIR_SPREAD )
+            *maxSpread = KB_CROSSHAIR_SPREAD;
+    }
+}
+
+// kb_noAds: human players never raise the sights, not even with the weapons that raise them to
+// fire (launchers, the Death Machine), which fire from the hip; vehicle seats keep theirs.
+static bool BG_KbNoAds(const playerState_s *ps)
+{
+    return kb_noAds->current.enabled && (ps->eFlags & 0x4000) == 0 && BG_KbHumanPlayer(ps);
 }
 
 void __cdecl PM_UpdateAimDownSightFlag(pmove_t *pm, pml_t *pml)
@@ -480,6 +497,8 @@ void __cdecl PM_UpdateAimDownSightFlag(pmove_t *pm, pml_t *pml)
         __debugbreak();
     ps->pm_flags &= ~0x10u;
     adsAllowed = PM_IsAdsAllowed(pm, pml);
+    if ( BG_KbNoAds(ps) )
+        adsAllowed = 0;
     //adsRequested = bitarray<51>::testBit(&pm->cmd.button_bits, 0xBu);
     adsRequested = pm->cmd.button_bits.testBit(0xBu);
     //if ( bitarray<51>::testBit(&pm->cmd.button_bits, 1u)
@@ -741,6 +760,7 @@ void __cdecl PM_UpdateAimDownSightLerp(pmove_t *pm, pml_t *pml)
             adsRequested = 1;
         }
         if ( weapDef->adsFireOnly
+            && !BG_KbNoAds(ps)
             && (ps->weaponDelay || weapDef->fireType == WEAPON_FIRETYPE_STACKED && (ps->weapFlags & 0x400) != 0)
             && (ps->weaponstate == 6 || ps->weaponstate == 31) )
         {
@@ -3428,7 +3448,7 @@ LABEL_34:
         else
             ps->weaponRestrictKickTime = weapDef->iFireDelay + weapDef->adsGunKickReducedKickBullets * weapDef->iFireTime;
     }
-    if ( weapDef->adsFireOnly && weapDef->fireType != WEAPON_FIRETYPE_MINIGUN )
+    if ( weapDef->adsFireOnly && weapDef->fireType != WEAPON_FIRETYPE_MINIGUN && !BG_KbNoAds(ps) )
     {
         if ( (int)(float)((float)(1.0 - ps->fWeaponPosFrac) * (float)(1.0 / weapVariantDef->fOOPosAnimLength[0])) < *weaponDelay )
             v2 = *weaponDelay;
@@ -4591,6 +4611,7 @@ void __cdecl Dtp_State_Loop(playerState_s *ps)
 
 void __cdecl PM_Weapon_CheckForSprint(pmove_t *pm)
 {
+    bool sprinting;
     playerState_s *ps; // [esp+0h] [ebp-4h]
 
     if ( !pm && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\bgame\\bg_weapons.cpp", 4901, 0, "%s", "pm") )
@@ -4625,11 +4646,13 @@ void __cdecl PM_Weapon_CheckForSprint(pmove_t *pm)
         && ps->weaponstate != 26
         && (ps->pm_flags & 0x400000) == 0 )
     {
-        if ( (ps->pm_flags & 0x8000) != 0 && (ps->weaponstate < 27 || ps->weaponstate > 29) )
+        // kb_sprintFire: a human player's weapon stays up (and fires) while sprinting
+        sprinting = (ps->pm_flags & 0x8000) != 0 && !(kb_sprintFire->current.enabled && BG_KbHumanPlayer(ps));
+        if ( sprinting && (ps->weaponstate < 27 || ps->weaponstate > 29) )
         {
             Sprint_State_Raise(ps);
         }
-        else if ( (ps->pm_flags & 0x8000) == 0 && (ps->weaponstate == 27 || ps->weaponstate == 28) )
+        else if ( !sprinting && (ps->weaponstate == 27 || ps->weaponstate == 28) )
         {
             Sprint_State_Drop(ps);
         }

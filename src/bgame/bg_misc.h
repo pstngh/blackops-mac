@@ -168,6 +168,11 @@ enum entity_event_t : __int32
 };
 
 void __cdecl BG_RegisterDvars();
+bool __cdecl BG_KbHumanPlayer(const playerState_s *ps);
+// kb_staticCrosshair's spread in degrees: the smallest crosshair a weapon draws (the Python's
+// prone minimum). Every weapon with side reticles draws reticle_side_small, 8 units, no offset.
+static const float KB_CROSSHAIR_SPREAD = 1.0f;
+static const int KB_CROSSHAIR_SIDE_SIZE = 8;
 char *__cdecl BG_GetEntityTypeName(int eType);
 const gitem_s *__cdecl BG_FindItemForWeapon(unsigned int weapon);
 const gitem_s *__cdecl G_FindItem(char *pickupName);
@@ -316,6 +321,9 @@ extern const dvar_s *player_debugHealth;
 extern const dvar_s *player_debugSprint;
 extern const dvar_s *player_sustainAmmo;
 extern const dvar_s *kb_infiniteReserve;
+extern const dvar_s *kb_staticCrosshair;
+extern const dvar_s *kb_noAds;
+extern const dvar_s *kb_sprintFire;
 extern const dvar_s *player_clipSizeMultiplier;
 extern const dvar_s *player_lastStandBleedoutTime;
 extern const dvar_s *player_lastStandBleedoutTimeNoRevive;

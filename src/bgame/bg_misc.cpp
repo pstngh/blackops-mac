@@ -23,6 +23,7 @@
 #include <qcommon/threads.h>
 #include <game/g_vehicle_path.h>
 #include <xanim/xanim.h>
+#include <client_mp/sv_client_mp.h>
 
 bool render_waist_foot_line;
 
@@ -419,6 +420,9 @@ const dvar_s *player_debugHealth;
 const dvar_s *player_debugSprint;
 const dvar_s *player_sustainAmmo;
 const dvar_s *kb_infiniteReserve;
+const dvar_s *kb_staticCrosshair;
+const dvar_s *kb_noAds;
+const dvar_s *kb_sprintFire;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1030,6 +1034,21 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Reloading doesn't use up the human players' reserve ammo (the clip still empties)");
+    kb_staticCrosshair = _Dvar_RegisterBool(
+        "kb_staticCrosshair",
+        1,
+        1u,
+        "A small fixed crosshair for every weapon; the human players' bullets land inside it (shotguns keep their spread)");
+    kb_noAds = _Dvar_RegisterBool(
+        "kb_noAds",
+        1,
+        1u,
+        "Human players can't aim down the sights; every weapon fires from the hip");
+    kb_sprintFire = _Dvar_RegisterBool(
+        "kb_sprintFire",
+        1,
+        1u,
+        "Human players keep the weapon up while sprinting and can fire without ending the sprint");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,
@@ -1942,6 +1961,14 @@ void __cdecl BG_RegisterDvars()
     zero_idle_movement = _Dvar_RegisterBool("zero_idle_movement", 0, 0x80u, "Turn the ADS idle movement off.");
     BG_Flame_RegisterDvars();
     BG_Wind_RegisterDvars();
+}
+
+// The user's changes that apply to human players only (kb_infiniteReserve, kb_staticCrosshair,
+// kb_noAds, kb_sprintFire). pmove runs on the server and in the client's prediction: bots run
+// it only on the server (SV_IsTestClient), and a client predicts only its own player.
+bool __cdecl BG_KbHumanPlayer(const playerState_s *ps)
+{
+    return !com_sv_running->current.enabled || !SV_IsTestClient(ps->clientNum);
 }
 
 char *__cdecl BG_GetEntityTypeName(int eType)

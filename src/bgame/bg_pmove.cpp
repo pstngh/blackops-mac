@@ -2287,6 +2287,10 @@ void __cdecl PM_EndSprint(playerState_s *ps, pmove_t *pm)
 
 bool __cdecl PM_SprintStartInterferingButtons(const playerState_s *ps, int forwardSpeed, bitarray<51> *button_bits)
 {
+    bool sprintFire;
+
+    // kb_sprintFire: a human player's fire buttons (the left gun's too) don't stop a sprint
+    sprintFire = kb_sprintFire->current.enabled && BG_KbHumanPlayer(ps);
     if ( (ps->pm_flags & 8) != 0 )
         return 1;
     if ( ps->waterlevel >= 2 )
@@ -2299,7 +2303,7 @@ bool __cdecl PM_SprintStartInterferingButtons(const playerState_s *ps, int forwa
         return 1;
     if ( button_bits->testBit(2u) )
         return 1;
-    if ( button_bits->testBit(0) )
+    if ( button_bits->testBit(0) && !sprintFire )
         return 1;
     if ( button_bits->testBit(5u) )
         return 1;
@@ -2307,8 +2311,12 @@ bool __cdecl PM_SprintStartInterferingButtons(const playerState_s *ps, int forwa
         return 1;
     if ( button_bits->testBit(0xFu) )
         return 1;
-    if ( button_bits->testBit(0x18u) && BG_GetWeaponDef(ps->weapon)->offhandSlot != OFFHAND_SLOT_EQUIPMENT )
+    if ( button_bits->testBit(0x18u)
+        && BG_GetWeaponDef(ps->weapon)->offhandSlot != OFFHAND_SLOT_EQUIPMENT
+        && !(sprintFire && BG_GetWeaponDef(ps->weapon)->bDualWield) )
+    {
         return 1;
+    }
     if ( ps->leanf != 0.0 )
         return 1;
     if ( (ps->pm_flags & 0x1001C) != 0 )
@@ -2339,6 +2347,9 @@ bool __cdecl PM_SprintStartInterferingButtons(const playerState_s *ps, int forwa
 
 bool __cdecl PM_SprintEndingButtons(const pmove_t *pm)
 {
+    bool sprintFire;
+
+    sprintFire = kb_sprintFire->current.enabled && BG_KbHumanPlayer(pm->ps);
     if ( pm->ps->waterlevel >= 2 )
         return 1;
     if ( (pm->ps->pm_flags & 0x10018) != 0 )
@@ -2351,7 +2362,7 @@ bool __cdecl PM_SprintEndingButtons(const pmove_t *pm)
         return 1;
     if ( pm->cmd.button_bits.testBit(2u) )
         return 1;
-    if ( pm->cmd.button_bits.testBit(0) )
+    if ( pm->cmd.button_bits.testBit(0) && !sprintFire )
         return 1;
     if ( pm->cmd.button_bits.testBit(5u) )
         return 1;
@@ -2366,7 +2377,8 @@ bool __cdecl PM_SprintEndingButtons(const pmove_t *pm)
     if ( pm->ps->leanf != 0.0 )
         return 1;
     if ( pm->cmd.button_bits.testBit(0x18u)
-        && BG_GetWeaponDef(pm->ps->weapon)->offhandSlot != OFFHAND_SLOT_EQUIPMENT )
+        && BG_GetWeaponDef(pm->ps->weapon)->offhandSlot != OFFHAND_SLOT_EQUIPMENT
+        && !(sprintFire && BG_GetWeaponDef(pm->ps->weapon)->bDualWield) )
     {
         return 1;
     }

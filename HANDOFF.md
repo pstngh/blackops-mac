@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 16)
+## Status (2026-10-10, session 17)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -191,6 +191,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   `kb_noGrenades`, `kb_noLastStand`, `kb_noDeathCam`, `kb_noMusic`, `kb_noAnnouncer`,
   `kb_infiniteReserve`); 0 gives back the original game. Verified in play (Decisions session
   16); the game folder's copy has it.
+- **The user's gameplay changes, stage B** (session 17): a small fixed crosshair for every
+  weapon, the smallest one the game draws (1 degree), with the human players' shots locked
+  inside it (shotguns keep their pellet spread); no aiming down the sights for human players
+  (every weapon fires from the hip; the Strela locks on from the hip); human players keep the
+  weapon up while sprinting and fire without ending the sprint. Bots keep their spread, ADS
+  and sprint. Dvars `kb_staticCrosshair`, `kb_noAds`, `kb_sprintFire` (default 1, archived);
+  verified in play (Decisions session 17); the game folder's copy has it.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -394,17 +401,16 @@ current work, in three stages. The Metal leftovers in 0 are optional: nothing th
   only; each change is a dvar that defaults on (`kb_*`, archived); "death cam" means the
   killcam, the final killcam and the ~2 s death view.
 - **Stage A (done, session 16)**: 2, 3, 4, 5, 6, 10 (Decisions session 16).
-- **Stage B (next)**: 7, 8, 9, engine pmove/cgame work: crosshair (`CG_DrawCrosshair`, the
-  spread it draws), ADS (`PM_UpdateAimDownSightFlag` / the ADS button), sprint
-  (`PM_Weapon` sprint states, `sprintOut`, fire while sprinting). Bots keep ADS and the normal
-  sprint (the user's choice). Ask the user first whether the crosshair is only drawn small
-  and fixed (bullet spread unchanged) or whether the spread is locked to it too. pmove runs
-  on both sides (client prediction and server): a change must read the same dvar on both,
-  as `kb_infiniteReserve` does (BG_KbInfiniteReserve tells bots by `SV_IsTestClient` when
-  the server runs here; a client predicts only its own player).
-- **Stage C**: 1, the lean. Needs OpenMoHAA's source (GitHub, openmoh/openmohaa): ask the
+- **Stage B (done, session 17)**: 7, 8, 9 (Decisions session 17). The user's answers: the
+  hip-fire spread is locked to the crosshair too; shotguns keep their pellet spread.
+- **Stage C (next)**: 1, the lean. Needs OpenMoHAA's source (GitHub, openmoh/openmohaa): ask the
   user before downloading it. Then match its lean (angle, speed, view offset, how it moves
-  the eye and the body, collision) in BO's pmove lean (`PM_UpdateLean`, `leanf`).
+  the eye and the body, collision) in BO's pmove lean (`PM_UpdateLean` in bg_pmove.cpp,
+  `ps->leanf`, the `player_lean_shift`/`player_lean_rotate` dvars, `AddLeanToPosition`), as a
+  `kb_*` dvar like the others. Leaning ends a sprint and slows walking to 40% today
+  (`PM_SprintEndingButtons`, `PM_CmdScale_Walk`'s `leanf != 0`): OpenMoHAA's rules decide
+  those too. Whether the lean change is the human player's only was not asked (bots may not
+  lean at all); `BG_KbHumanPlayer` (bg_misc.cpp) is the test if it should be.
 
 0. **Metal backend leftovers** (Metal backend above; built in session 13, the default
    since session 15). The rules agreed with the user (2026-10-09) still hold for any work
@@ -673,6 +679,75 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 17)
+
+The user's gameplay changes, stage B (items 7, 8, 9 of the list in Next steps), as in stage A:
+archived dvars that default to 1, 0 gives the original game. All three apply to human players
+only (bots keep their spread, ADS and sprint): `BG_KbHumanPlayer` (bg_misc.cpp) is
+`!com_sv_running || !SV_IsTestClient(clientNum)`, the test `kb_infiniteReserve` used, now shared.
+pmove and the spread run on the server and in the client's prediction; bots run only on the
+server, and a client predicts only its own player, so both sides agree.
+
+- **The user's answers** (session 17): the hip-fire spread is locked to the crosshair, not only
+  drawn small; shotguns keep their own pellet spread (their hip spread is the pellet cone).
+- **The crosshair** (the weapon table dumped at load, 1705 variants): every weapon that draws
+  side reticles draws the same material, `reticle_side_small`, 8 units, `iReticleMinOfs` 0,
+  `fHipReticleSidePos` 0; crosshairs differ only by the gap, which is the spread
+  (`240 * tan(spread) / tanHalfFovY` in the 640x480 space). The smallest a real weapon draws is
+  the Python's prone minimum, 1.0 degree (6.7 of 480 units at the default FOV; the dev
+  `defaultweapon_mp`'s 0.4 doesn't count); standing minimums start at 2.0 (SMGs, G11, Python).
+- **kb_staticCrosshair**: `CG_DrawReticleSides` draws `reticle_side_small` (registered in
+  `CG_Init`, `cg_kbReticleSide`) at 8 units, the gap from 1.0 degree by the game's own formula
+  (so it matches the bullet cone at any FOV), at full alpha (no fading with `aimSpreadScale`),
+  for every weapon, the launchers, Death Machine and killstreak items too (they had a centre
+  reticle or none); no centre reticle. Where the original hides the crosshair (weapon raising
+  or switching, reload, melee, hardcore, flashbang) it still does. `BG_GetSpreadForWeapon`
+  clamps a human player's min and max spread to 1.0 degree, except shotguns
+  (`WEAPCLASS_SPREAD`); a smaller spread (vehicle guns, Steady Aim prone) stays. The server's
+  `FireWeapon` (bullets and rockets), the client's predicted impacts (`CG_DrawBulletImpacts`)
+  and the crosshair all go through it. Measured per shot: MP5K standing, walking and
+  sprinting 1.0 (dvar off: 1.3-3.25), Dragunov 1.0 (10-15), RPG/M72/M202 1.0, Stakeout 4-7
+  (unchanged), Death Machine 0 (its own); bots 2-8, 0 in ADS (unchanged).
+- **kb_noAds**: `PM_UpdateAimDownSightFlag` never allows ADS for a human player outside a
+  vehicle seat. The weapons that raise the sights to fire (`adsFireOnly`: RPG, M72 LAW, China
+  Lake, M202, M220 TOW, Death Machine) fire from the hip, without the raise or its delay
+  (`PM_UpdateAimDownSightLerp`, `PM_Weapon_StartFiring`); sniper rifles have no scope. The
+  heat-seeking lock-on (Strela, M202, M72) runs only while `PlayerStingerAds()` in
+  `_heatseekingmissile.gsc`, which wanted `playerads() == 1.0`: a `Scr_KbPatchSource` patch
+  also accepts a human player with `kb_noAds` (`!self istestclient()`), so it runs while the
+  launcher is held. The Strela (`requireLockonToFire`) locked on the dev attack helicopter
+  (`set scr_spawnenemyheli 1`, `developer_script 1`, the view turned to it by a temporary
+  hack) from the hip within ~1 s and fired locked; with no lock it refuses to fire, as before.
+- **kb_sprintFire**: the fire button (and a dual-wield left gun's, bit 0x18) no longer ends or
+  prevents a sprint (`PM_SprintEndingButtons`, `PM_SprintStartInterferingButtons`), and
+  `PM_Weapon_CheckForSprint` never enters the sprint weapon states (27-29: raise, loop, drop),
+  so the weapon stays ready and fires at sprint speed. The viewmodel's lowered sprint pose
+  came from those states, so the gun stays up; the sprint bob stays. Reload, melee, jump,
+  crouch/prone, offhands and lean still end a sprint; the automatic reload of an empty clip
+  doesn't. Bots see the third-person sprint animation while the player fires. Measured
+  (mp_nuked, MP5K): sprint + fire at 290-330 units/s, weapon state 6 (firing) at the press,
+  sprint flag on throughout; dvars off: states 27/28, the press drops the weapon (29) and
+  fires 0.3 s later at 203 units/s.
+- **Checks**: release client, 7 managed bots, the scripted player standing, walking, sprinting
+  and holding the ADS button while firing an SMG, a sniper rifle, a shotgun, the launchers,
+  the Death Machine and the Strela, with temporary per-shot logs on the server and of the
+  client's predicted impacts (removed): all 705 bot shots kept their spread and ADS, none
+  fired sprinting. A client process on a dedicated server (prediction with no server in the
+  process) predicted the same 1.0 as the server. Screenshots: the crosshair keeps one size
+  standing, walking, sprinting and firing (the original's grows and fades). The ASan client
+  (`kb_godMode 0`, fu bots, 1-minute TDM, the scripted player sprint-firing and holding the
+  ADS button in a loop) over mp_nuked, mp_array, mp_cracked and mp_crisis (three match ends
+  and rotations): no report, no assert, no script patch warning. Every changed file through
+  check_file.py natively and `--i386`.
+- **fps**: unchanged. bench_views.py --bots, the reference (HEAD) and this build alternating, four
+  runs each. Two pairs in the normal display state (`KB_FPS` presented = shown, ~400-600):
+  ref A-F, sky, overview 533/624/596/684/644/667/596/437 and 526/616/644/687/578/669/602/416;
+  new 535/653/717/700/646/679/723/438 and 547/645/659/686/644/666/660/425. The first pair ran
+  with the display asleep or locked (120 presented, 0 shown a second), and there the new build
+  was 7-10% lower at D, E, F and sky (630/628/656/628 against 686/673/708/697), level elsewhere;
+  not seen in the three other pairs, and the change adds only a few dvar tests per pmove and one
+  `tan` per frame.
 
 ## Decisions (session 16)
 

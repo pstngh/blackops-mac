@@ -16,6 +16,11 @@
 #include <ui_mp/ui_main_mp.h>
 #include "cg_drawtools.h"
 
+// kb_staticCrosshair: every weapon draws the same small crosshair, the four side pieces of the
+// smallest one the game draws (KB_CROSSHAIR_SPREAD), fixed: no growing or fading with the
+// spread, no centre reticle. Registered by CG_Init.
+Material *cg_kbReticleSide;
+
 void __cdecl CG_CalcCrosshairPosition(const cg_s *cgameGlob, float *x, float *y)
 {
     float gunYaw; // [esp+10h] [ebp-24h]
@@ -292,7 +297,8 @@ void __cdecl CG_DrawCrosshair(int localClientNum)
                                                 v1 = centerW;
                                             centerW = v1;
                                         }
-                                        CG_DrawReticleCenter(localClientNum, weapDef, color, centerX, centerY, centerW, transScale);
+                                        if ( !kb_staticCrosshair->current.enabled )
+                                            CG_DrawReticleCenter(localClientNum, weapDef, color, centerX, centerY, centerW, transScale);
                                         CG_DrawReticleSides(localClientNum, weapIndex, color, centerX, centerY, centerW, transScale);
                                         //if ( g_DXDeviceThread == GetCurrentThreadId() )
                                             //D3DPERF_EndEvent();
@@ -1304,7 +1310,10 @@ void __cdecl CG_DrawReticleSides(
     {
         __debugbreak();
     }
-    material = weapDef->reticleSide;
+    if ( kb_staticCrosshair->current.enabled )
+        material = cg_kbReticleSide;
+    else
+        material = weapDef->reticleSide;
     if ( material )
     {
         horzAlign = 2;
@@ -1322,10 +1331,17 @@ void __cdecl CG_DrawReticleSides(
         {
             reticleAlpha = 1.0f;
         }
-        CG_CalcReticleColor(baseColor, reticleAlpha, cgameGlob->predictedPlayerState.aimSpreadScale, reticleColor);
+        CG_CalcReticleColor(
+            baseColor,
+            reticleAlpha,
+            kb_staticCrosshair->current.enabled ? 0.0f : cgameGlob->predictedPlayerState.aimSpreadScale,
+            reticleColor);
         if ( reticleColor[3] >= 0.0099999998 )
         {
-            drawSize[0] = (float)weapDef->iReticleSideSize * transScale;
+            if ( kb_staticCrosshair->current.enabled )
+                drawSize[0] = (float)KB_CROSSHAIR_SIDE_SIZE * transScale;
+            else
+                drawSize[0] = (float)weapDef->iReticleSideSize * transScale;
             drawSize[1] = drawSize[0];
             CG_CalcReticleSpread(cgameGlob, weapDef, drawSize, transScale, spread);
             scrPlace = &scrPlaceView[localClientNum];
@@ -1405,6 +1421,13 @@ void __cdecl CG_CalcReticleSpread(
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame\\cg_draw_reticles.cpp", 1016, 0, "%s", "weapDef") )
     {
         __debugbreak();
+    }
+    if ( kb_staticCrosshair->current.enabled )
+    {
+        scale = (float)(240.0 * tan(KB_CROSSHAIR_SPREAD * transScale * 0.017453292)) / cgameGlob->refdef.tanHalfFovY;
+        *spread = scale;
+        spread[1] = scale;
+        return;
     }
     BG_GetSpreadForWeapon(&cgameGlob->predictedPlayerState, weapDef, &f, &maxSpread);
     f = (float)((float)((float)(maxSpread - f) * (float)(cgameGlob->predictedPlayerState.aimSpreadScale / 255.0)) + f)

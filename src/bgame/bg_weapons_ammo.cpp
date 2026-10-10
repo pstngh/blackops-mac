@@ -9,7 +9,6 @@
 #include "bg_misc.h"
 #include "bg_pmove.h"
 #include <flame/flame_system.h>
-#include <client_mp/sv_client_mp.h>
 
 unsigned int bg_numWeapClips;
 unsigned int bg_numAmmoTypes;
@@ -665,12 +664,10 @@ int __cdecl BG_WeaponAmmo(const playerState_s *ps, unsigned int weapon)
 }
 
 // kb_infiniteReserve: a reload fills the clip and leaves the reserve as it was, for human
-// players. Bots run pmove only on the server; a client predicts only its own player.
+// players.
 static bool BG_KbInfiniteReserve(const playerState_s *ps)
 {
-    if ( !kb_infiniteReserve->current.enabled )
-        return 0;
-    return !com_sv_running->current.enabled || !SV_IsTestClient(ps->clientNum);
+    return kb_infiniteReserve->current.enabled && BG_KbHumanPlayer(ps);
 }
 
 void __cdecl PM_ReloadClip(playerState_s *ps)

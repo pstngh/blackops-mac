@@ -1127,6 +1127,13 @@ static const ScrKbPatch scrKbPatches[] =
         "maps\\mp\\gametypes\\_globallogic_utils::waitForTimeOrNotifies( 1.75 );",
         "if ( !GetDvarInt( \"kb_noDeathCam\" ) ) maps\\mp\\gametypes\\_globallogic_utils::waitForTimeOrNotifies( 1.75 );"
     },
+    // kb_noAds: the launchers' lock-on (the Strela fires only locked) runs while a human player
+    // holds one, not only in the sights
+    {
+        "maps/mp/_heatseekingmissile.gsc",
+        "if ( self playerads() == 1.0 )",
+        "if ( self playerads() == 1.0 || ( GetDvarInt( \"kb_noAds\" ) && !self istestclient() ) )"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)

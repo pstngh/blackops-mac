@@ -81,10 +81,12 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-session 16): `kb_godMode` (human players take no damage), `kb_noGrenades`, `kb_noLastStand`,
+sessions 16-17): `kb_godMode` (human players take no damage), `kb_noGrenades`, `kb_noLastStand`,
 `kb_noDeathCam` (respawn 0.1 s after dying), `kb_noMusic`, `kb_noAnnouncer`,
-`kb_infiniteReserve`. Tests where the player should die pass `+set kb_godMode 0`; a scratch
-profile keeps whatever a run set (they are written to its config_mp.cfg).
+`kb_infiniteReserve`, `kb_staticCrosshair` (a fixed small crosshair; the human players' shots
+land inside it, 1 degree), `kb_noAds`, `kb_sprintFire`. Tests where the player should die pass
+`+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`; a scratch profile keeps whatever a run set
+(they are written to its config_mp.cfg).
 
 Playing without a keyboard: `KB_CMDS` runs console commands at times (seconds) after
 the client becomes active in a map (again after each map change), `|`-separated;
@@ -96,7 +98,9 @@ KB_CMDS='8:openscriptmenu team_marinesopfor autoassign|11:openscriptmenu changec
 ```
 
 `changeclass custom1,0` (to `custom5`, then `prestige1`-`prestige5`) picks a
-custom class. `KB_MENU_CMDS` takes the same list but times it from startup and runs it once,
+custom class; the default classes are `assault_mp`, `smg_mp`, `cqb_mp` (shotgun), `lmg_mp`,
+`sniper_mp`. Weapons: `take all|give rpg_mp|weapnext`. On mp_nuked, `setviewpos -100 360 200 90`
+drops the player into the street with ~700 units of clear run north (sprint tests). `KB_MENU_CMDS` takes the same list but times it from startup and runs it once,
 in a map or not: the main menu (`12:openmenu cac_main|30:quit`).
 
 With vsync on (the default), a GL client started while the display sleeps hangs in

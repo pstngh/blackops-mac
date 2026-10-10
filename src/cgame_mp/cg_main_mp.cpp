@@ -40,6 +40,7 @@
 #include <qcommon/threads.h>
 #include <bgame/bg_slidemove.h>
 #include <cgame/cg_draw_names.h>
+#include <cgame/cg_draw_reticles.h>
 #include <cgame/cg_main.h>
 #include <client_mp/cl_input_mp.h>
 #include <EffectsCore/fx_load_obj.h>
@@ -2878,6 +2879,7 @@ void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommand
     UI_ClearLocalUIVisibilityBits(localClientNum);
     SCR_UpdateLoadScreen();
     cgMedia.whiteMaterial = Material_RegisterHandle("white", 7);
+    cg_kbReticleSide = Material_RegisterHandle("reticle_side_small", 7);
     cgMedia.smallDevFont = CL_RegisterFont("fonts/smallDevFont", 1);
     cgMedia.bigDevFont = CL_RegisterFont("fonts/bigDevFont", 1);
     Material_RegisterHandle("net_disconnect", 7);
