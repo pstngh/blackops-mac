@@ -136,6 +136,7 @@ void __cdecl G_GetPlayerViewOrigin_Internal(const playerState_s *ps, float *orig
     else if ((ps->eFlags & 0x4000) == 0 || useBodyPosition && (ps->eFlags2 & 0x10000000) != 0)
     {
         BG_GetPlayerViewOrigin(ps, origin, level.time);
+        BG_KbClipLeanEye(ps, origin, 1);
     }
     else
     {

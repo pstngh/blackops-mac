@@ -2214,6 +2214,7 @@ char __cdecl CG_GetPlayerViewOrigin(int localClientNum, const playerState_s *ps,
     {
         LocalClientGlobals = CG_GetLocalClientGlobals(localClientNum);
         BG_GetPlayerViewOrigin(ps, origin, LocalClientGlobals->time);
+        BG_KbClipLeanEye(ps, origin, 0);
         return 1;
     }
     else
@@ -2379,7 +2380,7 @@ void __cdecl CG_AddPlayerWeapon(
                 lightingOrigin[1] = ps->origin[1];
                 lightingOrigin[2] = ps->origin[2];
                 lightingOrigin[2] = lightingOrigin[2] + ps->viewHeightCurrent;
-                AddLeanToPosition(lightingOrigin, ps->viewangles[1], ps->leanf, 16.0, 20.0);
+                BG_AddLeanToEye(lightingOrigin, ps->viewangles, ps->leanf);
                 constantSet = &cent->pose.constantSet;
                 if ( weapDef->inventoryType == WEAPINVENTORY_ALTMODE )
                     weapVarDef = BG_GetWeaponVariantDef(ps->lastWeaponAltModeSwitch);

@@ -3653,7 +3653,7 @@ char __cdecl PM_WeaponAllowPlant(pmove_t *pm)
     start[2] = ps->origin[2];
     start[2] = start[2] + ps->viewHeightCurrent;
     if ( (ps->eFlags & 0x4000) == 0 )
-        AddLeanToPosition(start, ps->viewangles[1], ps->leanf, 16.0, 20.0);
+        BG_AddLeanToEye(start, ps->viewangles, ps->leanf);
     end[0] = (float)(trace_dist * dir[0]) + start[0];
     end[1] = (float)(trace_dist * dir[1]) + start[1];
     end[2] = (float)(trace_dist * dir[2]) + start[2];

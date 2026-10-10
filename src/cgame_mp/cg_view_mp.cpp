@@ -2896,14 +2896,19 @@ void __cdecl CG_OffsetFirstPersonView(cg_s *cgameGlob)
             cgameGlob->refdef.vieworg[2] = (float)(cgameGlob->landChange * (float)(delta / 150.0))
                                                                      + cgameGlob->refdef.vieworg[2];
         }
-        AddLeanToPosition(
+        BG_AddLeanToEye(
             cgameGlob->refdef.vieworg,
-            cgameGlob->refdefViewAngles[1],
-            cgameGlob->predictedPlayerState.leanf,
-            16.0,
-            20.0);
+            cgameGlob->refdefViewAngles,
+            cgameGlob->predictedPlayerState.leanf);
         if ( (float)(cgameGlob->predictedPlayerState.origin[2] + 8.0) > cgameGlob->refdef.vieworg[2] )
             cgameGlob->refdef.vieworg[2] = cgameGlob->predictedPlayerState.origin[2] + 8.0;
+        if ( kb_aaLean->current.enabled && cgameGlob->predictedPlayerState.leanf != 0.0 )
+        {
+            // kb_aaLean: AA's camera, kept out of walls, rolls 0.4 of the lean angle (OpenMoHAA cg_view.c)
+            BG_KbClipLeanEye(&cgameGlob->predictedPlayerState, cgameGlob->refdef.vieworg, 0);
+            cgameGlob->refdefViewAngles[2] = cgameGlob->predictedPlayerState.leanf * KB_LEAN_DEGREES * KB_LEAN_VIEW_ROLL
+                                           + cgameGlob->refdefViewAngles[2];
+        }
     }
 }
 

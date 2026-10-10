@@ -735,7 +735,7 @@ int __cdecl PM_FootstepType(pmove_t *pm)
         return 108;
     if ( (iPMFlags & 2) != 0 )
     {
-        if ( (iPMFlags & 0x40) == 0 && ps->leanf == 0.0 )
+        if ( (iPMFlags & 0x40) == 0 && !PM_LeanWalks(ps) )
         {
             if ( player_runThreshhold->current.value <= pm->xyspeed )
                 return 106;
@@ -747,7 +747,7 @@ int __cdecl PM_FootstepType(pmove_t *pm)
             return 107;
         }
     }
-    else if ( (iPMFlags & 0x40) == 0 && ps->leanf == 0.0 )
+    else if ( (iPMFlags & 0x40) == 0 && !PM_LeanWalks(ps) )
     {
         if ( (iPMFlags & 0x8000) != 0 )
         {
@@ -831,6 +831,10 @@ void __cdecl PM_UpdateLean(
             v6 = 0.0f;
         ps->leanf = v6;
     }
+    else if ( kb_aaLean->current.enabled )
+    {
+        PM_KbUpdateLean(ps, msec, cmd);
+    }
     else
     {
         iStance = PM_GetEffectiveStance(ps);
@@ -909,6 +913,92 @@ void __cdecl PM_UpdateLean(
             }
         }
     }
+}
+
+// kb_aaLean (HANDOFF, Decisions session 18): Allied Assault's lean, OpenMoHAA's PmoveSingle with
+// MoHAA 1.11's numbers (leanMax 40, leanAdd 10, leanRecoverSpeed 15, leanSpeed 4, leaning while
+// moving allowed). The angle eases toward 40 degrees and back, in every stance and in the air, with
+// no trace (AA keeps only the camera out of walls: BG_KbClipLeanEye). Dead or on a ladder it is 0.
+void __cdecl PM_KbUpdateLean(playerState_s *ps, float msec, usercmd_s *cmd)
+{
+    float frametime;
+    float fLeanAngle;
+    float fAngle;
+    float fLeanStep;
+    bool left;
+    bool right;
+
+    if ( ps->pm_type >= 9 || (ps->pm_flags & 8) != 0 )
+    {
+        ps->leanf = 0.0f;
+        return;
+    }
+    left = cmd->button_bits.testBit(6u);
+    right = cmd->button_bits.testBit(7u);
+    if ( ps->weaponstate == 35 || (ps->pm_flags & 0x800) != 0 || (ps->eFlags & 0x4300) != 0 )
+    {
+        left = 0;
+        right = 0;
+    }
+    frametime = msec * 0.001f;
+    fLeanAngle = ps->leanf * KB_LEAN_DEGREES;
+    if ( left != right )
+    {
+        if ( left )
+        {
+            if ( fLeanAngle <= -KB_LEAN_MAX )
+            {
+                fLeanAngle = -KB_LEAN_MAX;
+            }
+            else
+            {
+                fAngle = frametime * (-KB_LEAN_MAX - fLeanAngle) * KB_LEAN_ADD;
+                fLeanStep = frametime * -KB_LEAN_SPEED;
+                if ( fAngle <= fLeanStep )
+                    fLeanStep = fAngle;
+                fLeanAngle = fLeanAngle + fLeanStep;
+            }
+        }
+        else if ( fLeanAngle >= KB_LEAN_MAX )
+        {
+            fLeanAngle = KB_LEAN_MAX;
+        }
+        else
+        {
+            // AA's right lean takes the eased step either way (both arms of its test do): no minimum speed
+            fLeanAngle = frametime * (KB_LEAN_MAX - fLeanAngle) * KB_LEAN_ADD + fLeanAngle;
+        }
+    }
+    else if ( fLeanAngle != 0.0 )
+    {
+        fAngle = fLeanAngle * frametime * KB_LEAN_RECOVER_SPEED;
+        if ( fLeanAngle <= 0.0 )
+        {
+            fLeanStep = frametime * -KB_LEAN_SPEED;
+            if ( fLeanStep >= fAngle )
+                fLeanStep = fAngle;
+            fLeanAngle = fLeanAngle - fLeanStep;
+            if ( fLeanAngle > 0.0 )
+                fLeanAngle = 0.0f;
+        }
+        else
+        {
+            fLeanStep = frametime * KB_LEAN_SPEED;
+            if ( fLeanStep <= fAngle )
+                fLeanStep = fAngle;
+            fLeanAngle = fLeanAngle - fLeanStep;
+            if ( fLeanAngle < 0.0 )
+                fLeanAngle = 0.0f;
+        }
+    }
+    ps->leanf = fLeanAngle / KB_LEAN_DEGREES;
+}
+
+// kb_aaLean: AA's lean doesn't change how a player moves (MoHAA lets them lean at full speed); BO's
+// makes them walk (40% speed, walk animations and footsteps) and ends or prevents a sprint.
+bool __cdecl PM_LeanWalks(const playerState_s *ps)
+{
+    return ps->leanf != 0.0 && !kb_aaLean->current.enabled;
 }
 
 void __cdecl PM_UpdateViewAngles_RangeLimited(playerState_s *ps)
@@ -2317,7 +2407,7 @@ bool __cdecl PM_SprintStartInterferingButtons(const playerState_s *ps, int forwa
     {
         return 1;
     }
-    if ( ps->leanf != 0.0 )
+    if ( PM_LeanWalks(ps) )
         return 1;
     if ( (ps->pm_flags & 0x1001C) != 0 )
         return 1;
@@ -2374,7 +2464,7 @@ bool __cdecl PM_SprintEndingButtons(const pmove_t *pm)
         return 1;
     if ( pm->cmd.button_bits.testBit(9u) )
         return 1;
-    if ( pm->ps->leanf != 0.0 )
+    if ( PM_LeanWalks(pm->ps) )
         return 1;
     if ( pm->cmd.button_bits.testBit(0x18u)
         && BG_GetWeaponDef(pm->ps->weapon)->offhandSlot != OFFHAND_SLOT_EQUIPMENT
@@ -2618,7 +2708,7 @@ double __cdecl PM_MoveScale(playerState_s *ps, float fmove, float rmove, float u
         __debugbreak();
     scale = (float)((float)ps->speed * max)
                 / (float)(127.0 * sqrtf((float)((float)(fmove * fmove) + (float)(rmove * rmove)) + (float)(umove * umove)));
-    if ( (ps->pm_flags & 0x40) == 0 && ps->leanf == 0.0 )
+    if ( (ps->pm_flags & 0x40) == 0 && !PM_LeanWalks(ps) )
         scalea = scale * 1.0;
     else
         scalea = scale * 0.40000001;
@@ -2647,7 +2737,7 @@ double __cdecl PM_CmdScale(playerState_s *ps, usercmd_s *cmd)
     if ( !max )
         return 0.0;
     scale = (float)((float)ps->speed * (float)max) / (float)(127.0 * total);
-    if ( (ps->pm_flags & 0x40) != 0 || ps->leanf != 0.0 || (ps->pm_flags & 0x400000) != 0 )
+    if ( (ps->pm_flags & 0x40) != 0 || PM_LeanWalks(ps) || (ps->pm_flags & 0x400000) != 0 )
         scalea = scale * 0.40000001;
     else
         scalea = scale * 1.0;
@@ -3006,7 +3096,7 @@ double __cdecl PM_CmdScale_Walk(pmove_t *pm, usercmd_s *cmd)
     if ( v4 == 0.0 )
         return 0.0;
     scale = (float)((float)ps->speed * v4) / (float)(127.0 * total);
-    if ( (ps->pm_flags & 0x40) != 0 || ps->leanf != 0.0 || v5 )
+    if ( (ps->pm_flags & 0x40) != 0 || PM_LeanWalks(ps) || v5 )
         scalea = scale * 0.40000001;
     else
         scalea = scale * 1.0;
@@ -4738,7 +4828,7 @@ void __cdecl PM_Footsteps(pmove_t *pm, pml_t *pml)
             }
             return;
         }
-        v5 = (ps->pm_flags & 0x40) != 0 || ps->leanf != 0.0;
+        v5 = (ps->pm_flags & 0x40) != 0 || PM_LeanWalks(ps);
         walking = v5;
         v3 = ps->pm_flags & 0x8000;
         sprinting = v3 != 0;
@@ -4835,7 +4925,7 @@ char __cdecl PM_Footstep_LadderMove(pmove_t *pm, pml_t *pml)
         return 1;
     fLadderSpeed = ps->velocity[2];
     fMaxSpeed = (float)(0.5 * 1.5) * 127.0;
-    if ( (ps->pm_flags & 0x40) == 0 && ps->leanf == 0.0 )
+    if ( (ps->pm_flags & 0x40) == 0 && !PM_LeanWalks(ps) )
         bobmove = (float)(fLadderSpeed / (float)(fMaxSpeed * 1.0)) * 0.44999999;
     else
         bobmove = (float)(fLadderSpeed / (float)(fMaxSpeed * 0.40000001)) * 0.34999999;

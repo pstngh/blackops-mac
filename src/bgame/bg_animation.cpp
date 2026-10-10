@@ -2345,6 +2345,22 @@ LABEL_7:
         angles[4][0] = vHeadAngles[0] * player_AimBlend_Head->current.value;
         angles[4][1] = vHeadAngles[1] * player_AimBlend_Head->current.vector[1];
         angles[4][2] = vHeadAngles[2] * player_AimBlend_Head->current.vector[2];
+        if ( kb_aaLean->current.enabled && (es->lerp.eFlags & 8) == 0 )
+        {
+            // kb_aaLean: AA's body (OpenMoHAA bg_pmove.cpp, PmoveAdjustAngleSettings) rolls the pelvis
+            // 0.8 of the lean angle, Spine1 0.22, Spine2 -0.02 and the head -0.4 (it ends at 0.6), and
+            // doesn't shift or tilt the model. The pelvis's share goes to the lowest spine bone here, so
+            // the legs stay planted; the upper back ends at the full angle, as in AA.
+            fLeanFrac = ci->lerpLean * KB_LEAN_DEGREES;
+            angles[0][2] = fLeanFrac * 0.80000001;
+            angles[1][2] = (float)(fLeanFrac * 0.2) * 1.1;
+            angles[2][2] = (float)(fLeanFrac * 0.2) * -0.1;
+            angles[3][2] = 0.0f;
+            angles[4][2] = (float)(fLeanFrac * 0.60000002) - fLeanFrac;
+            angles[5][2] = 0.0f;
+            tag_origin_angles[2] = 0.0f;
+            tag_origin_offset_4 = 0.0f;
+        }
         if ( es->animState.fAimLeftRight != 0.0 || es->animState.fAimUpDown != 0.0 )
             angles[5][0] = AngleNormalize180(es->animState.fAimLeftRight - es->animState.fAimUpDown);
         for ( i = 0; i < 6; ++i )

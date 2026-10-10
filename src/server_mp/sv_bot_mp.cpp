@@ -449,12 +449,10 @@ void __cdecl Bot_UpdateSight(bot_info_t *botInfo, const client_t *bot)
         {
             enemyOrigin[2] = enemyOrigin[2] + botInfo->threat.enemy->client->ps.viewHeightCurrent;
             if ( (botInfo->threat.enemy->client->ps.eFlags & 0x4000) == 0 )
-                AddLeanToPosition(
+                BG_AddLeanToEye(
                     enemyOrigin,
-                    botInfo->threat.enemy->client->ps.viewangles[1],
-                    botInfo->threat.enemy->client->ps.leanf,
-                    16.0,
-                    20.0);
+                    botInfo->threat.enemy->client->ps.viewangles,
+                    botInfo->threat.enemy->client->ps.leanf);
         }
         else
         {
@@ -865,7 +863,7 @@ bool __cdecl Bot_ThreatSightCheck(const client_t *bot, const gentity_s *enemy, f
         {
             enemyOrigin[2] = enemyOrigin[2] + enemy->client->ps.viewHeightCurrent;
             if ( (enemy->client->ps.eFlags & 0x4000) == 0 )
-                AddLeanToPosition(enemyOrigin, enemy->client->ps.viewangles[1], enemy->client->ps.leanf, 16.0, 20.0);
+                BG_AddLeanToEye(enemyOrigin, enemy->client->ps.viewangles, enemy->client->ps.leanf);
         }
         else
         {
@@ -1823,7 +1821,7 @@ void __cdecl Bot_UpdateDirection(bot_info_t *botInfo, const client_t *bot, userc
                     enemyPs = (const playerState_s *)G_GetPlayerState(botInfo->threat.enemy->s.number);
                     Bot_PredictPosition(botInfo->threat.enemy, enemyPs, enemyOrigin);
                     if ( (enemyPs->eFlags & 0x4000) == 0 )
-                        AddLeanToPosition(enemyOrigin, enemyPs->viewangles[1], enemyPs->leanf, 16.0, 20.0);
+                        BG_AddLeanToEye(enemyOrigin, enemyPs->viewangles, enemyPs->leanf);
                     head = enemyOrigin[2] + enemyPs->viewHeightCurrent;
                     v3 = Vec3DistanceSq(botOrigin, enemyOrigin);
                     if ( weapDef->fMaxDamageRange * weapDef->fMaxDamageRange > v3 )

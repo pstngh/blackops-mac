@@ -907,7 +907,14 @@ void __cdecl BG_SetWeaponMovementAngles(weaponState_t *ws, float *angles)
     angles[2] = 0.0f;
     BG_ApplyWeaponMovement_BaseAngles(ws, angles);
     BG_ApplyWeaponMovement_SwayAngles(ws, angles);
-    if ( ws->ps->leanf != 0.0 )
+    if ( ws->ps->leanf != 0.0 && kb_aaLean->current.enabled )
+    {
+        // kb_aaLean: AA's arms roll 0.7 of the lean angle, the camera 0.4 (OpenMoHAA bg_pmove.cpp,
+        // PmoveAdjustAngleSettings_Client); fades into the sights like BO's lean offset
+        angles[2] = (float)((float)(1.0 - ws->ps->fWeaponPosFrac) * ws->ps->leanf * KB_LEAN_DEGREES * KB_LEAN_VM_ROLL)
+                  + angles[2];
+    }
+    else if ( ws->ps->leanf != 0.0 )
     {
         LeanFraction = GetLeanFraction(ws->ps->leanf);
         angles[2] = angles[2] - (float)(LeanFraction * 2.0);
@@ -1132,7 +1139,12 @@ void __cdecl BG_ApplyWeaponMovement_LeanOrigin(weaponState_t *ws, float *origin)
     float rollAngles[3]; // [esp+1Ch] [ebp-Ch] BYREF
 
     ps = ws->ps;
-    if ( ps->leanf != 0.0 && ps->fWeaponPosFrac < 1.0 )
+    if ( ps->leanf != 0.0 && ps->fWeaponPosFrac < 1.0 && kb_aaLean->current.enabled )
+    {
+        // kb_aaLean: AA lowers the gun by vm_lean_lower a degree (OpenMoHAA cg_viewmodelanim.c)
+        origin[2] = origin[2] - (float)((float)(1.0 - ps->fWeaponPosFrac) * fabs(ps->leanf * KB_LEAN_DEGREES) * KB_LEAN_VM_LOWER);
+    }
+    else if ( ps->leanf != 0.0 && ps->fWeaponPosFrac < 1.0 )
     {
         memset(rollAngles, 0, sizeof(rollAngles));
         fLean = GetLeanFraction(ps->leanf);

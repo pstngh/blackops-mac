@@ -476,7 +476,7 @@ int __cdecl Turret_PlaceTurret_Client(int localClientNum, const entityState_s *e
         viewOrg[1] = carrierEnt->pose.origin[1];
         viewOrg[2] = carrierEnt->pose.origin[2];
         viewOrg[2] = viewOrg[2] + 60.0;
-        AddLeanToPosition(viewOrg, viewAngles[1], ci->lerpLean, 16.0, 20.0);
+        BG_AddLeanToEye(viewOrg, viewAngles, ci->lerpLean);
     }
     canPlace = Turret_PlaceTurret_Internal(
                              TURRET_HANDLER_CLIENT,

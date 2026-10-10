@@ -3637,7 +3637,7 @@ void CScr_GetLocalClientEyePos()
     origin[1] = ps->origin[1];
     origin[2] = ps->origin[2];
     origin[2] = origin[2] + ps->viewHeightCurrent;
-    AddLeanToPosition(origin, ps->viewangles[1], ps->leanf, 16.0, 20.0);
+    BG_AddLeanToEye(origin, ps->viewangles, ps->leanf);
     Scr_AddVector(origin, SCRIPTINSTANCE_CLIENT);
 }
 

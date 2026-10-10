@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 17)
+## Status (2026-10-10, session 18)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -198,6 +198,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   weapon up while sprinting and fire without ending the sprint. Bots keep their spread, ADS
   and sprint. Dvars `kb_staticCrosshair`, `kb_noAds`, `kb_sprintFire` (default 1, archived);
   verified in play (Decisions session 17); the game folder's copy has it.
+- **The user's gameplay changes, stage C** (session 18): the lean of Medal of Honor: Allied
+  Assault, from OpenMoHAA's source: it eases to 40 degrees and back at AA's rates, the camera
+  rolls 0.4 of the angle, the eye turns about a point below it (AA's lengths scaled to BO's
+  soldier), the camera and the shots stop at walls where AA's camera does, the body bends like
+  AA's, and leaning no longer slows the player or ends a sprint. Dvar `kb_aaLean` (default 1,
+  archived); verified in play against AA's formulas (Decisions session 18); the game folder's
+  copy has it. With it the user's list of 10 changes is done.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -386,8 +393,11 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-The user's own gameplay changes (queued 2026-10-09 for after the performance work) are the
-current work, in three stages. The Metal leftovers in 0 are optional: nothing there blocks play.
+The user's own gameplay changes (queued 2026-10-09 for after the performance work) are done:
+stages A, B and C (sessions 16-18) cover all 10. **Nothing is queued now: ask the user what to do
+next** (don't pick). What remains is optional: the Metal leftovers in 0 and the items 1-9 below
+(graphics leftovers, the FX freeze seen once, sound leftovers, the match-end crash seen once, the
+main menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wishes).
 
 - The list: 1 lean exactly as OpenMoHAA's (speed, angle, everything); 2 no grenades of any
   kind; 3 no death cam; 4 permanent god mode for the player; 5 no music or announcer; 6 no
@@ -403,14 +413,9 @@ current work, in three stages. The Metal leftovers in 0 are optional: nothing th
 - **Stage A (done, session 16)**: 2, 3, 4, 5, 6, 10 (Decisions session 16).
 - **Stage B (done, session 17)**: 7, 8, 9 (Decisions session 17). The user's answers: the
   hip-fire spread is locked to the crosshair too; shotguns keep their pellet spread.
-- **Stage C (next)**: 1, the lean. Needs OpenMoHAA's source (GitHub, openmoh/openmohaa): ask the
-  user before downloading it. Then match its lean (angle, speed, view offset, how it moves
-  the eye and the body, collision) in BO's pmove lean (`PM_UpdateLean` in bg_pmove.cpp,
-  `ps->leanf`, the `player_lean_shift`/`player_lean_rotate` dvars, `AddLeanToPosition`), as a
-  `kb_*` dvar like the others. Leaning ends a sprint and slows walking to 40% today
-  (`PM_SprintEndingButtons`, `PM_CmdScale_Walk`'s `leanf != 0`): OpenMoHAA's rules decide
-  those too. Whether the lean change is the human player's only was not asked (bots may not
-  lean at all); `BG_KbHumanPlayer` (bg_misc.cpp) is the test if it should be.
+- **Stage C (done, session 18)**: 1, the lean (Decisions session 18). The user's answers: AA's
+  lean (MoHAA 1.11), not Spearhead's or Breakthrough's; AA's lengths scaled to BO's soldier; the
+  same 40 degrees prone (AA has no prone).
 
 0. **Metal backend leftovers** (Metal backend above; built in session 13, the default
    since session 15). The rules agreed with the user (2026-10-09) still hold for any work
@@ -679,6 +684,86 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 18)
+
+The user's gameplay change 1, the lean (stage C), as in stages A and B: an archived dvar,
+`kb_aaLean`, default 1; 0 gives the original game. It applies to every player (bots don't lean;
+the body and eye code reads only the player state, so no `BG_KbHumanPlayer` test).
+
+- **The source**: OpenMoHAA (github.com/openmoh/openmohaa, commit a2f34019 of 2026-04-24), a
+  shallow clone (124 MB) in session 18's scratchpad, read only; it is gone with the session (ask
+  before downloading it again). Its lean: `PmoveSingle` (fgame/bg_pmove.cpp) eases `fLeanAngle`
+  with the numbers fgame/player.cpp and cgame/cg_predict.c set per game: Allied Assault (1.11)
+  leanMax 40, leanAdd 10, leanRecoverSpeed 15, leanSpeed 4, leaning while moving allowed;
+  Spearhead/Breakthrough 45, 6, 8.5, 2, no leaning while moving without a dmflag.
+  `CG_OffsetFirstPersonView` (cgame/cg_view.c) turns the eye by the angle about a point 28.7
+  units below it, around the view's forward axis (pitch and yaw), traces a 6-unit box from the
+  unleaned eye down to the new height and across to it (MASK_PLAYERSOLID), and rolls the view
+  0.3 of the angle (`CG_CalcViewValues` adds 0.1); `CG_CalcViewModelMovement` drops the gun
+  `vm_lean_lower` (0.1) a degree; `PmoveAdjustAngleSettings(_Client)` rolls the bones. The
+  client sends its camera position as the eye the server shoots from (`CL_EyeInfo`). Nothing
+  else in its pmove looks at the lean: no slowdown, no trace.
+- **The user's answers** (session 18): AA's lean; AA's lengths scaled to BO's soldier (eye 60
+  units high against AA's 82, so x60/82: the pivot 21.0, the box 4.39, the gun's drop 0.073 a
+  degree); the same 40 degrees prone (AA has no prone; BO halves it there).
+- **The state**: `ps->leanf` holds the angle / 80 (`KB_LEAN_DEGREES`), so AA's 40 degrees is BO's
+  full lean, 0.5: the network, the entity state's lean and every BO reader keep their range, and
+  the dvar can change in a match. Constants in bg_misc.h (`KB_LEAN_*`).
+- **The motion** (`PM_KbUpdateLean`, bg_pmove.cpp, in `PM_UpdateLean`'s on-foot branch): AA's
+  arithmetic in floats, frame time = msec / 1000. AA's quirks kept: the right lean takes only the
+  eased step (both arms of its test assign it), the left one at least 4 degrees/s, so a left lean
+  reaches exactly -40 (544 ms) and a right one creeps up to it. AA's rules: it leans in the air
+  (BO only on the ground), and dead or on a ladder the angle is 0 at once (AA's PM_CLIMBWALL).
+  BO's no-lean states stay (weapon state 35, deployed; pm_flags 0x800, which masks the buttons;
+  turrets and vehicle seats), and a mantle still freezes it (BO skips the lean while mantling).
+  No trace limits the angle (BO cut it with an 8-unit box 20 units out).
+- **Movement** (`PM_LeanWalks`): leaning no longer makes the player walk (40% speed, walk leg
+  animations, the quieter footsteps, the ladder bob) or ends or prevents a sprint.
+- **The eye** (`BG_AddLeanToEye`, bg_misc.cpp; `AddLeanToPosition` with the dvar off): AA's
+  rotation, used by every reader of the leaning eye: the camera, `BG_GetPlayerViewOrigin` (the
+  server's shots through `G_GetPlayerViewOrigin`, the client's `CG_GetPlayerViewOrigin`), the
+  snapshot's visibility point, the bots' aim at a leaning enemy, CSC `getlocalclienteyepos`, the
+  viewmodel's lighting origin, turret placement and the plant check. At 40 degrees, level: 13.50
+  sideways, 4.91 down (BO's full lean: 14.67 and 3.12). Looking down it moves less sideways, as
+  in AA (the axis is pitched).
+- **Collision** (`BG_KbClipLeanEye`): AA's two traces, ±4.39 box, the player's mask 0x2818011,
+  in the camera (cgame's trace) and in `G_GetPlayerViewOrigin`/`CG_GetPlayerViewOrigin`, so the
+  shots start where the camera is. Walls stop the eye, not the angle: the roll and the body stay
+  at 40 (the body can lean into a wall, as in AA).
+- **The camera** rolls 0.4 of the angle (16 degrees at 40; BO's doesn't roll). **The gun** rolls
+  0.3 of it on top of the camera (AA's arms roll 0.7) and drops 2.9 units at 40 (BO: -1.5 degrees
+  and a 1.6-unit shift); both fade into the sights like BO's offset (`kb_noAds` keeps ADS off).
+- **The body** (`BG_Player_DoControllersInternal`; third person and the server's hit locations):
+  AA's rolls: the pelvis's 0.8 of the angle on the lowest spine bone (rolling BO's pelvis would
+  tilt the legs), 0.22 on back_mid (AA's Spine1), -0.02 on back_up (Spine2), -0.4 on the head
+  (it ends at 0.6), nothing on the neck, no shift or tilt of the whole model; the upper back ends
+  at the full angle, as in AA (BO: ~17 degrees, shifted 2.5-5 units). Standing and crouched; prone
+  keeps BO's prone lean (a torso twist), now to 40 degrees, ~1.7x its usual extent. Seen from the
+  front the left lean looks a little smaller than the right (BO's rifle pose is one-sided).
+- **Checks** (temporary logs of `leanf`, the camera's angles and eye, and the server's eye,
+  marked and removed; mp_nuked, release client unless said): the client and server eye 13.50 /
+  4.91 at 40 degrees, 13.12 / 4.60 and roll 15.47 at 38.67 (the formulas give the same); the ease
+  follows AA's recurrence (3.2, 6.144 degrees at 8 ms frames); 90% in 215-224 ms (AA's formula:
+  224), -40 at 542 ms (544), released to 10% in 151 ms (152). Running while leaning 178-183
+  units/s (dvar off: 72), sprinting while leaning 272 with the sprint flag kept (off: the lean
+  ends it). Into a hedge: the eye stops at 12.51 of 13.50 with the angle and roll at 40 (off: the
+  lean cut to 20.5 degrees); camera and server agree (11.59 at another spot). Prone (eye held at
+  BO's 8-unit floor), crouched, jumping (the lean holds in the air). Screenshots: the view rolls
+  toward the lean, the gun a little further; third person against the dvar off. A client process
+  on a dedicated server with `cg_showmiss 1`: one prediction miss, at the `setviewpos` teleport,
+  none while leaning, moving, jumping or switching sides. ASan client (`kb_godMode 0`, 7 managed
+  fu bots, 1-minute TDM, the scripted player leaning standing, running, sprinting, jumping,
+  crouched and prone in a loop) over mp_nuked, mp_array, mp_cracked and mp_crisis (three match
+  ends and rotations, 7 deaths): no report, no assert. Every changed file through check_file.py
+  natively and `--i386`; tools/audit_splitlocals.py: 0 sites.
+- **fps**: unchanged. bench_views.py --bots, the reference (HEAD) and this build alternating,
+  three runs each, all in the normal display state (presented = shown, 530-539 a second): ref A-F,
+  sky, overview 535/675/652/746/655/701/740/424, 532/663/685/726/660/697/735/439,
+  519/670/696/702/641/680/709/426; new 537/676/697/731/664/702/703/430,
+  519/675/700/720/667/687/739/432, 520/662/661/722/644/702/735/425. The views don't lean (noclip
+  skips it), so view A standing against holding a lean (no noclip, two runs each): new 563/561
+  and 557/551 fps, ref 566/568 and 558/565: no cost beyond run noise.
 
 ## Decisions (session 17)
 

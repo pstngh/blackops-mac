@@ -173,6 +173,22 @@ bool __cdecl BG_KbHumanPlayer(const playerState_s *ps);
 // prone minimum). Every weapon with side reticles draws reticle_side_small, 8 units, no offset.
 static const float KB_CROSSHAIR_SPREAD = 1.0f;
 static const int KB_CROSSHAIR_SIDE_SIZE = 8;
+// kb_aaLean: Allied Assault's lean (OpenMoHAA, MoHAA 1.11's numbers; HANDOFF, Decisions session 18).
+// ps->leanf holds the lean angle / KB_LEAN_DEGREES, so AA's full 40 degrees is BO's full lean, 0.5.
+// AA's lengths are scaled to BO's soldier (the eye is 60 units high, AA's 82).
+static const float KB_LEAN_DEGREES = 80.0f;
+static const float KB_LEAN_MAX = 40.0f;                         // pm->leanMax
+static const float KB_LEAN_ADD = 10.0f;                         // pm->leanAdd
+static const float KB_LEAN_RECOVER_SPEED = 15.0f;               // pm->leanRecoverSpeed
+static const float KB_LEAN_SPEED = 4.0f;                        // pm->leanSpeed
+static const float KB_LEAN_SCALE = 60.0f / 82.0f;
+static const float KB_LEAN_PIVOT = 28.7f * KB_LEAN_SCALE;       // the eye turns about a point this far below it
+static const float KB_LEAN_EYE_BOX = 6.0f * KB_LEAN_SCALE;      // the camera's half box against walls
+static const float KB_LEAN_VIEW_ROLL = 0.1f + 0.3f;             // the camera rolls by this times the angle
+static const float KB_LEAN_VM_LOWER = 0.1f * KB_LEAN_SCALE;     // vm_lean_lower: the gun drops this per degree
+static const float KB_LEAN_VM_ROLL = 0.7f - KB_LEAN_VIEW_ROLL;  // the gun on the camera: AA's arms roll 0.7 of it
+void __cdecl BG_AddLeanToEye(float *position, const float *viewAngles, float leanf);
+void __cdecl BG_KbClipLeanEye(const playerState_s *ps, float *eye, unsigned __int8 handler);
 char *__cdecl BG_GetEntityTypeName(int eType);
 const gitem_s *__cdecl BG_FindItemForWeapon(unsigned int weapon);
 const gitem_s *__cdecl G_FindItem(char *pickupName);
@@ -324,6 +340,7 @@ extern const dvar_s *kb_infiniteReserve;
 extern const dvar_s *kb_staticCrosshair;
 extern const dvar_s *kb_noAds;
 extern const dvar_s *kb_sprintFire;
+extern const dvar_s *kb_aaLean;
 extern const dvar_s *player_clipSizeMultiplier;
 extern const dvar_s *player_lastStandBleedoutTime;
 extern const dvar_s *player_lastStandBleedoutTimeNoRevive;

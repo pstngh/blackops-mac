@@ -79,6 +79,8 @@ void __cdecl PM_UpdateLean(
                 float msec,
                 usercmd_s *cmd,
                 void (__cdecl *capsuleTrace)(trace_t *, const float *, const float *, const float *, const float *, int, int, col_context_t *));
+void __cdecl PM_KbUpdateLean(playerState_s *ps, float msec, usercmd_s *cmd);
+bool __cdecl PM_LeanWalks(const playerState_s *ps);
 void __cdecl PM_UpdateViewAngles_RangeLimited(playerState_s *ps);
 void __cdecl PM_UpdateViewAngles(
                 int localClientNum,

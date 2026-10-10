@@ -2157,7 +2157,7 @@ void __cdecl SV_BuildClientSnapshot(client_t *client)
                 position[1] = *((float *)dst + 10);
                 position[2] = *((float *)dst + 11);
                 position[2] = position[2] + *((float *)dst + 100);
-                AddLeanToPosition(position, *((float *)dst + 97), *((float *)dst + 31), 16.0, 20.0);
+                BG_AddLeanToEye(position, (float *)dst + 96, *((float *)dst + 31));
                 memset(v15, 0, sizeof(v15));
                 if ( CachedSnapshot )
                 {

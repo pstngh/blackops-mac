@@ -15,6 +15,7 @@
 #include "bg_weapons_ammo.h"
 #include <qcommon/common.h>
 #include "bg_pmove.h"
+#include "bg_public.h"
 #include <universal/com_math_anglevectors.h>
 #include <physics/phys_render.h>
 #include "bg_weapons_view.h"
@@ -423,6 +424,7 @@ const dvar_s *kb_infiniteReserve;
 const dvar_s *kb_staticCrosshair;
 const dvar_s *kb_noAds;
 const dvar_s *kb_sprintFire;
+const dvar_s *kb_aaLean;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1049,6 +1051,11 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Human players keep the weapon up while sprinting and can fire without ending the sprint");
+    kb_aaLean = _Dvar_RegisterBool(
+        "kb_aaLean",
+        1,
+        1u,
+        "Lean like Medal of Honor: Allied Assault (OpenMoHAA): 40 degrees, the view rolls, full speed while leaning");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,
@@ -3359,9 +3366,74 @@ void __cdecl BG_GetPlayerViewOrigin(const playerState_s *ps, float *origin, int 
     origin[1] = (float)(deltaB * vRight[1]) + origin[1];
     origin[2] = (float)(deltaB * vRight[2]) + origin[2];
     if ( (ps->eFlags & 0x4000) == 0 )
-        AddLeanToPosition(origin, ps->viewangles[1], ps->leanf, 16.0, 20.0);
+        BG_AddLeanToEye(origin, ps->viewangles, ps->leanf);
     if ( (float)(ps->origin[2] + 8.0) > origin[2] )
         origin[2] = ps->origin[2] + 8.0;
+}
+
+// Moves the eye by the lean: AddLeanToPosition with kb_aaLean off. kb_aaLean: AA's camera (OpenMoHAA
+// cg_view.c, CG_OffsetFirstPersonView) turns the eye by the lean angle about a point below it, around
+// the view's forward axis (its pitch and yaw); BG_KbClipLeanEye keeps it out of walls.
+void __cdecl BG_AddLeanToEye(float *position, const float *viewAngles, float leanf)
+{
+    float pivotAngles[3];
+    float forward[3];
+    float delta[3];
+    float end[3];
+
+    if ( !kb_aaLean->current.enabled )
+    {
+        AddLeanToPosition(position, viewAngles[1], leanf, 16.0, 20.0);
+        return;
+    }
+    if ( leanf == 0.0 )
+        return;
+    pivotAngles[0] = viewAngles[0];
+    pivotAngles[1] = viewAngles[1];
+    pivotAngles[2] = 0.0f;
+    AngleVectors(pivotAngles, forward, 0, 0);
+    delta[0] = 0.0f;
+    delta[1] = 0.0f;
+    delta[2] = KB_LEAN_PIVOT;
+    RotatePointAroundVector(end, forward, delta, leanf * KB_LEAN_DEGREES);
+    *position = (float)(end[0] - delta[0]) + *position;
+    position[1] = (float)(end[1] - delta[1]) + position[1];
+    position[2] = (float)(end[2] - delta[2]) + position[2];
+}
+
+// kb_aaLean: AA's camera keeps the leaning eye out of walls (OpenMoHAA cg_view.c): a box from the
+// unleaned eye straight to the leaning eye's height, then across to it, against what blocks the
+// player. The camera and the eye the shots start from (G_GetPlayerViewOrigin) both take it.
+void __cdecl BG_KbClipLeanEye(const playerState_s *ps, float *eye, unsigned __int8 handler)
+{
+    col_context_t context;
+    trace_t trace;
+    float start[3];
+    float end[3];
+    float mins[3];
+    float maxs[3];
+
+    if ( !kb_aaLean->current.enabled || ps->leanf == 0.0 )
+        return;
+    mins[0] = -KB_LEAN_EYE_BOX;
+    mins[1] = -KB_LEAN_EYE_BOX;
+    mins[2] = -KB_LEAN_EYE_BOX;
+    maxs[0] = KB_LEAN_EYE_BOX;
+    maxs[1] = KB_LEAN_EYE_BOX;
+    maxs[2] = KB_LEAN_EYE_BOX;
+    start[0] = ps->origin[0];
+    start[1] = ps->origin[1];
+    start[2] = ps->origin[2] + ps->viewHeightCurrent;
+    end[0] = start[0];
+    end[1] = start[1];
+    end[2] = eye[2];
+    pmoveHandlers[handler].trace(&trace, start, mins, maxs, end, ps->clientNum, 0x2818011, &context);
+    Vec3Lerp(start, end, trace.fraction, start);
+    end[0] = eye[0];
+    end[1] = eye[1];
+    end[2] = start[2];
+    pmoveHandlers[handler].trace(&trace, start, mins, maxs, end, ps->clientNum, 0x2818011, &context);
+    Vec3Lerp(start, end, trace.fraction, eye);
 }
 
 void __cdecl BG_GetPlayerViewDirection(const playerState_s *ps, float *forward, float *right, float *up)
