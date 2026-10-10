@@ -93,16 +93,18 @@ KB_CMDS='8:openscriptmenu team_marinesopfor autoassign|11:openscriptmenu changec
 custom class. `KB_MENU_CMDS` takes the same list but times it from startup and runs it once,
 in a map or not: the main menu (`12:openmenu cac_main|30:quit`).
 
-With vsync on (the default), a client started while the display sleeps hangs in
+With vsync on (the default), a GL client started while the display sleeps hangs in
 its first buffer swap (SDL3 waits for a display refresh that never comes): wake
-the display first (`caffeinate -u -t 2`) or pass `+set r_vsync 0`.
+the display first (`caffeinate -u -t 2`) or pass `+set r_vsync 0`. Metal's Present
+waits for a drawable there instead (untested with the display asleep).
 
 Seeing the client: `screencapture` lacks Screen Recording permission and the
 console is unreachable, so `KB_SCREENSHOT=<dir> KB_SCREENSHOT_EVERY=<n>` writes the
 back buffer as `<dir>/present_N.tga` every n presents (with draw counters on stderr);
-`KB_SCREENSHOT_WINDOW=1` adds `window_N.tga`, what the window shows after scaling.
-`KB_TRACEFRAME=n1,n2` logs those frames' render-target/viewport/clear/blit/draw
-calls and, with KB_SCREENSHOT, dumps the back buffer at the first resolves.
+On the GL layer (`KB_RENDERER=gl`) only, `KB_SCREENSHOT_WINDOW=1` adds `window_N.tga`,
+what the window shows after scaling, and `KB_TRACEFRAME=n1,n2` logs those frames'
+render-target/viewport/clear/blit/draw calls and, with KB_SCREENSHOT, dumps the back
+buffer at the first resolves.
 
 Hearing the client: OpenAL Soft's wave writer records the game's final mix in
 place of the device, in real time: `ALSOFT_CONF=<file>` holding `[general]`
@@ -131,17 +133,21 @@ bench_views.py times its commands by the game's clock (`KB_CMDS_GAMETIME=1`), bu
 match clock, script movers and `autoassign`'s team still vary between runs: compare a
 candidate with the closer of two reference runs.
 
-Metal: `KB_RENDERER=metal` renders through src/gfx_mtl (a D3D9 device on Metal) instead
-of the GL layer, which stays the default and Linux's renderer (HANDOFF, "Metal backend").
+Metal: the macOS client renders through src/gfx_mtl (a D3D9 device on Metal);
+`KB_RENDERER=gl` picks the GL layer instead, the macOS fallback and Linux's renderer
+(HANDOFF, "Metal backend").
 Metal draws what D3D9 specifies where the GL layer doesn't (mipmaps, shadow-map compares,
 separate alpha blending, particle clouds); `KB_MTL_GLCOMPAT=1` draws like the GL layer,
 to compare screenshots with it. Anything the backend doesn't implement prints `[mtl] BUG`
 once (`KB_MTL_STRICT=1` aborts there): grep logs for it. Develop with `MTL_DEBUG_LAYER=1
 MTL_SHADER_VALIDATION=1`. Metal's `KB_FPS` line adds frames presented and shown per
 second (shown: what the display reported; 0 while the screen is locked, when nothing is
-composited) and the pipelines built at first draw with their time (stalls).
+composited) and the pipelines built at first draw with their time (stalls), split into
+waiting for shader batches still compiling, function lookups and the longest build. The
+system's shader cache keeps about one map's batches; `KB_MTL_BATCH=<n>` (shaders per
+batch, default 64; a size not used before) gives a cold one to measure with.
 `KB_DUMP_MSL=<dir>` writes each translated shader. On the GL
-backend, `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
+backend (`KB_RENDERER=gl`), `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
 lock flag and shader pairing the game uses (the list Metal implements), and
 `KB_DUMP_SHADERS=<dir>` writes each shader's bytecode; `tools/shader_test.sh <dump> <out>`
 translates them all to GLSL and MSL and compiles the MSL.

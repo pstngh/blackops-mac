@@ -257,6 +257,7 @@ private:
 
     // KB_FPS. Presented: frames given a drawable; shown: those the display showed.
     double statsStart_ = 0, statsLast_ = 0, statsSum_ = 0, statsMax_ = 0, statsWait_ = 0, statsBuild_ = 0;
+    double statsBatchWait_ = 0, statsFunctions_ = 0, statsBuildMax_ = 0;   // of statsBuild_
     unsigned statsFrames_ = 0, statsPresented_ = 0, statsPipes_ = 0;
     std::atomic<unsigned> statsShown_{0};
     unsigned long statsDraws_ = 0, statsBlits_ = 0, statsUploads_ = 0;

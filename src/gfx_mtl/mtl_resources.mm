@@ -4,6 +4,7 @@
 #include "mtl_msl.h"
 #include "../gfx_shader/sm3.h"
 
+#include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -461,6 +462,13 @@ HRESULT WINAPI MetalDecl::GetDeclaration(D3DVERTEXELEMENT9 *e, UINT *n) {
 }
 
 // ---- Shaders ------------------------------------------------------------------
+static double Seconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+
+MetalShaderCompiler::MetalShaderCompiler(id<MTLDevice> dev) : dev_(dev) {
+    const char *e = getenv("KB_MTL_BATCH");
+    size_ = e && atoi(e) > 0 ? atoi(e) : 64;
+}
+
 std::shared_ptr<MetalShaderBatch> MetalShaderCompiler::add(const std::string &entry, const std::string &source) {
     std::shared_ptr<MetalShaderBatch> full;
     std::shared_ptr<MetalShaderBatch> b;
@@ -474,12 +482,25 @@ std::shared_ptr<MetalShaderBatch> MetalShaderCompiler::add(const std::string &en
         }
         b = open_;
         entries_[entry] = b;
+        lastAdd_ = Seconds();
         std::lock_guard<std::mutex> bg(b->mu);
         b->source += source;
-        if (++b->count == 64) { full = b; open_.reset(); }
+        if (++b->count == size_) { full = b; open_.reset(); }
     }
     if (full) submit(full);
     return b;
+}
+
+void MetalShaderCompiler::submitIdle() {
+    std::shared_ptr<MetalShaderBatch> b;
+    {
+        std::lock_guard<std::mutex> g(mu_);
+        // Shaders come in bursts while a zone loads (gaps up to ~0.25 s on mp_nuked);
+        // the engine is done when it pauses longer.
+        if (!open_ || Seconds() - lastAdd_ < 0.5) return;
+        b = std::move(open_);
+    }
+    submit(b);
 }
 
 void MetalShaderCompiler::submit(const std::shared_ptr<MetalShaderBatch> &b) {
@@ -510,7 +531,11 @@ id<MTLLibrary> MetalShaderCompiler::library(const std::shared_ptr<MetalShaderBat
     }
     submit(b);
     std::unique_lock<std::mutex> g(b->mu);
-    b->cv.wait(g, [&] { return b->done; });
+    if (!b->done) {
+        const double t0 = Seconds();
+        b->cv.wait(g, [&] { return b->done; });
+        waited += Seconds() - t0;
+    }
     return b->lib;
 }
 

@@ -720,11 +720,14 @@ id<MTLRenderPipelineState> MetalDevice::pipeline() {
     if (it != pipes_.end()) return it->second;
 
     // Built at the first draw that needs it, waiting for its shaders (KB_FPS counts it).
-    const double t0 = Now();
+    const double t0 = Now(), w0 = compiler_.waited;
     ++statsPipes_;
     MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
     pd.vertexFunction = vs.function(0, 0);
     pd.fragmentFunction = ps.function(k.alphaFunc, k.aa ? MetalShader::VARIANT_PER_SAMPLE : 0);
+    const double t1 = Now();
+    statsBatchWait_ += compiler_.waited - w0;
+    statsFunctions_ += t1 - t0 - (compiler_.waited - w0);
     if (!pd.vertexFunction || !pd.fragmentFunction) { pipes_[k] = nil; statsBuild_ += Now() - t0; return nil; }
     MTLVertexDescriptor *vd = [MTLVertexDescriptor vertexDescriptor];
     for (const MetalDecl::Attr &a : decl_->attrs) {
@@ -778,7 +781,9 @@ id<MTLRenderPipelineState> MetalDevice::pipeline() {
     id<MTLRenderPipelineState> p = [mtl newRenderPipelineStateWithDescriptor:pd error:&e];
     if (!p) MTL_Bug("pipeline (vs %08x, ps %08x): %s", vs.hash, ps.hash, e.localizedDescription.UTF8String);
     pipes_[k] = p;
-    statsBuild_ += Now() - t0;
+    const double t2 = Now();
+    statsBuild_ += t2 - t0;
+    if (t2 - t0 > statsBuildMax_) statsBuildMax_ = t2 - t0;
     return p;
 }
 
@@ -1304,6 +1309,7 @@ static void MaybeScreenshot(MetalDevice *dev, MetalSurface *bb) {
 
 // ---- Present -------------------------------------------------------------------------------
 HRESULT WINAPI MetalDevice::Present(const RECT *, const RECT *, HWND, const RGNDATA *) {
+    compiler_.submitIdle();
     MaybeScreenshot(this, bbSurface_);
     flushClear();
     endEncoder();
@@ -1392,14 +1398,15 @@ void MetalDevice::stats() {
         const double el = now - statsStart_;
         fprintf(stderr, "[fps] %.1f fps, frame %.2f ms avg %.2f max, swap %.2f ms avg, %lu draws/frame; "
                         "per frame: %lu blits, %lu uploads %llu KB, %llu KB orphaned; %.0f presented/s, %.0f shown/s; "
-                        "%u pipelines built in %.0f ms\n",
+                        "%u pipelines built in %.0f ms (%.0f waiting for shader batches, %.0f functions, longest %.0f)\n",
                 statsFrames_ / el, statsSum_ / statsFrames_, statsMax_, statsWait_ * 1000.0 / statsFrames_,
                 (g_kbDraws - statsDraws_) / statsFrames_, (g_kbBlits - statsBlits_) / statsFrames_,
                 (g_kbUploads - statsUploads_) / statsFrames_, (g_kbUploadBytes - statsUploadBytes_) / statsFrames_ / 1024, 0ull,
-                statsPresented_ / el, statsShown_.exchange(0) / el, statsPipes_, statsBuild_ * 1000.0);
+                statsPresented_ / el, statsShown_.exchange(0) / el, statsPipes_, statsBuild_ * 1000.0,
+                statsBatchWait_ * 1000.0, statsFunctions_ * 1000.0, statsBuildMax_ * 1000.0);
         statsStart_ = now;
         statsFrames_ = statsPresented_ = statsPipes_ = 0;
-        statsSum_ = statsMax_ = statsWait_ = statsBuild_ = 0;
+        statsSum_ = statsMax_ = statsWait_ = statsBuild_ = statsBatchWait_ = statsFunctions_ = statsBuildMax_ = 0;
         statsDraws_ = g_kbDraws; statsBlits_ = g_kbBlits; statsUploads_ = g_kbUploads; statsUploadBytes_ = g_kbUploadBytes;
     }
 }

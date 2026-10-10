@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 13)
+## Status (2026-10-10, session 15)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -18,7 +18,9 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **Dedicated server** with 4 bots: deaths, killstreaks, ragdolls, no asserts; also
   clean under ASan with heap redzones (120 s).
 - **Client**: main menu, team menu over the blurred world, local matches that render
-  on every MP map; 116-304 fps uncapped on an M4 at 1280x720 (Performance below). Keyboard, mouse and console work.
+  on every MP map; on Metal (the default since session 15) mp_nuked's fixed views run
+  490-800 fps uncapped on an M4 at 1280x720, 390-700 with 7 bots (GL: 116-304;
+  Performance and Metal backend below). Keyboard, mouse and console work.
   `KB_CMDS` (CLAUDE.md) plays without a keyboard: join, class, move, fire, grenade,
   reload, weapon switch, death and respawn. A soak of all 14 MP maps x 180 s with
   the scripted player ran without a crash; 1-minute matches end (scoreboard) and
@@ -176,8 +178,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   and ASan are quiet, and it runs 4-8x GL's fps: mp_nuked's views 600-730 (GL 147-578,
   the engine's frame pacing caps ~730), the overviews 294-806 (GL 67-161). By default it
   draws what D3D9 specifies and the GL layer never did (mipmaps, sun shadows, particle
-  clouds, stencil). GL stays the default until the user switches (Metal backend
-  below, Next steps 0).
+  clouds, stencil). The default since session 15 (the user's decision; `KB_RENDERER=gl`
+  picks the GL layer), and the game folder's portable copy has it. On the user's 240 Hz
+  display, unlocked: 240 frames shown a second with vsync, 330-395 without. A cold
+  system shader cache no longer stalls the spawn (Decisions session 15).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -279,12 +283,13 @@ has no such switch, session 2's port wired the dvar up).
 
 ## Metal backend (session 13)
 
-`KB_RENDERER=metal` makes `Direct3DCreate9` (src/gfx_mtl/mtl_window.mm) return a D3D9
-device on Metal instead of the GL layer's; the engine's renderer (src/gfx_d3d) is
-unchanged. Same binary (cmake/macos.cmake: Objective-C++ with ARC, Metal, QuartzCore,
-Foundation; no new dependencies); GL stays the default and the game folder's portable
-copy keeps GL (make_portable.sh not rerun) until the user switches. Design and the
-reasons behind it: Decisions (session 13).
+`Direct3DCreate9` (src/gfx_mtl/mtl_window.mm) returns a D3D9 device on Metal, or the
+GL layer's with `KB_RENDERER=gl`; the engine's renderer (src/gfx_d3d) is unchanged.
+Same binary (cmake/macos.cmake: Objective-C++ with ARC, Metal, QuartzCore, Foundation;
+no new dependencies). Metal is the default since session 15, and the game folder's
+portable copy and its launcher have it (make_portable.sh rerun). Design and the reasons
+behind it: Decisions (session 13); the display rate and the shader cache: Decisions
+(session 15).
 
 Files (~3,700 lines, plus the 365-line shared parser):
 - src/gfx_shader/sm3.{h,cpp}: SM3 bytecode -> IR, shared with gl_shader.cpp's GLSL.
@@ -340,6 +345,8 @@ found):
 | sky | 578 | 716 | 565 | 610 |
 | overview | 120 | 524 | 102 | 465 |
 
+Session 15, Metal as the default, screen unlocked (the table's Metal runs had it
+locked), no bots: A 558, B 681, C 747, D 765, E 672, F 730, sky 806, overview 490.
 Runs of one build vary by up to ~10%. Overviews, no bots, GL -> Metal: mp_crisis 67 ->
 294, mp_berlinwall2 70 -> 332, mp_outskirts 73 -> 350, mp_cracked 76 -> 635, mp_array 79
 -> 377, mp_zoo 85 -> 394, mp_kowloon 86 -> 418, mp_villa 87 -> 421, mp_stadium 93 -> 408,
@@ -363,8 +370,12 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-0. **Metal backend: the user's decision, then leftovers** (Metal backend above; built
-   in session 13). The rules agreed with the user (2026-10-09) still hold for any work
+Next stage (session 16): the user's own gameplay changes, which they queued for after
+the performance work (the stage's brief lists them). The Metal leftovers in 0 are
+optional: nothing there blocks play.
+
+0. **Metal backend leftovers** (Metal backend above; built in session 13, the default
+   since session 15). The rules agreed with the user (2026-10-09) still hold for any work
    on it, and session 13's deviations are in its Decisions (DISCARD renames instead of
    a per-frame ring, by the spec; the runtime compiler in place of `xcrun metal`):
    - Spec first: instrument the GL layer to list every D3D9 method, render state and
@@ -402,18 +413,22 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
      OK), create a task card with a self-contained brief for the next stage that
      repeats these points, the rules, the harness (bench_views.py, cmp_screens.py,
      sample_report.py, gpu_trace.py) and the user's constraints, then stop.
-   Leftovers:
-   - Make it the default if the user wants: `KB_UseMetal()` in mtl_window.mm (GL with
-     `KB_RENDERER=gl` then), and only then rerun `tools/make_portable.sh` for the game
-     folder.
-   - Check the display rate with the screen unlocked: every run of session 13 had the
-     screen locked (nothing composited; `nextDrawable` paced at 120/s). `KB_FPS=1`
-     prints `presented/s` and `shown/s` (frames the display reported showing). If an
-     unlocked 240 Hz display shows ~120, try CAMetalDisplayLink with a 240 Hz
-     `preferredFrameRateRange` (under the lock it starved, so it is untested).
-   - The first match after a new build can stall (up to ~0.7 s seen) where a draw waits
-     for a shader batch still compiling with a cold system cache; measure that with
-     `KB_FPS`'s pipeline line before changing the batching.
+   Leftovers (session 15 did the default, the display rate and the spawn stall:
+   Decisions session 15):
+   - Load time with a cold system shader cache, which is common (it keeps about one
+     map's batches): the map's first frame waits 0.6-1.6 s, and the startup ~0.45 s,
+     for batches still compiling. The compiler keeps every core busy (~17 ms of CPU a
+     shader, ~3,300 a map), so only less work helps: ~85% of a map's shaders never draw
+     in a match (~600 pipelines); the cost per shader (the `kb_pcf` branch ~20%,
+     `preserveInvariance`, the optimization level: measure first); or an offline
+     metallib of all 8,864 shaders (`xcrun metal`, the Metal Toolchain download: ask
+     first). MTLBinaryArchive keeps only backend binaries, not the MSL front end that
+     costs here. `KB_MTL_BATCH=<n>` gives a cold cache to measure with.
+   - Warm, one or two frames a match of 25-50 ms where a pipeline first used
+     specializes its function (a backend compile, 6-28 ms). GL's worst: 39 ms.
+   - Without vsync ~35% of the frames rendered are not shown (no free drawable: three,
+     and the presenter thread waits in `nextDrawable`); presented/s stays above the
+     display's 240. Only if the latency matters.
    - CPU at view A, if a profile at the user's settings asks for it: occlusion-query
      polling (7%), the model lighting volume's staging buffer and relock copy each
      frame (~5%). The engine's frame pacing caps lighter views at ~730 fps.
@@ -626,6 +641,57 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 15)
+
+- **Metal is the default** (the user's decision, 2026-10-10): `KB_UseMetal()`
+  (mtl_window.mm) picks Metal unless `KB_RENDERER=gl`; another value prints a line and
+  uses Metal. Checked with bench_views.py and no environment (mp_nuked, numbers in
+  Metal backend), then make_portable.sh updated the game folder's copy and rebuilt the
+  launcher (it passes its environment on, so its matches run Metal). The GL-only
+  diagnostics (`KB_SPEC`, `KB_DUMP_SHADERS`, `KB_TRACEFRAME`, `KB_SCREENSHOT_WINDOW`) need
+  `KB_RENDERER=gl` now.
+- **Display rate, screen unlocked** (the user's main display, a 240 Hz Dell G2524H,
+  fullscreen 1280x720): with vsync 240.0 fps and 240 frames shown a second (`KB_FPS`'s
+  `shown/s`), one 8.3 ms frame every second or two; without vsync 360-470 presented and
+  330-395 shown a second at 500-800 fps: the fullscreen window's drawables flip without
+  waiting for the refresh (tearing, as GL's swap interval 0), and exactly 240 when the
+  compositor composites the window (in one run from ~26 s on, without a cause found).
+  Session 13's 120 a second was the locked screen. So no CAMetalDisplayLink.
+- **The system shader cache** (`$(getconf DARWIN_USER_CACHE_DIR)/com.apple.metal`, one for
+  all of the user's apps) keys a library by its source, and keeps about one map's set
+  of our batches: compiling another set evicts the previous one (mp_nuked, mp_array,
+  mp_nuked again: the second mp_nuked partly cold; batches of 63 after 64: the 64s cold
+  again). Not per executable, as session 13 thought: the same binary at another path
+  ran warm, and a new build ran warm when the shaders were unchanged; session 13's cold
+  runs had other compiles in between. Every shader is created on one thread in a fixed
+  order, so a run's batches are the same each time (source hashes logged in two runs).
+  Cold, mp_nuked with bots: ~3,300 shaders, ~59 s of CPU in MTLCompilerService (~17 ms a
+  shader), 7-10 cores busy from the load's first shader to ~2 s after its last; warm,
+  1-2 ms a batch. `KB_MTL_BATCH=<n>` (default 64) sets the shaders per batch: a size not
+  used before gives every batch a new source, a cold cache to measure with (clearing the
+  system's would cost every other app its cache too).
+- **The spawn stall**: `KB_FPS`'s pipeline line now splits the time into waiting for
+  batches, the function lookups (specialization) and the longest build. With a cold
+  cache it showed three waits: ~0.45 s before the main menu (the startup batches), 0.6-1.6
+  s at the map's first frame (the load's backlog: the loading screen stays up that much
+  longer), and ~0.6 s at the player's spawn, ~15 s after the load: the load's last batch
+  (45 shaders) was neither full nor needed by a draw, so it stayed open until the
+  spawn's first draw and then compiled cold (9 shaders, 0.1 s, with batches of 61).
+  Now the open batch is submitted once no shader was created for 0.5 s (checked at
+  Present): gaps inside mp_nuked's load were at most 0.25 s, the pause after the startup
+  shaders 1.45 s. Cold after the change: no wait after the first frame, the worst
+  in-match frame 30 ms; warm: no waits. The first two remain (Next steps 0).
+- **Checked** (the final build): `KB_MTL_GLCOMPAT=1` screenshots of mp_nuked's views and
+  all 26 overviews against session 13's two GL runs: within the GL-vs-GL noise of the
+  closer one once the team emblem (`autoassign`) and the fps counter are masked, except
+  mp_array (0.62%; session 13's Metal 0.73%: particles, Decisions session 13); against
+  session 13's Metal run 0.0-0.6% (no drawing changed). `MTL_DEBUG_LAYER=1
+  MTL_SHADER_VALIDATION=1`, mp_nuked's views with 7 bots and a cold cache: no message.
+  ASan client with `MTL_DEBUG_LAYER=1`, 7 bots, the scripted player, 1-minute TDM over
+  mp_nuked, mp_array, mp_cracked (240 s, cold batches): no report. fps with no
+  environment: A 542, B 677, C 703, D 714, E 650, F 699, sky 703, overview 479.
+  make_portable.sh rerun with this build.
 
 ## Decisions (session 14)
 

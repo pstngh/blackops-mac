@@ -38,7 +38,7 @@ target_compile_options(${BIN_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-everything;-Werror=class-varargs;-Werror=int-to-pointer-cast;-Werror=pointer-to-int-cast;-Werror=pointer-to-enum-cast;-ferror-limit=0>
 )
 
-# The Metal backend (src/gfx_mtl, KB_RENDERER=metal): Objective-C++ with ARC, built with
+# The Metal backend (src/gfx_mtl; KB_RENDERER=gl picks GL): Objective-C++ with ARC, built with
 # its own flags (the engine's MSVC compatibility header and warning policy are for the
 # decompiled code).
 enable_language(OBJCXX)

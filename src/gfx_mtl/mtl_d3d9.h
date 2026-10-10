@@ -1,7 +1,7 @@
 // mtl_d3d9.h — the D3D9 interfaces on Metal (macOS), beside the GL layer (src/gfx_gl).
 //
-// The renderer in src/gfx_d3d calls Direct3DCreate9/CreateDevice as on Windows;
-// KB_RENDERER=metal picks this backend at startup (mtl_backend.mm), else GL. It
+// The renderer in src/gfx_d3d calls Direct3DCreate9/CreateDevice as on Windows; this
+// is the macOS backend unless KB_RENDERER=gl picks GL at startup (mtl_window.mm). It
 // implements what the game uses, listed by the GL layer's KB_SPEC recorder (HANDOFF,
 // "Metal backend"); anything else is reported once as "[mtl] BUG" (KB_MTL_STRICT=1
 // aborts there instead).
@@ -329,7 +329,11 @@ private:
 // Shader libraries compiled in the background, many shaders to a library: the system
 // compiler takes ~70 ms for a lone pixel shader and ~8 ms each in a library of a few
 // hundred (it compiles a library's functions in parallel), and caches what it has
-// compiled. A batch is submitted when full or when a draw needs one of its shaders.
+// compiled, keyed by a library's whole source. That cache keeps about one map's
+// batches: another map's (or another app's) compiles evict them, so a map's first load
+// is often cold (~17 ms of CPU a shader, ~3,300 shaders a map, every core busy). A
+// batch is submitted when full, when a draw needs one of its shaders, or once the engine
+// has created no shader for a while (the end of a load).
 struct MetalShaderBatch {
     std::string source;
     int count = 0;
@@ -341,16 +345,23 @@ struct MetalShaderBatch {
 
 class MetalShaderCompiler {
 public:
-    explicit MetalShaderCompiler(id<MTLDevice> dev) : dev_(dev) {}
+    explicit MetalShaderCompiler(id<MTLDevice> dev);
     // The batch compiling `entry` (whose MSL is `source`); the same shader again
     // (same bytecode) shares its first batch.
     std::shared_ptr<MetalShaderBatch> add(const std::string &entry, const std::string &source);
     id<MTLLibrary> library(const std::shared_ptr<MetalShaderBatch> &b);   // waits, submitting it if needed
+    // Submits the open batch once no shader was added for half a second (Present calls
+    // it): a load's last, partial batch then compiles before a draw needs it (the
+    // player's spawn waited ~0.6 s for it with a cold cache).
+    void submitIdle();
+    double waited = 0;   // seconds library() waited for batches still compiling (render thread; KB_FPS)
 private:
     void submit(const std::shared_ptr<MetalShaderBatch> &b);
     id<MTLDevice> dev_;
+    int size_;           // shaders a batch: 64; KB_MTL_BATCH=<n> for tests (new batches: a cold cache)
     std::mutex mu_;
     std::shared_ptr<MetalShaderBatch> open_;
+    double lastAdd_ = 0;
     std::unordered_map<std::string, std::shared_ptr<MetalShaderBatch>> entries_;
 };
 

@@ -164,8 +164,8 @@ void MetalWindow::setVSync(bool on) {
 }
 
 // ---- Backend choice ----------------------------------------------------------
-// KB_RENDERER=metal: this backend; anything else (or unset): GL, which stays the
-// default until Metal matches it everywhere.
+// This backend unless KB_RENDERER=gl: the GL layer (src/gfx_gl) stays the fallback on
+// macOS and Linux's renderer.
 extern "C" IDirect3D9 *WINAPI GL_Direct3DCreate9(UINT sdk);
 extern "C" HRESULT WINAPI GL_D3DXSaveSurfaceToFileA(const char *file, D3DXIMAGE_FILEFORMAT fmt,
                                                      IDirect3DSurface9 *surface, const void *palette, const RECT *rect);
@@ -175,14 +175,16 @@ static bool KB_UseMetal() {
     static int use = -1;
     if (use < 0) {
         const char *r = getenv("KB_RENDERER");
-        use = r && !strcmp(r, "metal");
+        use = !r || strcmp(r, "gl");
+        if (r && strcmp(r, "gl") && strcmp(r, "metal"))
+            fprintf(stderr, "[mtl] KB_RENDERER=%s is neither metal nor gl: using Metal\n", r);
     }
     return use != 0;
 }
 
 extern "C" IDirect3D9 *WINAPI Direct3DCreate9(UINT sdk) {
     if (KB_UseMetal()) {
-        fprintf(stderr, "[mtl] Metal backend (KB_RENDERER=metal)\n");
+        fprintf(stderr, "[mtl] Metal backend (KB_RENDERER=gl for the GL layer)\n");
         return new MetalD3D9();
     }
     return GL_Direct3DCreate9(sdk);
