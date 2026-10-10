@@ -363,11 +363,46 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-0. **Metal backend: the user's decision, then leftovers** (Metal backend above;
-   built in session 13 to the rules agreed on 2026-10-09: spec first, no silent
-   fallbacks, one sync model, one shader parser, plain state with one translation
-   point, GL kept as the fallback; every stage checked by screenshots, the validation
-   layer and ASan, and measured).
+0. **Metal backend: the user's decision, then leftovers** (Metal backend above; built
+   in session 13). The rules agreed with the user (2026-10-09) still hold for any work
+   on it, and session 13's deviations are in its Decisions (DISCARD renames instead of
+   a per-frame ring, by the spec; the runtime compiler in place of `xcrun metal`):
+   - Spec first: instrument the GL layer to list every D3D9 method, render state and
+     value, format, lock flag, primitive type and shader opcode the game uses (menus
+     and several maps); implement that list, and make anything outside it fail loudly.
+   - No silent fallbacks or self-healing (the GL layer's ignored states, trusted link
+     failures, builtin-shader fallback and skipped draws hid bugs): log once, treat as
+     a bug. Develop with `MTL_DEBUG_LAYER=1` and `MTL_SHADER_VALIDATION=1`; any
+     validation message is a bug.
+   - Use what Metal shares with D3D: 0..1 depth, top-left origins for viewport,
+     scissor and textures (no Y flips; the D3D9 half-pixel offset stays); unified
+     memory (Lock returns a pointer into the MTLBuffer); command buffers keep the
+     resources they use alive (no name-reuse invalidation).
+   - One sync model: Metal only on the render thread (window and layer once on the
+     main thread), 2-3 frames in flight behind one semaphore, per-frame transient
+     data (DISCARD locks, constants) from one ring per frame, CPU waits only there and
+     for readbacks. Automatic hazard tracking until a profile says otherwise.
+   - One shader translator: a shared D3D9 bytecode parser with GLSL and MSL emitters;
+     dump every shader the game loads and translate + compile them all in a test tool.
+   - Plain D3D state structs with dirty bits, translated to Metal in one place per
+     draw; one cache each for pipeline, depth-stencil and sampler states, keyed by
+     hashes. No optimization without a profile.
+   - Same binary, backend chosen at startup by an environment variable; GL stays the
+     macOS fallback until Metal matches it, and Linux's renderer.
+   - Stages that each run the game (clear screen, 2D menus, world, lighting and
+     shadows, post effects and MSAA), each done when tools/bench_views.py screenshots
+     match GL on every map's overview and mp_nuked's views (tools/cmp_screens.py, with
+     each map's GL-vs-GL noise as the tolerance; compare with the closer of two GL
+     runs), the validation layer and ASan are quiet and fps is measured. Objective-C++
+     (.mm) with ARC, no new dependencies; aim for ~3,000-4,000 lines.
+   - Hand-offs (the user's standing instruction): at each stage's end, or sooner after
+     more than one compaction, update HANDOFF.md, commit (pre-authorized at stage ends
+     and hand-offs once the checks pass, or as work in progress on an early hand-off,
+     saying so; CLAUDE.md's conventions; never push; mid-stage commits need the user's
+     OK), create a task card with a self-contained brief for the next stage that
+     repeats these points, the rules, the harness (bench_views.py, cmp_screens.py,
+     sample_report.py, gpu_trace.py) and the user's constraints, then stop.
+   Leftovers:
    - Make it the default if the user wants: `KB_UseMetal()` in mtl_window.mm (GL with
      `KB_RENDERER=gl` then), and only then rerun `tools/make_portable.sh` for the game
      folder.
