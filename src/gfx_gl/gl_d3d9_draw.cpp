@@ -9,6 +9,7 @@
 #include "gl_platform.h"
 #include "gl_resources.h"
 #include "gl_shader.h"   // GLAttribLocation / GLAttribName / GLBindAttribLocations
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 #include <cstdio>
@@ -188,6 +189,8 @@ HRESULT WINAPI GLDevice::CreateTexture(UINT Width, UINT Height, UINT Levels, DWO
                                        D3DFORMAT Format, D3DPOOL Pool,
                                        IDirect3DTexture9 **ppTexture, HANDLE *) {
     if (!ppTexture) return E_INVALIDARG;
+    KB_SPEC("CreateTexture %s usage=%x fmt=%u pool=%u levels=%s pow2=%d", KB_SpecThread(), (unsigned)Usage, (unsigned)Format,
+            (unsigned)Pool, Levels == 0 ? "0" : Levels == 1 ? "1" : "n", (int)(!(Width & (Width - 1)) && !(Height & (Height - 1))));
     *ppTexture = new GLTexture(this, Width, Height, Levels, Usage, Format, Pool);
     return D3D_OK;
 }
@@ -195,6 +198,8 @@ HRESULT WINAPI GLDevice::CreateTexture(UINT Width, UINT Height, UINT Levels, DWO
 HRESULT WINAPI GLDevice::CreateVolumeTexture(UINT Width, UINT Height, UINT Depth, UINT Levels, DWORD Usage,
                                              D3DFORMAT Format, D3DPOOL Pool, IDirect3DVolumeTexture9 **ppVolumeTexture, HANDLE *) {
     if (!ppVolumeTexture) return E_INVALIDARG;
+    KB_SPEC("CreateVolumeTexture %s usage=%x fmt=%u pool=%u levels=%u", KB_SpecThread(), (unsigned)Usage, (unsigned)Format,
+            (unsigned)Pool, Levels);
     *ppVolumeTexture = new GLVolumeTexture(this, Width, Height, Depth, Levels, Usage, Format, Pool);
     return D3D_OK;
 }
@@ -202,6 +207,8 @@ HRESULT WINAPI GLDevice::CreateVolumeTexture(UINT Width, UINT Height, UINT Depth
 HRESULT WINAPI GLDevice::CreateCubeTexture(UINT EdgeLength, UINT Levels, DWORD Usage, D3DFORMAT Format,
                                            D3DPOOL Pool, IDirect3DCubeTexture9 **ppCubeTexture, HANDLE *) {
     if (!ppCubeTexture) return E_INVALIDARG;
+    KB_SPEC("CreateCubeTexture %s usage=%x fmt=%u pool=%u levels=%s", KB_SpecThread(), (unsigned)Usage, (unsigned)Format,
+            (unsigned)Pool, Levels == 0 ? "0" : Levels == 1 ? "1" : "n");
     *ppCubeTexture = new GLCubeTexture(this, EdgeLength, Levels, Usage, Format, Pool);
     return D3D_OK;
 }
@@ -209,6 +216,7 @@ HRESULT WINAPI GLDevice::CreateCubeTexture(UINT EdgeLength, UINT Levels, DWORD U
 HRESULT WINAPI GLDevice::CreateVertexBuffer(UINT Length, DWORD Usage, DWORD FVF, D3DPOOL Pool,
                                             IDirect3DVertexBuffer9 **ppVB, HANDLE *) {
     if (!ppVB) return E_INVALIDARG;
+    KB_SPEC("CreateVertexBuffer %s usage=%x fvf=%x pool=%u", KB_SpecThread(), (unsigned)Usage, (unsigned)FVF, (unsigned)Pool);
     *ppVB = new GLVertexBuffer(this, Length, Usage, FVF, Pool);
     return D3D_OK;
 }
@@ -216,6 +224,7 @@ HRESULT WINAPI GLDevice::CreateVertexBuffer(UINT Length, DWORD Usage, DWORD FVF,
 HRESULT WINAPI GLDevice::CreateIndexBuffer(UINT Length, DWORD Usage, D3DFORMAT Format, D3DPOOL Pool,
                                            IDirect3DIndexBuffer9 **ppIB, HANDLE *) {
     if (!ppIB) return E_INVALIDARG;
+    KB_SPEC("CreateIndexBuffer %s usage=%x fmt=%u pool=%u", KB_SpecThread(), (unsigned)Usage, (unsigned)Format, (unsigned)Pool);
     *ppIB = new GLIndexBuffer(this, Length, Usage, Format, Pool);
     return D3D_OK;
 }
@@ -223,6 +232,10 @@ HRESULT WINAPI GLDevice::CreateIndexBuffer(UINT Length, DWORD Usage, D3DFORMAT F
 HRESULT WINAPI GLDevice::CreateVertexDeclaration(const D3DVERTEXELEMENT9 *pElements,
                                                  IDirect3DVertexDeclaration9 **ppDecl) {
     if (!ppDecl || !pElements) return E_INVALIDARG;
+    KB_SPEC("CreateVertexDeclaration %s", KB_SpecThread());
+    for (const D3DVERTEXELEMENT9 *e = pElements; g_kbSpec && e->Stream != 0xFF; ++e)
+        KB_SPEC("DeclElement stream=%u off%%4=%u type=%u method=%u usage=%u index=%u", (unsigned)e->Stream,
+                (unsigned)e->Offset % 4, (unsigned)e->Type, (unsigned)e->Method, (unsigned)e->Usage, (unsigned)e->UsageIndex);
     *ppDecl = new GLVertexDeclaration(this, pElements);
     return D3D_OK;
 }
@@ -230,9 +243,11 @@ HRESULT WINAPI GLDevice::CreateVertexDeclaration(const D3DVERTEXELEMENT9 *pEleme
 // ---- Geometry binding (device holds non-owning refs; the app owns lifetime) -
 HRESULT WINAPI GLDevice::SetStreamSource(UINT StreamNumber, IDirect3DVertexBuffer9 *pStreamData,
                                          UINT OffsetInBytes, UINT Stride) {
+    GLVertexBuffer *vb = static_cast<GLVertexBuffer *>(pStreamData);
+    KB_SPEC("SetStreamSource %s stream=%u null=%d off%%4=%u stride=%u dynamic=%d", KB_SpecThread(), StreamNumber, vb == nullptr,
+            OffsetInBytes % 4, Stride, vb ? (int)vb->isDynamic() : -1);
     if (StreamNumber >= 4) return D3D_OK;  // TODO: support >4 streams if needed
     Stream &s = streams_[StreamNumber];
-    GLVertexBuffer *vb = static_cast<GLVertexBuffer *>(pStreamData);
     // No-change fast path: the engine re-sets identical bindings around most draws;
     // an unconditional flush here kept draw batches at size 1 (flushes/f == draws/f).
     if (s.vb == vb && s.offset == OffsetInBytes && s.stride == Stride) return D3D_OK;
@@ -242,6 +257,8 @@ HRESULT WINAPI GLDevice::SetStreamSource(UINT StreamNumber, IDirect3DVertexBuffe
 
 HRESULT WINAPI GLDevice::SetIndices(IDirect3DIndexBuffer9 *pIndexData) {
     GLIndexBuffer *ib = static_cast<GLIndexBuffer *>(pIndexData);
+    KB_SPEC("SetIndices %s null=%d fmt=%u dynamic=%d", KB_SpecThread(), ib == nullptr, ib ? (unsigned)ib->format() : 0u,
+            ib ? (int)ib->isDynamic() : -1);
     if (ib_ == ib) return D3D_OK;   // no-change fast path
     ib_ = ib;
     return D3D_OK;
@@ -249,6 +266,7 @@ HRESULT WINAPI GLDevice::SetIndices(IDirect3DIndexBuffer9 *pIndexData) {
 
 HRESULT WINAPI GLDevice::SetVertexDeclaration(IDirect3DVertexDeclaration9 *pDecl) {
     GLVertexDeclaration *d = static_cast<GLVertexDeclaration *>(pDecl);
+    KB_SPEC("SetVertexDeclaration %s null=%d", KB_SpecThread(), d == nullptr);
     if (decl_ == d) return D3D_OK;   // no-change fast path
     decl_ = d;
     return D3D_OK;
@@ -476,9 +494,43 @@ void GLDevice::applyVertexState() {
     curVaoEnt_ = &ent;
 }
 
+// KB_SPEC: what a draw uses: shaders, declaration, streams, targets, bound textures.
+void GLDevice::specDraw(const char *kind, unsigned prim, int baseVertex) {
+    extern const char *KB_SpecSurfKind(IDirect3DSurface9 *);
+    const unsigned vsh = vs_ ? vs_->hash : 0, psh = ps_ ? ps_->hash : 0;
+    KB_SpecNote("Draw %s %s prim=%u vs=%d ps=%d decl=%d ib=%u base<0=%d", KB_SpecThread(), kind, prim, vs_ != nullptr,
+                ps_ != nullptr, decl_ != nullptr, ib_ ? (unsigned)ib_->format() : 0u, (int)(baseVertex < 0));
+    KB_SpecNote("Pair vs=%08x ps=%08x", vsh, psh);
+    if (decl_) KB_SpecNote("VsDecl vs=%08x decl=%s", vsh, decl_->specSig.c_str());
+    extern unsigned long g_kbPresentEnter;
+    for (int i = 0; i < 4; ++i)
+        if (streams_[i].vb && streams_[i].vb->isDynamic() && streams_[i].vb->specDiscardPresent != g_kbPresentEnter)
+            KB_SpecNote("DrawStream dynamic VB not DISCARDed this frame%s",
+                        streams_[i].vb->specDiscardPresent == ~0ul ? " (never)" : "");
+    if (ib_ && ib_->isDynamic() && ib_->specDiscardPresent != g_kbPresentEnter)
+        KB_SpecNote("Draw dynamic IB not DISCARDed this frame%s", ib_->specDiscardPresent == ~0ul ? " (never)" : "");
+    for (int i = 0; i < 4; ++i)
+        if (streams_[i].vb) {
+            streams_[i].vb->specUsed = true;
+            KB_SpecNote("DrawStream %d stride=%u off%%4=%u dynamic=%d", i, streams_[i].stride, streams_[i].offset % 4,
+                        (int)streams_[i].vb->isDynamic());
+        }
+    if (ib_) ib_->specUsed = true;
+    KB_SpecNote("DrawTarget rt=%s fmt=%u ds=%s dsfmt=%u bbsamples=%d", KB_SpecSurfKind(specRT_),
+                specRT_ ? (unsigned)static_cast<GLSurface *>(specRT_)->format() : 0u, KB_SpecSurfKind(specDS_),
+                specDS_ ? (unsigned)static_cast<GLSurface *>(specDS_)->format() : 0u,
+                bbSamples_);
+    if (ps_)
+        for (int i = 0; i < kMaxStages; ++i)
+            if (ps_->samplerMask() & (1u << i))
+                KB_SpecNote("PsSampler ps=%08x s%d %s fmt=%u", psh, i, specTexKind_[i] ? specTexKind_[i] : "none", specTexFmt_[i]);
+    if (alphaTestOn_) KB_SpecNote("DrawAlphaTest func=%u ps=%d", (unsigned)alphaFunc_, ps_ != nullptr);
+}
+
 HRESULT WINAPI GLDevice::DrawPrimitive(D3DPRIMITIVETYPE PrimitiveType, UINT StartVertex,
                                        UINT PrimitiveCount) {
     extern unsigned long g_kbDraws; ++g_kbDraws;
+    if (g_kbSpec) specDraw("DP", (unsigned)PrimitiveType, 0);
     if (!useDrawProgram()) return D3D_OK;   // shader still linking -> skip (pops in next frame)
     applyVertexState();
 
@@ -495,6 +547,7 @@ HRESULT WINAPI GLDevice::DrawPrimitive(D3DPRIMITIVETYPE PrimitiveType, UINT Star
 HRESULT WINAPI GLDevice::DrawIndexedPrimitive(D3DPRIMITIVETYPE Type, INT BaseVertexIndex,
                                               UINT /*MinVertexIndex*/, UINT /*NumVertices*/,
                                               UINT startIndex, UINT primCount) {
+    if (g_kbSpec) specDraw("DIP", (unsigned)Type, BaseVertexIndex);
     if (!ib_) return D3D_OK;
     extern unsigned long g_kbDraws; ++g_kbDraws;
 

@@ -452,6 +452,7 @@ emscripten/
 build_macos/
 build_asan/
 build_debug/
+build_mtl/
 
 # macOS Finder metadata
 .DS_Store

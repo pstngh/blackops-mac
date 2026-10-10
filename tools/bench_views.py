@@ -17,7 +17,11 @@ usage: bench_views.py [options] [-- extra game args]
 
 The game starts with a fresh scratch profile (fs_h in <out>), r_vsync 0 and com_maxfps 0,
 joins a team, takes `god` and `noclip`, and sits at each view (`setviewpos`) for S
-seconds; KB_FPS=1 gives the fps. Views are positions in tools/views.txt
+seconds; KB_FPS=1 gives the fps. The schedule runs on the game's clock
+(KB_CMDS_GAMETIME=1), so screenshots of two builds or backends show the same moment of
+the map's animations (foliage, flags) even when one loads faster; the match clock, script
+movers, particles (they step per frame), `autoassign`'s team and Nuketown's mannequin
+still vary, so compare with the closer of two reference runs. Views are positions in tools/views.txt
 ("<map> <name> x y z yaw pitch"). Other settings are the game folder's config.
 
 Run it with Homebrew's python3 for the ASan build: /usr/bin/python3 is a SIP binary that
@@ -101,7 +105,7 @@ def run_map(args, mapname, views, out):
         t += seconds
     cmds.append(f'{t:g}:quit')
     env = dict(os.environ)
-    env.update({'KB_FPS': '1', 'KB_CMDS': '|'.join(cmds)})
+    env.update({'KB_FPS': '1', 'KB_CMDS': '|'.join(cmds), 'KB_CMDS_GAMETIME': '1'})
     for kv in args.env:
         k, v = kv.split('=', 1)
         env[k] = v

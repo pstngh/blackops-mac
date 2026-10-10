@@ -4,6 +4,7 @@
 #include "gl_platform.h"
 #include "gl_shader.h"
 #include "gl_resources.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 
@@ -24,6 +25,7 @@ HRESULT WINAPI GLDevice::CreatePixelShader(const DWORD *pFunction, IDirect3DPixe
 
 HRESULT WINAPI GLDevice::SetVertexShader(IDirect3DVertexShader9 *pShader) {
     GLVertexShader *vs = static_cast<GLVertexShader *>(pShader);
+    KB_SPEC("SetVertexShader %s null=%d", KB_SpecThread(), vs == nullptr);
     if (vs_ == vs) return D3D_OK;   // no-change fast path (engine re-sets per drawSurf)
     vs_ = vs;
     return D3D_OK;
@@ -31,6 +33,7 @@ HRESULT WINAPI GLDevice::SetVertexShader(IDirect3DVertexShader9 *pShader) {
 
 HRESULT WINAPI GLDevice::SetPixelShader(IDirect3DPixelShader9 *pShader) {
     GLPixelShader *ps = static_cast<GLPixelShader *>(pShader);
+    KB_SPEC("SetPixelShader %s null=%d", KB_SpecThread(), ps == nullptr);
     if (ps_ == ps) return D3D_OK;   // no-change fast path
     ps_ = ps;
     return D3D_OK;
@@ -40,6 +43,7 @@ HRESULT WINAPI GLDevice::SetPixelShader(IDirect3DPixelShader9 *pShader) {
 // since the last draw, tracked here.
 
 HRESULT WINAPI GLDevice::SetVertexShaderConstantF(UINT StartRegister, const float *pData, UINT Vec4Count) {
+    KB_SPEC("SetVertexShaderConstantF %s end=%u", KB_SpecThread(), StartRegister + Vec4Count);
     // No-change fast path: the engine re-sets identical constants around most draws.
     // Flushing+bumping only on REAL changes keeps draw batches alive (flushes/f used
     // to equal draws/f) and lets useDrawProgram skip the per-draw uniform uploads.
@@ -58,6 +62,7 @@ HRESULT WINAPI GLDevice::SetVertexShaderConstantF(UINT StartRegister, const floa
 }
 
 HRESULT WINAPI GLDevice::SetPixelShaderConstantF(UINT StartRegister, const float *pData, UINT Vec4Count) {
+    KB_SPEC("SetPixelShaderConstantF %s end=%u", KB_SpecThread(), StartRegister + Vec4Count);
     if (pData && StartRegister + Vec4Count <= 256) {
         float *dst = psConst_ + StartRegister * 4;
         size_t bytes = Vec4Count * 4 * sizeof(float);

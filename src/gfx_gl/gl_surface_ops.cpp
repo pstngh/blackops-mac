@@ -7,6 +7,9 @@
 #include "gl_d3d9.h"
 #include "gl_resources.h"
 #include "gl_format.h"
+#include "gl_spec.h"
+
+const char *KB_SpecSurfKind(IDirect3DSurface9 *p);
 
 #include <GL/glew.h>
 #include <cstdio>
@@ -28,6 +31,7 @@ GLSurface *GLDevice::backBufferSurface() {
 
 
 HRESULT WINAPI GLDevice::GetBackBuffer(UINT, UINT, D3DBACKBUFFER_TYPE, IDirect3DSurface9 **pp) {
+    KB_SPEC("GetBackBuffer %s", KB_SpecThread());
     if (!pp) return E_INVALIDARG;
     GLSurface *bb = backBufferSurface();
     bb->AddRef();
@@ -36,6 +40,7 @@ HRESULT WINAPI GLDevice::GetBackBuffer(UINT, UINT, D3DBACKBUFFER_TYPE, IDirect3D
 }
 
 HRESULT WINAPI GLDevice::GetSwapChain(UINT, IDirect3DSwapChain9 **pp) {
+    KB_SPEC("GetSwapChain %s", KB_SpecThread());
     if (!pp) return E_INVALIDARG;
     if (!swapChain_)
         swapChain_ = new GLSwapChain(this, backBufferSurface());
@@ -50,6 +55,7 @@ HRESULT WINAPI GLDevice::GetSwapChain(UINT, IDirect3DSwapChain9 **pp) {
 // The FBO holds D3D row order, so the rows arrive top-down like a D3D surface's.
 HRESULT WINAPI GLSwapChain::GetFrontBufferData(IDirect3DSurface9 *pDestSurface) {
     GLSurface *dst = static_cast<GLSurface *>(pDestSurface);
+    KB_SPEC("GetFrontBufferData %s %s fmt=%u", KB_SpecThread(), KB_SpecSurfKind(pDestSurface), dst ? (unsigned)dst->format() : 0u);
     if (!dst) return E_FAIL;
     UINT w = dst->width(), h = dst->height();
     std::vector<unsigned char> &shadow = dst->shadow();
@@ -64,23 +70,26 @@ HRESULT WINAPI GLSwapChain::GetFrontBufferData(IDirect3DSurface9 *pDestSurface) 
 }
 
 HRESULT WINAPI GLDevice::CreateRenderTarget(UINT Width, UINT Height, D3DFORMAT Format,
-                                            D3DMULTISAMPLE_TYPE, DWORD, BOOL,
+                                            D3DMULTISAMPLE_TYPE ms, DWORD, BOOL lockable,
                                             IDirect3DSurface9 **ppSurface, HANDLE *) {
+    KB_SPEC("CreateRenderTarget %s fmt=%u ms=%u lockable=%d", KB_SpecThread(), (unsigned)Format, (unsigned)ms, (int)lockable);
     if (!ppSurface) return E_INVALIDARG;
     *ppSurface = new GLSurface(this, Width, Height, Format, /*sysmem=*/false);
     return D3D_OK;
 }
 
 HRESULT WINAPI GLDevice::CreateOffscreenPlainSurface(UINT Width, UINT Height, D3DFORMAT Format,
-                                                     D3DPOOL, IDirect3DSurface9 **ppSurface, HANDLE *) {
+                                                     D3DPOOL pool, IDirect3DSurface9 **ppSurface, HANDLE *) {
+    KB_SPEC("CreateOffscreenPlainSurface %s fmt=%u pool=%u", KB_SpecThread(), (unsigned)Format, (unsigned)pool);
     if (!ppSurface) return E_INVALIDARG;
     *ppSurface = new GLSurface(this, Width, Height, Format, /*sysmem=*/true);
     return D3D_OK;
 }
 
 HRESULT WINAPI GLDevice::CreateDepthStencilSurface(UINT Width, UINT Height, D3DFORMAT Format,
-                                                   D3DMULTISAMPLE_TYPE, DWORD, BOOL,
+                                                   D3DMULTISAMPLE_TYPE ms, DWORD, BOOL discard,
                                                    IDirect3DSurface9 **ppSurface, HANDLE *) {
+    KB_SPEC("CreateDepthStencilSurface %s fmt=%u ms=%u discard=%d", KB_SpecThread(), (unsigned)Format, (unsigned)ms, (int)discard);
     if (!ppSurface) return E_INVALIDARG;
     *ppSurface = new GLSurface(this, Width, Height, Format, GLDepthStencilTag{});
     return D3D_OK;
@@ -91,6 +100,8 @@ HRESULT WINAPI GLDevice::GetRenderTargetData(IDirect3DSurface9 *pRenderTarget,
                                              IDirect3DSurface9 *pDestSurface) {
     GLSurface *src = static_cast<GLSurface *>(pRenderTarget);
     GLSurface *dst = static_cast<GLSurface *>(pDestSurface);
+    KB_SPEC("GetRenderTargetData %s %s fmt=%u -> %s fmt=%u", KB_SpecThread(), KB_SpecSurfKind(pRenderTarget),
+            src ? (unsigned)src->format() : 0u, KB_SpecSurfKind(pDestSurface), dst ? (unsigned)dst->format() : 0u);
     if (!src || !dst || !src->texName()) return E_FAIL;
 
     unsigned internal, fmt, type; int bpp;
@@ -124,6 +135,15 @@ HRESULT WINAPI GLDevice::StretchRect(IDirect3DSurface9 *pSourceSurface, const RE
     extern unsigned long g_kbBlits; ++g_kbBlits;
     GLSurface *src = static_cast<GLSurface *>(pSourceSurface);
     GLSurface *dst = static_cast<GLSurface *>(pDestSurface);
+    if (g_kbSpec && src && dst) {
+        const int sw = pSourceRect ? pSourceRect->right - pSourceRect->left : (int)src->width();
+        const int sh = pSourceRect ? pSourceRect->bottom - pSourceRect->top : (int)src->height();
+        const int dw = pDestRect ? pDestRect->right - pDestRect->left : (int)dst->width();
+        const int dh = pDestRect ? pDestRect->bottom - pDestRect->top : (int)dst->height();
+        KB_SpecNote("StretchRect %s %s fmt=%u -> %s fmt=%u filter=%u srcrect=%d dstrect=%d scaled=%d", KB_SpecThread(),
+                    KB_SpecSurfKind(pSourceSurface), (unsigned)src->format(), KB_SpecSurfKind(pDestSurface), (unsigned)dst->format(),
+                    (unsigned)Filter, pSourceRect != nullptr, pDestRect != nullptr, (int)(sw != dw || sh != dh));
+    }
     if (!src || !dst) return E_FAIL;
     if ((!src->isBackbuffer() && !src->texName()) ||
         (!dst->isBackbuffer() && !dst->texName())) return E_FAIL;

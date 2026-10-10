@@ -18,7 +18,10 @@ struct SentientGlobals // sizeof=0x28
                                         // G_InitSentients(void)+17/w ...
     int sampleTime[2];                  // XREF: G_InitSentients(void)+30/w
                                         // G_InitSentients(void)+35/w
-} glob;
+};
+// Not visible outside this file: an external `glob` takes libc's glob() symbol, and
+// FindFirstFileA (win_kernel.cpp) called into this struct.
+static SentientGlobals glob;
 
 sentient_s *__cdecl Sentient_Alloc()
 {

@@ -56,6 +56,7 @@ public:
     unsigned glShader();                       // lazy: compiles on first use (GL thread)
     bool ok() const { return translatedOk_; }
     const std::string &glsl() const { return glsl_; }
+    unsigned hash = 0;                         // KB_ShaderHash of the bytecode (KB_SPEC)
 private:
     IDirect3DDevice9 *device_;
     unsigned          shader_ = 0;
@@ -78,6 +79,8 @@ public:
     // independently.
     unsigned glShader(unsigned shadowMask);
     bool ok() const { return translatedOk_; }
+    unsigned samplerMask() const { return samplerMask_; }
+    unsigned hash = 0;                         // KB_ShaderHash of the bytecode (KB_SPEC)
 private:
     IDirect3DDevice9 *device_;
     unsigned          shader_ = 0;

@@ -14,6 +14,7 @@
 #define KISAK_GL_D3D9_H
 
 #include "gl_object.h"
+#include "gl_spec.h"
 #include <map>
 #include <set>
 #include <array>
@@ -64,13 +65,13 @@ public:
     ~GLDevice() override;
 
     // --- Frame / target (gl_d3d9.cpp) ---
-    HRESULT WINAPI TestCooperativeLevel() override { return D3D_OK; }
-    UINT    WINAPI GetAvailableTextureMem() override { return 256u * 1024 * 1024; }
+    HRESULT WINAPI TestCooperativeLevel() override { KB_SPEC("TestCooperativeLevel %s", KB_SpecThread()); return D3D_OK; }
+    UINT    WINAPI GetAvailableTextureMem() override { KB_SPEC("GetAvailableTextureMem %s", KB_SpecThread()); return 256u * 1024 * 1024; }
     HRESULT WINAPI GetDeviceCaps(D3DCAPS9 *pCaps) override;
     HRESULT WINAPI Reset(D3DPRESENT_PARAMETERS *pp) override;
     HRESULT WINAPI Present(const RECT *, const RECT *, HWND, const RGNDATA *) override;
-    HRESULT WINAPI BeginScene() override { inScene_ = true;  return D3D_OK; }
-    HRESULT WINAPI EndScene() override   { inScene_ = false; return D3D_OK; }
+    HRESULT WINAPI BeginScene() override { KB_SPEC("BeginScene %s inScene=%d", KB_SpecThread(), (int)inScene_); inScene_ = true;  return D3D_OK; }
+    HRESULT WINAPI EndScene() override   { KB_SPEC("EndScene %s inScene=%d", KB_SpecThread(), (int)inScene_); inScene_ = false; return D3D_OK; }
     HRESULT WINAPI Clear(DWORD Count, const D3DRECT *pRects, DWORD Flags, D3DCOLOR Color,
                          float Z, DWORD Stencil) override;
     HRESULT WINAPI SetViewport(const D3DVIEWPORT9 *pViewport) override;
@@ -91,7 +92,7 @@ public:
     HRESULT WINAPI DrawIndexedPrimitive(D3DPRIMITIVETYPE Type, INT BaseVertexIndex,
                                         UINT MinVertexIndex, UINT NumVertices,
                                         UINT startIndex, UINT primCount) override;
-    HRESULT WINAPI DrawPrimitiveUP(D3DPRIMITIVETYPE, UINT, const void *, UINT) override { return D3D_OK; }
+    HRESULT WINAPI DrawPrimitiveUP(D3DPRIMITIVETYPE t, UINT, const void *, UINT) override { KB_SPEC("DrawPrimitiveUP %s prim=%u", KB_SpecThread(), (unsigned)t); return D3D_OK; }
 
     // --- Render / sampler / texture state (gl_state.cpp) ---
     HRESULT WINAPI SetRenderState(D3DRENDERSTATETYPE State, DWORD Value) override;
@@ -105,7 +106,7 @@ public:
     HRESULT WINAPI SetPixelShaderConstantF(UINT StartRegister, const float *pData, UINT Vec4Count) override;
     HRESULT WINAPI SetRenderTarget(DWORD RenderTargetIndex, IDirect3DSurface9 *pRenderTarget) override;
     HRESULT WINAPI SetDepthStencilSurface(IDirect3DSurface9 *pNewZStencil) override;
-    void    WINAPI SetGammaRamp(UINT, DWORD, const D3DGAMMARAMP *) override {}
+    void    WINAPI SetGammaRamp(UINT, DWORD, const D3DGAMMARAMP *) override { KB_SPEC("SetGammaRamp %s", KB_SpecThread()); }
 
     // --- Not yet ported: textures / surfaces / shaders / queries — TODO(task #4/#5) ---
     HRESULT WINAPI GetBackBuffer(UINT, UINT, D3DBACKBUFFER_TYPE, IDirect3DSurface9 **pp) override;
@@ -128,12 +129,19 @@ public:
                                D3DTEXTUREFILTERTYPE Filter) override;
     // Still stubbed (TODO): standalone depth-stencil surfaces, UpdateSurface.
     HRESULT WINAPI CreateDepthStencilSurface(UINT, UINT, D3DFORMAT, D3DMULTISAMPLE_TYPE, DWORD, BOOL, IDirect3DSurface9 **pp, HANDLE *) override;
-    HRESULT WINAPI UpdateSurface(IDirect3DSurface9 *, const RECT *, IDirect3DSurface9 *, const POINT *) override { return E_NOTIMPL; }
+    HRESULT WINAPI UpdateSurface(IDirect3DSurface9 *, const RECT *, IDirect3DSurface9 *, const POINT *) override { KB_SPEC("UpdateSurface %s", KB_SpecThread()); return E_NOTIMPL; }
     HRESULT WINAPI CreateVertexShader(const DWORD *pFunction, IDirect3DVertexShader9 **ppShader) override;
     HRESULT WINAPI CreatePixelShader(const DWORD *pFunction, IDirect3DPixelShader9 **ppShader) override;
     HRESULT WINAPI CreateQuery(D3DQUERYTYPE Type, IDirect3DQuery9 **ppQuery) override;
 
     void retargetTexture(unsigned oldName, unsigned newName);   // see KB_GLRetargetTexture
+
+    // KB_SPEC: the targets and texture kinds a draw uses.
+    void specDraw(const char *kind, unsigned prim, int baseVertex);
+    IDirect3DSurface9 *specRT_ = nullptr, *specDS_ = nullptr;
+    const char        *specTexKind_[16] = {};
+    unsigned           specTexFmt_[16] = {};
+    bool               specVpFull_ = true;     // the viewport covers the render target
 
 private:
     // ps_3_0 addresses 16 sampler stages (s0..s15). The lit world/material
@@ -371,15 +379,24 @@ public:
     HRESULT WINAPI GetAdapterIdentifier(UINT, DWORD, D3DADAPTER_IDENTIFIER9 *pIdentifier) override;
     UINT    WINAPI GetAdapterModeCount(UINT Adapter, D3DFORMAT) override;
     HRESULT WINAPI EnumAdapterModes(UINT Adapter, D3DFORMAT, UINT Mode, D3DDISPLAYMODE *pMode) override;
-    HMONITOR WINAPI GetAdapterMonitor(UINT Adapter) override { return (HMONITOR)(intptr_t)(Adapter + 1); }
+    HMONITOR WINAPI GetAdapterMonitor(UINT Adapter) override { KB_SPEC("GetAdapterMonitor %s", KB_SpecThread()); return (HMONITOR)(intptr_t)(Adapter + 1); }
     HRESULT WINAPI GetAdapterDisplayMode(UINT Adapter, D3DDISPLAYMODE *pMode) override;
     HRESULT WINAPI GetDeviceCaps(UINT, D3DDEVTYPE, D3DCAPS9 *pCaps) override;
-    HRESULT WINAPI CheckDeviceType(UINT, D3DDEVTYPE, D3DFORMAT, D3DFORMAT, BOOL) override { return D3D_OK; }
-    HRESULT WINAPI CheckDeviceFormat(UINT, D3DDEVTYPE, D3DFORMAT, DWORD, D3DRESOURCETYPE,
+    HRESULT WINAPI CheckDeviceType(UINT, D3DDEVTYPE, D3DFORMAT a, D3DFORMAT b, BOOL w) override {
+        KB_SPEC("CheckDeviceType %s %u %u %d", KB_SpecThread(), (unsigned)a, (unsigned)b, (int)w);
+        return D3D_OK;
+    }
+    HRESULT WINAPI CheckDeviceFormat(UINT, D3DDEVTYPE, D3DFORMAT AdapterFormat, DWORD Usage, D3DRESOURCETYPE RType,
                                      D3DFORMAT CheckFormat) override {
         // The engine PROBES formats in preference order — saying yes to everything makes
         // it pick vendor FOURCC hacks ('NULL', INTZ, ...) this layer cannot back. Reject
         // unknown FOURCCs (DXT1/3/5 excepted) so the probe falls through to a real format.
+        HRESULT hr = checkDeviceFormat(CheckFormat);
+        KB_SPEC("CheckDeviceFormat %s adapterfmt=%u usage=%x rtype=%u fmt=%u -> %s", KB_SpecThread(), (unsigned)AdapterFormat,
+                (unsigned)Usage, (unsigned)RType, (unsigned)CheckFormat, hr == D3D_OK ? "ok" : "no");
+        return hr;
+    }
+    static HRESULT checkDeviceFormat(D3DFORMAT CheckFormat) {
         unsigned f = (unsigned)CheckFormat;
         // NVIDIA's transparency supersampling, which the engine asks for with
         // r_aaAlpha: sample shading here (GLDevice::commitSampleShading).
@@ -391,7 +408,10 @@ public:
         return D3D_OK;
     }
     HRESULT WINAPI CheckDeviceMultiSampleType(UINT, D3DDEVTYPE, D3DFORMAT, BOOL, D3DMULTISAMPLE_TYPE Type, DWORD *pQ) override;
-    HRESULT WINAPI CheckDepthStencilMatch(UINT, D3DDEVTYPE, D3DFORMAT, D3DFORMAT, D3DFORMAT) override { return D3D_OK; }
+    HRESULT WINAPI CheckDepthStencilMatch(UINT, D3DDEVTYPE, D3DFORMAT a, D3DFORMAT b, D3DFORMAT c) override {
+        KB_SPEC("CheckDepthStencilMatch %s %u %u %u", KB_SpecThread(), (unsigned)a, (unsigned)b, (unsigned)c);
+        return D3D_OK;
+    }
     HRESULT WINAPI CreateDevice(UINT Adapter, D3DDEVTYPE DeviceType, HWND hFocusWindow,
                                 DWORD BehaviorFlags, D3DPRESENT_PARAMETERS *pp,
                                 IDirect3DDevice9 **ppReturnedDeviceInterface) override;

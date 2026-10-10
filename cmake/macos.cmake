@@ -38,9 +38,24 @@ target_compile_options(${BIN_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-everything;-Werror=class-varargs;-Werror=int-to-pointer-cast;-Werror=pointer-to-int-cast;-Werror=pointer-to-enum-cast;-ferror-limit=0>
 )
 
+# The Metal backend (src/gfx_mtl, KB_RENDERER=metal): Objective-C++ with ARC, built with
+# its own flags (the engine's MSVC compatibility header and warning policy are for the
+# decompiled code).
+enable_language(OBJCXX)
+file(GLOB KISAK_MTL_SOURCES CONFIGURE_DEPENDS "${SRC_DIR}/gfx_mtl/*.mm" "${SRC_DIR}/gfx_mtl/*.cpp")
+add_library(kisak_mtl OBJECT ${KISAK_MTL_SOURCES})
+target_include_directories(kisak_mtl PRIVATE "${SRC_DIR}" "${SRC_DIR}/platform/winsdk")
+target_link_libraries(kisak_mtl PRIVATE PkgConfig::KISAK_DEPS)
+target_compile_options(kisak_mtl PRIVATE -fobjc-arc -Wall -Wno-unused-function)
+set_target_properties(kisak_mtl PROPERTIES CXX_STANDARD 20 OBJCXX_STANDARD 20)
+
 target_link_libraries(${BIN_NAME} PRIVATE
+    kisak_mtl
     PkgConfig::KISAK_DEPS
     ${KISAK_OPENGL_FRAMEWORK}
+    "-framework Metal"
+    "-framework QuartzCore"
+    "-framework Foundation"
     pthread
     m
 )

@@ -14,6 +14,8 @@ file(GLOB_RECURSE KISAK_PORTABLE_CPP CONFIGURE_DEPENDS
 )
 list(FILTER KISAK_PORTABLE_CPP EXCLUDE REGEX "/src/(libs|tracy|steam|nvapi|binklib|win32)/")
 list(FILTER KISAK_PORTABLE_CPP EXCLUDE REGEX "/(gfx_gl|audio_openal)/tests/")
+# The Metal backend is macOS's own target (macos.cmake).
+list(FILTER KISAK_PORTABLE_CPP EXCLUDE REGEX "/src/gfx_mtl/")
 # The stream thread (streamed sounds, high texture mips) is the Windows one.
 list(APPEND KISAK_PORTABLE_CPP "${SRC_DIR}/win32/win_stream.cpp")
 

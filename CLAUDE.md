@@ -127,9 +127,27 @@ record a CPU sample / Metal System Trace at each view (sampling lowers that view
 self, libs, incl, callers, tree; `render`/`main` select those threads) and
 `tools/gpu_trace.py report T --fps F` gives the GPU's busy share and command buffers
 per frame. `KB_FPS=<s>` alone prints fps, draws, blits and buffer uploads per frame.
+bench_views.py times its commands by the game's clock (`KB_CMDS_GAMETIME=1`), but the
+match clock, script movers and `autoassign`'s team still vary between runs: compare a
+candidate with the closer of two reference runs.
+
+Metal: `KB_RENDERER=metal` renders through src/gfx_mtl (a D3D9 device on Metal) instead
+of the GL layer, which stays the default and Linux's renderer (HANDOFF, "Metal backend").
+Metal draws what D3D9 specifies where the GL layer doesn't (mipmaps, shadow-map compares,
+separate alpha blending, particle clouds); `KB_MTL_GLCOMPAT=1` draws like the GL layer,
+to compare screenshots with it. Anything the backend doesn't implement prints `[mtl] BUG`
+once (`KB_MTL_STRICT=1` aborts there): grep logs for it. Develop with `MTL_DEBUG_LAYER=1
+MTL_SHADER_VALIDATION=1`. Metal's `KB_FPS` line adds frames presented and shown per
+second (shown: what the display reported; 0 while the screen is locked, when nothing is
+composited) and the pipelines built at first draw with their time (stalls).
+`KB_DUMP_MSL=<dir>` writes each translated shader. On the GL
+backend, `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
+lock flag and shader pairing the game uses (the list Metal implements), and
+`KB_DUMP_SHADERS=<dir>` writes each shader's bytecode; `tools/shader_test.sh <dump> <out>`
+translates them all to GLSL and MSL and compiles the MSL.
 
 AddressSanitizer: configure `build_asan` with `-DCMAKE_CXX_FLAGS="-fsanitize=address
--fno-omit-frame-pointer"` (same for C and the linker). ASan's dlopen interceptor
+-fno-omit-frame-pointer"` (same for C, Objective-C++ and the linker). ASan's dlopen interceptor
 makes sdl2-compat look for libSDL3 next to the ASan runtime, so copy
 `libclang_rt.asan_osx_dynamic.dylib` into `build_asan/asanrt/`, symlink
 `/opt/homebrew/lib/libSDL3.dylib` there, and run with

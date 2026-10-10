@@ -2,6 +2,7 @@
 #include "gl_d3d9.h"
 #include "glcontext.h"
 #include "gl_resources.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 
@@ -264,19 +265,35 @@ void GLDevice::kbRestoreAutoDepth(int w, int h) {
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0);
 }
 
+// KB_SPEC: what a surface is ("null", "bb", "tex", "cube", "rt", "ds", "sys") and its format.
+const char *KB_SpecSurfKind(IDirect3DSurface9 *p) {
+    GLSurface *s = static_cast<GLSurface *>(p);
+    if (!s) return "null";
+    if (s->isBackbuffer()) return "bb";
+    if (s->ownerTex()) return s->ownerTex()->isDepth() ? "deptex" : "tex";
+    if (s->isDepthStencil()) return "ds";
+    if (s->sysmem()) return "sys";
+    if (s->isCubeFace()) return "cube";
+    return s->texName() ? "rt" : "?";
+}
+
 // D3D9's SetRenderTarget(0, ..) sets the viewport to the whole new target (depth 0..1)
 // and resets the scissor rect to it; the renderer relies on that and does not
 // re-issue SetViewport for full-target post passes.
 void GLDevice::resetViewportToTarget() {
     glViewport(0, 0, fbWidth_, fbHeight_);
     vpWidth_ = fbWidth_; vpHeight_ = fbHeight_;
+    specVpFull_ = true;
     KB_glDepthRange(0.0, 1.0);
     glScissor(0, 0, fbWidth_, fbHeight_);
 }
 
 HRESULT WINAPI GLDevice::SetRenderTarget(DWORD RenderTargetIndex, IDirect3DSurface9 *pRenderTarget) {
-    if (RenderTargetIndex != 0) return D3D_OK;  // single render target for now (MRT: TODO)
     GLSurface *s = static_cast<GLSurface *>(pRenderTarget);
+    KB_SPEC("SetRenderTarget %s idx=%u %s fmt=%u level=%u", KB_SpecThread(), (unsigned)RenderTargetIndex,
+            KB_SpecSurfKind(pRenderTarget), s ? (unsigned)s->format() : 0u, s ? s->level() : 0u);
+    if (RenderTargetIndex != 0) return D3D_OK;  // single render target for now (MRT: TODO)
+    specRT_ = pRenderTarget;
     if (g_kbTrace) fprintf(stderr, "[trace] SetRT %p bb=%d %ux%u tex=%u ds=%p\n", (void *)s, s ? (int)s->isBackbuffer() : -1,
                            s ? s->width() : 0, s ? s->height() : 0, s ? s->texName() : 0, (void *)curDS_);
     // A null target, or the back-buffer surface itself, means the back buffer.
@@ -355,6 +372,9 @@ HRESULT WINAPI GLDevice::SetRenderTarget(DWORD RenderTargetIndex, IDirect3DSurfa
 
 HRESULT WINAPI GLDevice::SetDepthStencilSurface(IDirect3DSurface9 *pNewZStencil) {
     GLSurface *ds = static_cast<GLSurface *>(pNewZStencil);
+    KB_SPEC("SetDepthStencilSurface %s %s fmt=%u sameAsRT=%d", KB_SpecThread(), KB_SpecSurfKind(pNewZStencil),
+            ds ? (unsigned)ds->format() : 0u, ds ? (int)(ds->width() == (UINT)fbWidth_ && ds->height() == (UINT)fbHeight_) : -1);
+    specDS_ = pNewZStencil;
     // Only depth-TEXTURE-backed surfaces are honored (texName != 0, i.e. a view onto a
     // depth-format GLTexture). Plain metadata depth-stencil handles keep the auto
     // renderbuffer behavior. NULL restores the auto path.
@@ -420,7 +440,17 @@ HRESULT WINAPI GLDevice::SetDepthStencilSurface(IDirect3DSurface9 *pNewZStencil)
     return D3D_OK;
 }
 
+void KB_SpecPresentParams(const char *what, const D3DPRESENT_PARAMETERS *pp) {
+    if (pp)
+        KB_SPEC("%s %s bbfmt=%u count=%u ms=%u msq=%u swap=%u windowed=%d autods=%d dsfmt=%u flags=%x interval=%x refresh=%u",
+                what, KB_SpecThread(), (unsigned)pp->BackBufferFormat, (unsigned)pp->BackBufferCount,
+                (unsigned)pp->MultiSampleType, (unsigned)pp->MultiSampleQuality, (unsigned)pp->SwapEffect,
+                (int)pp->Windowed, (int)pp->EnableAutoDepthStencil, (unsigned)pp->AutoDepthStencilFormat,
+                (unsigned)pp->Flags, (unsigned)pp->PresentationInterval, (unsigned)pp->FullScreen_RefreshRateInHz);
+}
+
 HRESULT WINAPI GLDevice::Reset(D3DPRESENT_PARAMETERS *pp) {
+    KB_SpecPresentParams("Reset", pp);
     if (pp && pp->BackBufferWidth && pp->BackBufferHeight) {
         bbWidth_  = (int)pp->BackBufferWidth;
         bbHeight_ = (int)pp->BackBufferHeight;
@@ -513,6 +543,12 @@ static bool KB_PresentRect(int r[6]) {
     return r[2] > 0 && r[3] > 0 && r[4] > 0 && r[5] > 0;
 }
 
+// The Metal backend's Present records its rectangle here too.
+void KB_NotePresentRect(int x, int y, int w, int h, int bbWidth, int bbHeight) {
+    g_kbPresentRect[0] = x; g_kbPresentRect[1] = y; g_kbPresentRect[2] = w; g_kbPresentRect[3] = h;
+    g_kbPresentRect[4] = bbWidth; g_kbPresentRect[5] = bbHeight;
+}
+
 void KB_WindowToBackbuffer(int *x, int *y) {
     int r[6];
     if (!KB_PresentRect(r)) return;
@@ -529,7 +565,10 @@ void KB_BackbufferToWindow(int *x, int *y) {
     *y = r[1] + (int)((long long)*y * r[3] / r[5]);
 }
 
-HRESULT WINAPI GLDevice::Present(const RECT *, const RECT *, HWND, const RGNDATA *) {
+HRESULT WINAPI GLDevice::Present(const RECT *src, const RECT *dst, HWND wnd, const RGNDATA *dirty) {
+    KB_SPEC("Present %s src=%d dst=%d wnd=%d dirty=%d inScene=%d", KB_SpecThread(), src != nullptr, dst != nullptr,
+            wnd != nullptr, dirty != nullptr, (int)inScene_);
+    if (g_kbSpec) { static unsigned n; if (++n % 600 == 0) KB_SpecFlush(); }
     unsigned bb = resolvedBackbufferFbo();
     const unsigned long shot = KB_MaybeScreenshot(bb, bbWidth_, bbHeight_);
     {
@@ -591,8 +630,10 @@ HRESULT WINAPI GLDevice::Present(const RECT *, const RECT *, HWND, const RGNDATA
     return D3D_OK;
 }
 
-HRESULT WINAPI GLDevice::Clear(DWORD /*Count*/, const D3DRECT * /*pRects*/, DWORD Flags,
+HRESULT WINAPI GLDevice::Clear(DWORD Count, const D3DRECT *pRects, DWORD Flags,
                                D3DCOLOR Color, float Z, DWORD Stencil) {
+    KB_SPEC("Clear %s count=%u rects=%d flags=%x target=%s z=%g stencil=%u scissor=%d vpfull=%d", KB_SpecThread(), (unsigned)Count,
+            pRects != nullptr, (unsigned)Flags, fboActive_ ? "fbo" : "bb", Z, (unsigned)Stencil, (int)scissorOn_, (int)specVpFull_);
     if (g_kbTrace) fprintf(stderr, "[trace] Clear flags=%x color=%08x z=%g fbo=%d\n", (unsigned)Flags, (unsigned)Color, Z, (int)fboActive_);
     GLbitfield mask = 0;
     if (Flags & D3DCLEAR_TARGET) {
@@ -628,17 +669,22 @@ HRESULT WINAPI GLDevice::Clear(DWORD /*Count*/, const D3DRECT * /*pRects*/, DWOR
 
 HRESULT WINAPI GLDevice::SetViewport(const D3DVIEWPORT9 *vp) {
     if (!vp) return E_INVALIDARG;
+    KB_SPEC("SetViewport %s z=%g..%g full=%d inside=%d", KB_SpecThread(), vp->MinZ, vp->MaxZ,
+            (int)(vp->X == 0 && vp->Y == 0 && (int)vp->Width == fbWidth_ && (int)vp->Height == fbHeight_),
+            (int)((int)(vp->X + vp->Width) <= fbWidth_ && (int)(vp->Y + vp->Height) <= fbHeight_));
     if (g_kbTrace) fprintf(stderr, "[trace] SetViewport %u %u %u %u z %g..%g fbo=%d\n", (unsigned)vp->X, (unsigned)vp->Y,
                            (unsigned)vp->Width, (unsigned)vp->Height, vp->MinZ, vp->MaxZ, (int)fboActive_);
     // Every target, the back buffer included, is stored with D3D's row order (the
     // vertex shaders negate clip-space Y), so GL window y is D3D's y: no flip.
     glViewport((GLint)vp->X, (GLint)vp->Y, (GLsizei)vp->Width, (GLsizei)vp->Height);
+    specVpFull_ = vp->X == 0 && vp->Y == 0 && (int)vp->Width == fbWidth_ && (int)vp->Height == fbHeight_;
     vpWidth_ = vp->Width ? (int)vp->Width : 1; vpHeight_ = vp->Height ? (int)vp->Height : 1;
     KB_glDepthRange(vp->MinZ, vp->MaxZ);
     return D3D_OK;
 }
 
 HRESULT WINAPI GLDevice::GetDeviceCaps(D3DCAPS9 *pCaps) {
+    KB_SPEC("GetDeviceCaps %s", KB_SpecThread());
     if (!pCaps) return E_INVALIDARG;
     FillDefaultCaps(pCaps);
     return D3D_OK;
@@ -647,7 +693,8 @@ HRESULT WINAPI GLDevice::GetDeviceCaps(D3DCAPS9 *pCaps) {
 // ---------------------------------------------------------------------------
 // GLD3D9 (factory)
 // ---------------------------------------------------------------------------
-HRESULT WINAPI GLD3D9::GetAdapterIdentifier(UINT, DWORD, D3DADAPTER_IDENTIFIER9 *pIdentifier) {
+HRESULT WINAPI GLD3D9::GetAdapterIdentifier(UINT, DWORD flags, D3DADAPTER_IDENTIFIER9 *pIdentifier) {
+    KB_SPEC("GetAdapterIdentifier %s flags=%x", KB_SpecThread(), (unsigned)flags);
     if (!pIdentifier) return E_INVALIDARG;
     *pIdentifier = D3DADAPTER_IDENTIFIER9{};
     // GL_VENDOR/GL_RENDERER need a current context. R_ChooseAdapter() queries this
@@ -679,6 +726,7 @@ static int KB_AdapterDensity(UINT adapter) {
 }
 
 UINT WINAPI GLD3D9::GetAdapterCount() {
+    KB_SPEC("GetAdapterCount %s", KB_SpecThread());
     const int n = KB_VideoReady() ? SDL_GetNumVideoDisplays() : 0;
     return n > 0 ? (UINT)n : 1;
 }
@@ -697,6 +745,7 @@ static void KB_DesktopMode(UINT adapter, D3DDISPLAYMODE *mode) {
 }
 
 HRESULT WINAPI GLD3D9::GetAdapterDisplayMode(UINT Adapter, D3DDISPLAYMODE *pMode) {
+    KB_SPEC("GetAdapterDisplayMode %s", KB_SpecThread());
     if (!pMode) return E_INVALIDARG;
     KB_DesktopMode(Adapter, pMode);
     return D3D_OK;
@@ -730,13 +779,15 @@ static void KB_ListAdapterModes(UINT adapter) {
     }
 }
 
-UINT WINAPI GLD3D9::GetAdapterModeCount(UINT Adapter, D3DFORMAT) {
+UINT WINAPI GLD3D9::GetAdapterModeCount(UINT Adapter, D3DFORMAT fmt) {
+    KB_SPEC("GetAdapterModeCount %s fmt=%u", KB_SpecThread(), (unsigned)fmt);
     KB_ListAdapterModes(Adapter);
     return (UINT)g_kbAdapterModes.size();
 }
 
 HRESULT WINAPI GLD3D9::EnumAdapterModes(UINT Adapter, D3DFORMAT Format, UINT Mode, D3DDISPLAYMODE *pMode) {
     if (!pMode) return E_INVALIDARG;
+    KB_SPEC("EnumAdapterModes %s fmt=%u", KB_SpecThread(), (unsigned)Format);
     if (Adapter != g_kbAdapterModesOf || g_kbAdapterModes.empty())
         KB_ListAdapterModes(Adapter);
     if (Mode >= g_kbAdapterModes.size()) return D3DERR_INVALIDCALL;
@@ -745,7 +796,8 @@ HRESULT WINAPI GLD3D9::EnumAdapterModes(UINT Adapter, D3DFORMAT Format, UINT Mod
     return D3D_OK;
 }
 
-HRESULT WINAPI GLD3D9::GetDeviceCaps(UINT, D3DDEVTYPE, D3DCAPS9 *pCaps) {
+HRESULT WINAPI GLD3D9::GetDeviceCaps(UINT, D3DDEVTYPE type, D3DCAPS9 *pCaps) {
+    KB_SPEC("D3D9GetDeviceCaps %s type=%u", KB_SpecThread(), (unsigned)type);
     if (!pCaps) return E_INVALIDARG;
     FillDefaultCaps(pCaps);  // same caps the device reports
     return D3D_OK;
@@ -757,6 +809,8 @@ HRESULT WINAPI GLD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE /*DeviceType*/,
                                     IDirect3DDevice9 **ppReturnedDeviceInterface) {
     if (!pp || !ppReturnedDeviceInterface) return E_INVALIDARG;
     *ppReturnedDeviceInterface = nullptr;
+    KB_SpecSetRenderThread();
+    KB_SpecPresentParams("CreateDevice", pp);
 
     GLContextDesc desc;
     desc.width        = pp->BackBufferWidth  ? (int)pp->BackBufferWidth  : 640;
@@ -782,7 +836,8 @@ HRESULT WINAPI GLD3D9::CreateDevice(UINT Adapter, D3DDEVTYPE /*DeviceType*/,
 // The engine steps its sample count down until this accepts one
 // (R_SetupAntiAliasing). Counts above GL_MAX_SAMPLES are refused once a context
 // has told us the maximum; the first device creation clamps instead.
-HRESULT WINAPI GLD3D9::CheckDeviceMultiSampleType(UINT, D3DDEVTYPE, D3DFORMAT, BOOL, D3DMULTISAMPLE_TYPE Type, DWORD *pQ) {
+HRESULT WINAPI GLD3D9::CheckDeviceMultiSampleType(UINT, D3DDEVTYPE, D3DFORMAT fmt, BOOL windowed, D3DMULTISAMPLE_TYPE Type, DWORD *pQ) {
+    KB_SPEC("CheckDeviceMultiSampleType %s fmt=%u windowed=%d type=%u", KB_SpecThread(), (unsigned)fmt, (int)windowed, (unsigned)Type);
     if (pQ) *pQ = 1;
     if ((int)Type >= 2 && (int)Type > KB_MaxSamples()) return D3DERR_NOTAVAILABLE;
     return D3D_OK;
@@ -791,6 +846,12 @@ HRESULT WINAPI GLD3D9::CheckDeviceMultiSampleType(UINT, D3DDEVTYPE, D3DFORMAT, B
 // ---------------------------------------------------------------------------
 // Library entry point (replaces d3d9.dll's Direct3DCreate9 on non-Windows).
 // ---------------------------------------------------------------------------
+// On macOS the Metal backend's Direct3DCreate9 (gfx_mtl/mtl_window.mm) picks this one or
+// its own at startup.
+#if defined(__APPLE__)
+extern "C" IDirect3D9 *WINAPI GL_Direct3DCreate9(UINT /*SDKVersion*/) {
+#else
 extern "C" IDirect3D9 *WINAPI Direct3DCreate9(UINT /*SDKVersion*/) {
+#endif
     return new GLD3D9();
 }

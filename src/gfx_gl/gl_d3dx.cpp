@@ -10,6 +10,7 @@
 #include "d3dx9.h"
 #include "gl_object.h"
 #include "gl_resources.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 #include <cstdio>
@@ -59,14 +60,21 @@ extern "C" {
 
 HRESULT WINAPI D3DXCreateBuffer(DWORD NumBytes, LPD3DXBUFFER *ppBuffer) {
     if (!ppBuffer) return E_INVALIDARG;
+    KB_SPEC("D3DXCreateBuffer %s", KB_SpecThread());
     *ppBuffer = new GLD3DXBuffer(NumBytes);
     return D3D_OK;
 }
 
+// On macOS mtl_window.mm's D3DXSaveSurfaceToFileA calls this for GL surfaces.
+#if defined(__APPLE__)
+HRESULT WINAPI GL_D3DXSaveSurfaceToFileA(const char *pDestFile, D3DXIMAGE_FILEFORMAT /*fmt*/,
+#else
 HRESULT WINAPI D3DXSaveSurfaceToFileA(const char *pDestFile, D3DXIMAGE_FILEFORMAT /*fmt*/,
+#endif
                                       IDirect3DSurface9 *pSrcSurface, const void * /*palette*/,
                                       const RECT * /*srcRect*/) {
     GLSurface *s = static_cast<GLSurface *>(pSrcSurface);
+    KB_SPEC("D3DXSaveSurfaceToFileA %s", KB_SpecThread());
     if (!s || !pDestFile) return E_INVALIDARG;
     int w = (int)s->width(), h = (int)s->height();
     std::vector<unsigned char> bgra;

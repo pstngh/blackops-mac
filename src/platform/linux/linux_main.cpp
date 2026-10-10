@@ -60,6 +60,9 @@ void broad_phase_terrain_query_callback::query(const broad_phase_environment_que
 // runs each command that many seconds after the client becomes active in a map
 // (again on every map). Entries after "loop@<start>/<period>" repeat every
 // <period> seconds from <start>, their times relative to each repetition.
+// KB_CMDS_GAMETIME=1 times them by the game's clock instead (the client's server
+// time, from the server's start): a screenshot then shows the same moment of the
+// map's animations whatever the load took (tools/bench_views.py).
 static void KB_RunScriptedCommands() {
     struct Entry { int ms; const char *cmd; };
     static Entry entries[64];
@@ -97,8 +100,13 @@ static void KB_RunScriptedCommands() {
         loopNext = loopFirst;
         return;
     }
-    int now = Sys_Milliseconds();
-    if (!startMs) { startMs = now; loopBaseMs = now + loopStartMs; }
+    static const bool gameTime = getenv("KB_CMDS_GAMETIME") && *getenv("KB_CMDS_GAMETIME") == '1';
+    int now = gameTime ? CL_GetLocalClientGlobals(0)->serverTime : Sys_Milliseconds();
+    if (!startMs) {
+        startMs = gameTime ? 1 : now;
+        loopBaseMs = startMs + loopStartMs;
+        if (gameTime) fprintf(stderr, "[kbcmds] active at game time %.1f s\n", now / 1000.0);
+    }
     auto run = [&](const Entry &e) {
         fprintf(stderr, "[kbcmds] %.1f s: %s\n", (now - startMs) / 1000.0, e.cmd);
         Cbuf_AddText(0, e.cmd);

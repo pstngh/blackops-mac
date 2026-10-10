@@ -1,6 +1,7 @@
 // gl_query.cpp — GL occlusion / event queries + GLDevice::CreateQuery.
 #include "gl_query.h"
 #include "gl_d3d9.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 
@@ -36,6 +37,7 @@ HRESULT WINAPI GLQuery::GetDevice(IDirect3DDevice9 **ppDevice) {
 }
 
 HRESULT WINAPI GLQuery::Issue(DWORD dwIssueFlags) {
+    KB_SPEC("QueryIssue %s type=%u flags=%x", KB_SpecThread(), (unsigned)type_, (unsigned)dwIssueFlags);
     if (type_ == D3DQUERYTYPE_OCCLUSION) {
         if (dwIssueFlags & D3DISSUE_BEGIN) { haveResult_ = false; glBeginQuery(KB_OCCLUSION_TARGET, glQuery_); }
         if (dwIssueFlags & D3DISSUE_END)   glEndQuery(KB_OCCLUSION_TARGET);
@@ -48,8 +50,10 @@ HRESULT WINAPI GLQuery::Issue(DWORD dwIssueFlags) {
     return D3D_OK;
 }
 
-HRESULT WINAPI GLQuery::GetData(void *pData, DWORD /*dwSize*/, DWORD dwGetDataFlags) {
+HRESULT WINAPI GLQuery::GetData(void *pData, DWORD dwSize, DWORD dwGetDataFlags) {
     bool flush = (dwGetDataFlags & D3DGETDATA_FLUSH) != 0;
+    KB_SPEC("QueryGetData %s type=%u flags=%x size=%u null=%d", KB_SpecThread(), (unsigned)type_, (unsigned)dwGetDataFlags,
+            (unsigned)dwSize, pData == nullptr);
 
     if (type_ == D3DQUERYTYPE_OCCLUSION) {
         GLint available = 0;
@@ -89,6 +93,7 @@ HRESULT WINAPI GLQuery::GetData(void *pData, DWORD /*dwSize*/, DWORD dwGetDataFl
 
 HRESULT WINAPI GLDevice::CreateQuery(D3DQUERYTYPE Type, IDirect3DQuery9 **ppQuery) {
     if (!ppQuery) return E_INVALIDARG;
+    KB_SPEC("CreateQuery %s type=%u", KB_SpecThread(), (unsigned)Type);
     *ppQuery = new GLQuery(this, Type);
     return D3D_OK;
 }

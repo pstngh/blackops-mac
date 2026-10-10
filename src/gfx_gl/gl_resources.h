@@ -8,8 +8,10 @@
 #define KISAK_GL_RESOURCES_H
 
 #include "gl_object.h"
+#include "gl_spec.h"
 #include <vector>
 #include <mutex>
+#include <string>
 
 // DEFERRED GL (all resource classes below): uploads that find no GL object yet are
 // recorded as pending against the CPU shadow and replayed by sync(), which glName()
@@ -28,15 +30,16 @@
 // of which it observes.
 class GLVertexBuffer final : public GLObject<IDirect3DVertexBuffer9> {
 public:
+    unsigned long specDiscardPresent = ~0ul;   // KB_SPEC: present of the last DISCARD lock
     GLVertexBuffer(IDirect3DDevice9 *device, UINT length, DWORD usage, DWORD fvf, D3DPOOL pool);
     ~GLVertexBuffer() override;
 
     // IDirect3DResource9
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_VERTEXBUFFER; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
     // IDirect3DVertexBuffer9
     HRESULT WINAPI Lock(UINT OffsetToLock, UINT SizeToLock, void **ppbData, DWORD Flags) override;
     HRESULT WINAPI Unlock() override;
@@ -49,6 +52,8 @@ public:
     // take the shared-VAO re-spec path instead (gl_d3d9_draw.cpp applyVertexState).
     bool     isDynamic() const { return (usage_ & D3DUSAGE_DYNAMIC) != 0; }
     bool     pendingUpload() const { return pendMax_ > pendMin_; }   // unlocked hint (see glName)
+
+    bool     specUsed = false;   // bound for a draw (KB_SPEC: locks after first use)
 
 private:
     IDirect3DDevice9         *device_;
@@ -72,14 +77,15 @@ private:
 
 class GLIndexBuffer final : public GLObject<IDirect3DIndexBuffer9> {
 public:
+    unsigned long specDiscardPresent = ~0ul;   // KB_SPEC: present of the last DISCARD lock
     GLIndexBuffer(IDirect3DDevice9 *device, UINT length, DWORD usage, D3DFORMAT format, D3DPOOL pool);
     ~GLIndexBuffer() override;
 
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_INDEXBUFFER; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
     HRESULT WINAPI Lock(UINT OffsetToLock, UINT SizeToLock, void **ppbData, DWORD Flags) override;
     HRESULT WINAPI Unlock() override;
     HRESULT WINAPI GetDesc(D3DINDEXBUFFER_DESC *pDesc) override;
@@ -90,6 +96,8 @@ public:
     UINT     length() const { return length_; }
     bool     isDynamic() const { return (usage_ & D3DUSAGE_DYNAMIC) != 0; }
     bool     pendingUpload() const { return pendMax_ > pendMin_; }
+
+    bool     specUsed = false;   // bound for a draw (KB_SPEC: locks after first use)
 
 private:
     IDirect3DDevice9         *device_;
@@ -123,19 +131,19 @@ public:
     // IDirect3DResource9
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_TEXTURE; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
     // IDirect3DBaseTexture9
-    DWORD   WINAPI SetLOD(DWORD) override { return 0; }
-    DWORD   WINAPI GetLOD() override { return 0; }
+    DWORD   WINAPI SetLOD(DWORD lod) override { KB_SPEC("SetLOD %s lod=%u", KB_SpecThread(), (unsigned)lod); return 0; }
+    DWORD   WINAPI GetLOD() override { KB_SPEC("GetLOD %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetLevelCount() override { return levels_; }
     // IDirect3DTexture9
     HRESULT WINAPI GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) override;
     HRESULT WINAPI GetSurfaceLevel(UINT Level, IDirect3DSurface9 **ppSurfaceLevel) override;
     HRESULT WINAPI LockRect(UINT Level, D3DLOCKED_RECT *pLockedRect, const RECT *pRect, DWORD Flags) override;
     HRESULT WINAPI UnlockRect(UINT Level) override;
-    HRESULT WINAPI AddDirtyRect(const RECT *) override { return D3D_OK; }
+    HRESULT WINAPI AddDirtyRect(const RECT *) override { KB_SPEC("AddDirtyRect %s", KB_SpecThread()); return D3D_OK; }
 
     unsigned  glName() { if (!tex_ || pendLevels_) sync(); return tex_; }
     void      sync();
@@ -148,6 +156,8 @@ public:
     UINT      height() const { return height_; }
     D3DFORMAT format() const { return format_; }
     UINT      levels() const { return levels_; }
+
+    bool     specUsed = false;   // bound for a draw (KB_SPEC: locks after first use)
 
 private:
     void createGL();              // glGen + storage/placeholder (GL thread only)
@@ -178,11 +188,11 @@ public:
     ~GLVolumeTexture() override;
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_VOLUMETEXTURE; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
-    DWORD   WINAPI SetLOD(DWORD) override { return 0; }
-    DWORD   WINAPI GetLOD() override { return 0; }
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
+    DWORD   WINAPI SetLOD(DWORD lod) override { KB_SPEC("SetLOD %s lod=%u", KB_SpecThread(), (unsigned)lod); return 0; }
+    DWORD   WINAPI GetLOD() override { KB_SPEC("GetLOD %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetLevelCount() override { return levels_; }
     HRESULT WINAPI GetLevelDesc(UINT Level, D3DVOLUME_DESC *pDesc) override;
     HRESULT WINAPI LockBox(UINT Level, D3DLOCKED_BOX *pLockedVolume, const D3DBOX *, DWORD) override;
@@ -191,6 +201,8 @@ public:
     unsigned  glName() { if (!tex_ || pendLevels_) sync(); return tex_; }
     void      sync();
     D3DFORMAT format() const { return format_; }
+    bool     specUsed = false;   // bound for a draw (KB_SPEC: locks after first use)
+
 private:
     void createGL();
     void uploadLevel(UINT Level);
@@ -226,12 +238,12 @@ public:
     // IDirect3DResource9
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_CUBETEXTURE; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
     // IDirect3DBaseTexture9
-    DWORD   WINAPI SetLOD(DWORD) override { return 0; }
-    DWORD   WINAPI GetLOD() override { return 0; }
+    DWORD   WINAPI SetLOD(DWORD lod) override { KB_SPEC("SetLOD %s lod=%u", KB_SpecThread(), (unsigned)lod); return 0; }
+    DWORD   WINAPI GetLOD() override { KB_SPEC("GetLOD %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetLevelCount() override { return levels_; }
     // IDirect3DCubeTexture9
     HRESULT WINAPI GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) override;
@@ -246,6 +258,8 @@ public:
     void      sync();
     UINT      edgeLength() const { return edge_; }
     D3DFORMAT format() const { return format_; }
+
+    bool     specUsed = false;   // bound for a draw (KB_SPEC: locks after first use)
 
 private:
     void createGL();
@@ -295,9 +309,9 @@ public:
 
     HRESULT WINAPI GetDevice(IDirect3DDevice9 **ppDevice) override;
     D3DRESOURCETYPE WINAPI GetType() override { return D3DRTYPE_SURFACE; }
-    DWORD   WINAPI SetPriority(DWORD) override { return 0; }
+    DWORD   WINAPI SetPriority(DWORD) override { KB_SPEC("SetPriority %s", KB_SpecThread()); return 0; }
     DWORD   WINAPI GetPriority() override { return 0; }
-    void    WINAPI PreLoad() override {}
+    void    WINAPI PreLoad() override { KB_SPEC("PreLoad %s", KB_SpecThread()); }
     HRESULT WINAPI GetContainer(REFIID, void **ppContainer) override;
     HRESULT WINAPI GetDesc(D3DSURFACE_DESC *pDesc) override;
     HRESULT WINAPI LockRect(D3DLOCKED_RECT *pLockedRect, const RECT *pRect, DWORD Flags) override;
@@ -313,6 +327,7 @@ public:
     bool      isDepthStencil() const { return depthStencil_; }
     bool      texIsDepthStencil() const { return ownTexIsDepth_; }
     GLTexture *ownerTex() const { return owner_; }
+    bool      isCubeFace() const { return cubeOwner_ != nullptr; }
     std::vector<unsigned char> &shadow() { return shadow_; }
     void      setSize(UINT w, UINT h) { width_ = w; height_ = h; }   // back buffer after Reset
 
@@ -342,7 +357,8 @@ public:
         : device_(device), backbuffer_(backbuffer) {}
 
     HRESULT WINAPI Present(const RECT *src, const RECT *dst, HWND hwnd,
-                           const RGNDATA *dirty, DWORD /*flags*/) override {
+                           const RGNDATA *dirty, DWORD flags) override {
+        KB_SPEC("SwapChainPresent %s flags=%x", KB_SpecThread(), (unsigned)flags);
         return device_->Present(src, dst, hwnd, dirty);
     }
     // Read the displayed frame into a system-memory surface (the screenshot path).
@@ -350,6 +366,7 @@ public:
     HRESULT WINAPI GetBackBuffer(UINT /*iBackBuffer*/, D3DBACKBUFFER_TYPE,
                                  IDirect3DSurface9 **ppBackBuffer) override {
         if (!ppBackBuffer) return E_INVALIDARG;
+        KB_SPEC("SwapChainGetBackBuffer %s", KB_SpecThread());
         backbuffer_->AddRef();
         *ppBackBuffer = backbuffer_;
         return D3D_OK;
@@ -369,6 +386,7 @@ public:
     HRESULT WINAPI GetDeclaration(D3DVERTEXELEMENT9 *pElement, UINT *pNumElements) override;
 
     const std::vector<D3DVERTEXELEMENT9> &elements() const { return elements_; }
+    std::string specSig;   // KB_SPEC: "stream:offset:type:usage:index" per element
 
 private:
     IDirect3DDevice9              *device_;

@@ -45,6 +45,8 @@ add_library(kisak_gl STATIC
     gl_format.cpp
     gl_surface_ops.cpp
     gl_d3dx.cpp
+    gl_spec.cpp
+    ../gfx_shader/sm3.cpp            # the D3D9 bytecode parser (shared with the Metal backend)
     ../platform/sdl/sdl_window.cpp   # Win32 window/monitor APIs bridged onto the SDL window
 )
 target_include_directories(kisak_gl PUBLIC

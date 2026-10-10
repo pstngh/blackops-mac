@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-09, session 12)
+## Status (2026-10-10, session 13)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -169,6 +169,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **Performance** (session 12): measured (Performance below) and three engine bugs
   fixed that cost every build (Decisions session 12): +17-29% uncapped on the fixed
   views with bots. The render thread is the limit, and in it Apple's GL driver.
+- **Metal backend** (session 13): `KB_RENDERER=metal` renders through a D3D9 device
+  on Metal (src/gfx_mtl): menus, every MP map, MSAA and transparency AA, `vid_restart`,
+  screenshots. Its screenshots match GL's within GL's own run-to-run differences (with
+  the GL layer's deviations reproduced, `KB_MTL_GLCOMPAT=1`), the Metal validation layer
+  and ASan are quiet, and it runs 4-8x GL's fps: mp_nuked's views 600-730 (GL 147-578,
+  the engine's frame pacing caps ~730), the overviews 294-806 (GL 67-161). By default it
+  draws what D3D9 specifies and the GL layer never did (mipmaps, sun shadows, particle
+  clouds, stencil). GL stays the default until the user switches (Metal backend
+  below, Next steps 0).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -268,49 +277,117 @@ has no such switch, session 2's port wired the dvar up).
   sessions: resources, state -> pipeline cache, D3D9 bytecode -> MSL (from the GLSL
   translator), render passes, presentation, then correctness passes.
 
+## Metal backend (session 13)
+
+`KB_RENDERER=metal` makes `Direct3DCreate9` (src/gfx_mtl/mtl_window.mm) return a D3D9
+device on Metal instead of the GL layer's; the engine's renderer (src/gfx_d3d) is
+unchanged. Same binary (cmake/macos.cmake: Objective-C++ with ARC, Metal, QuartzCore,
+Foundation; no new dependencies); GL stays the default and the game folder's portable
+copy keeps GL (make_portable.sh not rerun) until the user switches. Design and the
+reasons behind it: Decisions (session 13).
+
+Files (~3,700 lines, plus the 365-line shared parser):
+- src/gfx_shader/sm3.{h,cpp}: SM3 bytecode -> IR, shared with gl_shader.cpp's GLSL.
+- src/gfx_mtl/mtl_msl.{h,cpp}: IR -> MSL.
+- mtl_d3d9.h, mtl_resources.mm: formats, buffers, textures, surfaces, vertex
+  declarations, shaders and their batch compiler, queries.
+- mtl_device.{h,mm}: the device: D3D state, the per-draw translation
+  (`prepareDraw`), the pipeline/depth-stencil/sampler caches, render passes and
+  clears, StretchRect, readbacks and screenshots, presentation, Reset, `KB_FPS`.
+- mtl_window.mm: the SDL window and its CAMetalLayer, the presenter thread, the
+  backend choice.
+- src/gfx_gl/gl_spec.{h,cpp} and hooks in the GL layer (`KB_SPEC`);
+  src/gfx_mtl/tests/shader_test.mm and tools/shader_test.sh.
+
+**Checks** (tools/bench_views.py on the game's clock, scratch profile, the user's
+settings: 1280x720 fullscreen, no AA; every run's log grepped for `[mtl] BUG`, never
+found):
+- Screenshots against GL with `KB_MTL_GLCOMPAT=1` (the GL layer's deviations
+  reproduced): mp_nuked's 7 views and all 26 overviews are within the GL-vs-GL noise
+  of the closer of two GL runs, or differ only by something that also varies between
+  GL runs, each identified: the team `autoassign` picks (emblem), the match clock (up
+  to 2 s apart between GL runs: the objective text, script movers such as mp_mountain's
+  gondola), particle effects (they step per frame, so they differ at 370 vs 79 fps:
+  with `fx_draw 0` mp_array's lower half goes from |d| 5 to 0.1), texture streaming
+  (one GL run had mp_radiation's roof at a lower mip), Nuketown's mannequin (placed at
+  random), the weapon's sway after `setviewpos`, the fps counter. 4x MSAA with
+  supersampled transparency AA (`r_aaAlpha 2`): the same, after the per-sample fix
+  (Decisions).
+- Default mode (D3D9's behaviour): 3-48% of pixels differ from GL, by design: mipmaps,
+  sun shadows (mp_nuked d: the hedge under the house dark), particle clouds (smoke and
+  mist sheets; `fx_drawClouds 0` changes GL's image not at all, Metal's by |d| 2 on
+  mp_hanoi), stencil. Looked at mp_havoc, mp_duga and mp_nuked a, b, d: nothing broken;
+  there is no Windows screenshot to compare with.
+- `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1` (API and GPU validation): mp_nuked's
+  views, the mp_crisis, mp_berlinwall2, mp_hanoi and mp_havoc overviews, 4x MSAA with
+  transparency AA, compat mode: no message. ASan build with `MTL_DEBUG_LAYER=1`, 7
+  bots, the scripted player, 1-minute TDM (mp_nuked -> mp_array -> mp_cracked, 240 s):
+  no report from the backend; on the final code one engine bug (`CanDamage`, below),
+  then a clean rerun.
+- `vid_restart` (4x MSAA, windowed 1600x900 and back), the `screenshot` command,
+  memory flat at ~930 MB over a 3-minute match.
+
+**Numbers** (uncapped fps, same tool and settings, GL measured this session):
+
+| view | GL | Metal | GL, 7 bots | Metal, 7 bots |
+|---|---|---|---|---|
+| A | 147 | 602 | 131 | 538 |
+| B | 183 | 711 | 161 | 693 |
+| C | 244 | 730 | 240 | 619 |
+| D | 330 | 700 | 332 | 638 |
+| E | 168 | 674 | 163 | 592 |
+| F | 239 | 733 | 196 | 683 |
+| sky | 578 | 716 | 565 | 610 |
+| overview | 120 | 524 | 102 | 465 |
+
+Runs of one build vary by up to ~10%. Overviews, no bots, GL -> Metal: mp_crisis 67 ->
+294, mp_berlinwall2 70 -> 332, mp_outskirts 73 -> 350, mp_cracked 76 -> 635, mp_array 79
+-> 377, mp_zoo 85 -> 394, mp_kowloon 86 -> 418, mp_villa 87 -> 421, mp_stadium 93 -> 408,
+mp_radiation 95 -> 422, mp_mountain 100 -> 453, mp_silo 106 -> 459, mp_golfcourse 107 ->
+486, mp_russianbase 108 -> 516, mp_drivein 109 -> 536, mp_duga 110 -> 500, mp_cosmodrome
+110 -> 738, mp_hotel 111 -> 532, mp_area51 112 -> 508, mp_nuked 120 -> 513,
+mp_firingrange 120 -> 629, mp_cairo 123 -> 574, mp_discovery 124 -> 582, mp_gridlock 133
+-> 556, mp_havoc 139 -> 621, mp_hanoi 161 -> 806 (4.2-8.3x; the build before the
+shader-side shadow compare, which moved mp_nuked's views by <3%). 4x MSAA, mp_nuked
+A-F/sky: GL 131-231/388; Metal 415-694/721 with transparency AA off, 224-392/727 with
+it on (the default with MSAA; both modes supersample, Decisions).
+
+**Where the time goes** (view A, no bots, ~1.8 ms a frame): the render thread is busy
+99%: the translation (`prepareDraw`) 27%, Metal's encoding of the draws 23%, polling
+occlusion queries (`GetData`) 7%, re-uploading the model lighting volume each frame
+~5% (a staging buffer and the relock copy), the engine's backend most of the rest. The
+main thread is busy 45%. The GPU is busy 76% (1.7 ms a frame: vertex 1.1 ms, fragment
+0.85 ms) in 1.2 command buffers and 24 encoders a frame. The lighter views run into
+the engine's frame pacing (~730 fps: the main loop's `NET_Sleep(1)` until the next
+millisecond), so CPU and GPU are close to balanced at A and the engine caps the rest.
+
 ## Next steps (in order)
 
-0. **Native Metal backend** (the user's choice, 2026-10-09; Performance (session 12)
-   has the numbers and the estimate): a D3D9 -> Metal device for macOS beside
-   src/gfx_gl (which stays for Linux and as the fallback), so the decompiled renderer
-   in src/gfx_d3d keeps calling Direct3DCreate9/CreateDevice. Goals: one or two
-   command buffers a frame, CAMetalLayer presentation, cached pipeline and
-   depth-stencil states, constants by setVertexBytes/setFragmentBytes, buffer locks
-   writing straight into shared MTLBuffers (rings for DISCARD), D3D9 SM3 bytecode ->
-   MSL (gl_shader.cpp's translator is the model). Measure against the GL numbers
-   there with the same fixed views. Rules agreed with the user, to keep it lean and
-   robust:
-   - Spec first: instrument the GL layer to list every D3D9 method, render state and
-     value, format, lock flag, primitive type and shader opcode the game uses (menus
-     and several maps); implement that list, and make anything outside it fail loudly.
-   - No silent fallbacks or self-healing (the GL layer's ignored states, trusted link
-     failures, builtin-shader fallback and skipped draws hid bugs): log once, treat as
-     a bug. Develop with `MTL_DEBUG_LAYER=1` and `MTL_SHADER_VALIDATION=1`; any
-     validation message is a bug.
-   - Use what Metal shares with D3D: 0..1 depth, top-left origins for viewport,
-     scissor and textures (no Y flips; the D3D9 half-pixel offset stays); unified
-     memory (Lock returns a pointer into the MTLBuffer); command buffers keep the
-     resources they use alive (no name-reuse invalidation).
-   - One sync model: Metal only on the render thread (window and layer once on the
-     main thread), 2-3 frames in flight behind one semaphore, per-frame transient
-     data (DISCARD locks, constants) from one ring per frame, CPU waits only there and
-     for readbacks. Automatic hazard tracking until a profile says otherwise.
-   - One shader translator: a shared D3D9 bytecode parser with GLSL and MSL emitters;
-     dump every shader the game loads and translate + compile them all with
-     `xcrun metal` in a test tool.
-   - Plain D3D state structs with dirty bits, translated to Metal in one place per
-     draw; one cache each for pipeline, depth-stencil and sampler states, keyed by
-     hashes. No optimization without a profile.
-   - Same binary, backend chosen at startup by an environment variable; GL stays the
-     macOS fallback until Metal matches it, and Linux's renderer.
-   - Stages that each run the game (clear screen, 2D menus, world, lighting and
-     shadows, post effects and MSAA), each done when tools/bench_views.py screenshots
-     match GL on every map's overview and mp_nuked's views (tools/cmp_screens.py, with
-     each map's GL-vs-GL noise as the tolerance: its header), the validation layer and
-     ASan are quiet and fps is measured. The overviews are heavy (GL: 60-200 fps,
-     2,500-10,300 draws a frame; mp_crisis and mp_berlinwall2 the heaviest), a better
-     stress test than mp_nuked's views. Objective-C++ (.mm)
-     with ARC, no new dependencies; aim for ~3,000-4,000 lines.
+0. **Metal backend: the user's decision, then leftovers** (Metal backend above;
+   built in session 13 to the rules agreed on 2026-10-09: spec first, no silent
+   fallbacks, one sync model, one shader parser, plain state with one translation
+   point, GL kept as the fallback; every stage checked by screenshots, the validation
+   layer and ASan, and measured).
+   - Make it the default if the user wants: `KB_UseMetal()` in mtl_window.mm (GL with
+     `KB_RENDERER=gl` then), and only then rerun `tools/make_portable.sh` for the game
+     folder.
+   - Check the display rate with the screen unlocked: every run of session 13 had the
+     screen locked (nothing composited; `nextDrawable` paced at 120/s). `KB_FPS=1`
+     prints `presented/s` and `shown/s` (frames the display reported showing). If an
+     unlocked 240 Hz display shows ~120, try CAMetalDisplayLink with a 240 Hz
+     `preferredFrameRateRange` (under the lock it starved, so it is untested).
+   - The first match after a new build can stall (up to ~0.7 s seen) where a draw waits
+     for a shader batch still compiling with a cold system cache; measure that with
+     `KB_FPS`'s pipeline line before changing the batching.
+   - CPU at view A, if a profile at the user's settings asks for it: occlusion-query
+     polling (7%), the model lighting volume's staging buffer and relock copy each
+     frame (~5%). The engine's frame pacing caps lighter views at ~730 fps.
+   - The GL layer's deviations from D3D9 (Decisions session 13) stay for Linux: no
+     mipmaps, raw-depth shadow maps, no stencil or separate alpha, dropped worker-thread
+     vertex uploads (particle clouds), relative reads that miss `def`'d constants.
+   - `xcrun metal` (offline MSL compile) needs Apple's Metal Toolchain download; not
+     installed (it was not asked for). tools/shader_test.sh compiles through the
+     runtime compiler instead.
 
 Done in session 11 (see Status and Decisions): weapons, footsteps and impacts are
 heard (an xWMA decoder), and script vehicles (the bots' RC-XD) no longer crash or
@@ -377,6 +454,11 @@ StringTable assets; table strings shared with earlier assets are references
 that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
+
+Seen in session 13:
+- Two more scalar locals passed as vectors (Decisions session 13, CanDamage):
+  `g_missile.cpp` ~3499 and `cg_compass.cpp` ~2992.
+- The GL layer's deviations from D3D9 (Decisions session 13), kept for Linux.
 
 Seen in session 11 (details in Next steps 2 and 3):
 - One client freeze in `FX_SortEffects` waiting for the effects iterator count.
@@ -501,6 +583,134 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 13)
+
+- **Spec first** (src/gfx_gl/gl_spec.cpp, `KB_SPEC`): hooks in every D3D9 entry point
+  of the GL layer record each distinct call shape (method, state and value class,
+  format, pool, usage, lock flags, primitive type, vertex declaration, shader pairing
+  and the sampler kinds each pixel shader reads) with a count, per thread. Recorded on
+  the menus, mp_nuked's views, six overviews and a 4x MSAA run: ~70 methods, 59
+  render-state values, 30 sampler states, 23 texture kinds, 180 vertex declarations,
+  ~1,500 shader pairs. The Metal device implements that list; anything else prints
+  `[mtl] BUG` once. It never printed in this session's runs.
+- **One shader parser** (src/gfx_shader/sm3.cpp): the SM3 bytecode parser
+  gl_shader.cpp had is now its own IR (declarations, defs, instructions), shared by
+  the GLSL emitter (gl_shader.cpp, byte-identical output over all 8,864 shaders the
+  game loads: tools/shader_test.sh with the old translator) and the MSL emitter
+  (src/gfx_mtl/mtl_msl.cpp; all 8,864 compile with the system's Metal compiler).
+  `xcrun metal` needs the Metal Toolchain download, not installed (not asked for);
+  the test compiles through `MTLDevice newLibraryWithSource`, the same compiler.
+- **D3D9 semantics in MSL**: the half-pixel offset in the vertex shader (as the GL
+  layer), `vPos` = floor of the pixel position, `vFace` from `front_facing` with
+  clockwise front faces, `rsq`/`log`/`pow` of |x| (D3D9's definitions), alpha test as a
+  function constant (a pipeline per compare function; the reference is a per-draw
+  value), hardware shadow maps (below), relative constant reads that land on `def`'d
+  constants (four vertex shaders; the GL layer reads the uniform array there),
+  `[[position, invariant]]` with `preserveInvariance` (the depth prepass's EQUAL test).
+- **Shadow maps compare in the shader**: D3D9 drivers return a filtered comparison
+  when a depth-format texture is sampled (lit where the coordinate's z <= the stored
+  depth, bilinear over the 4 texels). The game reads its shadow maps only with
+  `texldl` and `texldp` (the spec: 398 and 202 sampler bindings). So those lookups on
+  2D samplers carry a branch on a per-draw bit (buffer 21, set when a depth texture
+  is bound): `kb_pcf` gathers the 4 depths, compares and filters, matching
+  `sample_compare` to 0.0001 (tested). A depth texture on a sampler read any other way,
+  or with a filter other than bilinear, is a BUG line. The first version declared
+  the sampler `depth2d` in a variant compiled at first draw: 95-145 ms each for these
+  large lighting shaders, the in-match stalls with bots (up to 0.7-2 s). The branch
+  costs ~20% more compile time per pixel shader with a cold cache (8.6 -> 10.3 ms, in
+  the background batches).
+- **Bindings**: vertex buffers 0-3 are the streams; buffer 20 holds the shader
+  constants (`setVertexBytes`/`setFragmentBytes`, only the range the shader reads),
+  21 the per-draw values, 22 a buffer of D3D9's defaults for attributes the
+  declaration lacks ((0,0,0,1), COLOR (1,1,1,1), constant step function); texture
+  and sampler N are sampler register N (vertex texture samplers 257-260: 16-19).
+- **DISCARD renames, no per-frame ring** (a deviation from the agreed rule, by the
+  spec): dynamic buffers get NOOVERWRITE locks frames after their last DISCARD (7.4M
+  such locks in a run), appending to contents earlier frames wrote, so a ring reset
+  each frame would hand out storage still holding live data. Each buffer keeps a
+  small pool of shared MTLBuffers; DISCARD while the GPU may read the current one
+  swaps in one whose last command buffer has completed (or a new one), and bumps a
+  global generation so the draw rebinds. Locks return a pointer into the buffer
+  (unified memory); a plain lock of a buffer in use would wait (a BUG line; never seen).
+- **Texture uploads**: shared-storage textures; a level not yet used by the GPU is
+  written with `replaceRegion` at unlock, one already used goes through a staging
+  buffer and a blit in the frame's command buffer (earlier draws keep the old data).
+  A non-DISCARD relock returns the previous contents: `RB_PatchModelLighting`
+  rewrites part of the lighting volume each frame, and zeroed memory there turned
+  foliage and models black.
+- **Shaders compile in batches**: `newLibraryWithSource` takes ~70 ms per shader
+  cold (the menus ran at 5 fps when each compiled at first draw), ~8 ms each in a
+  library of 64, ~0 with the system's shader cache warm. CreateVertex/PixelShader
+  translate at once and add to an open batch of 64, compiled asynchronously; a draw
+  that needs a shader of an unfinished batch submits it and waits. Pipelines are
+  built at first draw (cached by a key of shaders, declaration, formats, samples,
+  blend and alpha test), and so is the per-sample variant (transparency AA, its own
+  library). `KB_FPS` prints the pipelines built per interval and the time. The
+  system cache keeps libraries and pipelines between runs; with it cold (the first
+  run of a new build) the first match can stall up to ~0.7 s where a draw waits for a
+  batch still compiling; warm, the worst frames with 7 bots were 26-55 ms (GL: 39).
+- **One command buffer a frame** (plus readbacks): render encoders open lazily at the
+  first draw into a target, clears become load actions (partial clears draw a quad),
+  StretchRect resolves MSAA in a render pass or blits; occlusion queries use one
+  32768-slot accumulate visibility buffer (Metal limits offsets to 256 KB) and are
+  read when their command buffer completes; event queries complete by serial.
+  Three frames in flight behind one semaphore, waited for at the frame's first
+  command buffer. Metal calls only on the render thread; the query FLUSH flag
+  commits only there.
+- **Presentation**: CAMetalLayer (framebufferOnly, 3 drawables). Rendering must not
+  wait for the display: `nextDrawable` blocks until the compositor returns a drawable,
+  and presenting from the render queue capped the GPU at ~360 fps. So a presenter
+  thread waits for drawables, the render queue scales the back buffer into one of
+  three present textures, and a second queue (waiting on an MTLEvent) draws it into
+  the drawable. Without vsync a frame with no drawable ready is not shown (as Apple's
+  GL drops them); with vsync Present waits. `nextDrawable` delivered 120 drawables a
+  second here, with sync on or off and in a bare test app, but the screen was locked
+  for every run of this session (the user away; locked at 01:35, the tests from 01:52):
+  nothing was composited (`KB_FPS`'s `shown/s`, frames the display reported showing,
+  stayed 0). Whether an unlocked 240 Hz display gets 240 a second is unmeasured;
+  `KB_FPS` prints `presented/s` and `shown/s` to check it (Next steps 0).
+- **Autorelease pools**: the engine's render thread has none, and Metal autoreleases
+  per encoder (96 KB each under the validation layer: the ASan run ran out of memory).
+  A pool is pushed when a command buffer begins and popped after it commits. Pools
+  are LIFO, so no `@autoreleasepool` may span the commit of a command buffer begun
+  outside it ("Invalid or prematurely-freed autorelease pool").
+- **Formats**: D24S8/D24X8/D24FS8 -> Depth32Float_Stencil8 (Apple GPUs have no 24-bit
+  depth), A16B16G16R16 -> RGBA16Unorm (D3D9 clamps it; the GL layer used a float
+  target), X8R8G8B8/L8/A8L8 by swizzles, DXT1/3/5 -> BC1/2/3.
+- **Transparency AA** (the `ADAPTIVETESS_Y` ATOC/SSAA hack on alpha-tested draws into
+  MSAA) runs the pixel shader per sample, its inputs interpolated at the samples
+  (`sample_perspective`), so the alpha test cuts each sample. Metal's
+  alpha-to-coverage instead left orange fringes on foliage (the colour these textures
+  keep under low alpha). The GL layer's fast mode (ATOC) shades half the samples
+  (`glMinSampleShading(0.5)`), which Metal can't express: both modes cost what SSAA
+  does (numbers in Metal backend). The first version read `[[sample_id]]` but left
+  the inputs at the pixel centre: every sample passed or failed together, i.e. no
+  transparency AA; the MSAA screenshots against GL found it.
+- **Where the GL layer differs from D3D9** (found by the spec and the screenshots;
+  not fixed, GL stays the fallback and Linux's renderer): it ignores
+  `D3DSAMP_MIPFILTER` (gl_state.cpp's min filter is never mipmapped, so only level 0 is
+  sampled, however small the surface); it samples
+  shadow maps as raw depth, so the sun casts no shadows on the world; it ignores
+  separate alpha blending and all stencil states (the game sets EQUAL/NEVER stencil
+  tests, two-sided); it drops vertex buffer uploads made from the worker threads, so
+  particle clouds (mist, smoke, dust sheets) never draw; relative constant reads miss
+  `def`'d constants; A16B16G16R16 targets are float. `KB_MTL_GLCOMPAT=1` reproduces
+  the first three on Metal, for screenshot comparisons.
+- **Engine**: sentient.cpp's global `glob` (a struct) had external linkage, and the
+  symbol `_glob` is libc's `glob()` too: `FindFirstFileA`'s call to `glob()`
+  (win_kernel.cpp) bound to that data in every macOS build. The Metal build's larger
+  layout put it out of branch range and the link failed. It is `static` now.
+- **CanDamage's cone check** (g_combat_mp.cpp, every build): the decompile split each
+  direction vector into three float locals and passed the first to `Vec3Normalize`,
+  relying on the i386 stack layout; ASan caught the stack overflow on the server thread
+  (a grenade's `G_RadiusDamage` with bots). They are `float[3]` now. A scan found two
+  more of the kind, not fixed (a separate task): `g_missile.cpp` ~3499 (missile
+  attractors, `Vec3NormalizeTo(&perpDir[2], &perpDist)`) and `cg_compass.cpp` ~2992
+  (`Vec2Length(&v22)`).
+- **KB_CMDS_GAMETIME=1** (linux_main.cpp; bench_views.py sets it): KB_CMDS times its
+  entries by the client's server time instead of the wall clock, so two runs that
+  load at different speeds take their screenshots at the same moment of the map.
 
 ## Decisions (session 12)
 

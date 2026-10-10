@@ -9,8 +9,10 @@
 #include "gl_d3d9.h"
 #include "gl_platform.h"
 #include "gl_resources.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
+#include <cmath>
 #include <cstdlib>   // getenv (KB_NOPREPASS)
 
 // KB_NOPREPASS=1: single pass, no depth prepass. The prepass re-draws ALL opaque world
@@ -81,6 +83,15 @@ GLint glWrap(DWORD d)   { return d == D3DTADDRESS_CLAMP ? GL_CLAMP_TO_EDGE : GL_
 } // namespace
 
 HRESULT WINAPI GLDevice::SetRenderState(D3DRENDERSTATETYPE State, DWORD Value) {
+    if (g_kbSpec) {
+        float f;
+        memcpy(&f, &Value, 4);
+        if (State == D3DRS_DEPTHBIAS || State == D3DRS_SLOPESCALEDEPTHBIAS || State == D3DRS_POINTSIZE)
+            KB_SpecNote("SetRenderState %s %u=%s%s", KB_SpecThread(), (unsigned)State, f == 0.0f ? "0" : f < 0.0f ? "neg" : "pos",
+                        f != 0.0f && fabsf(f) < 1e-4f ? "-tiny" : "");
+        else
+            KB_SpecNote("SetRenderState %s %u=%u", KB_SpecThread(), (unsigned)State, (unsigned)Value);
+    }
     // Skip the GL call when this state already holds this value: the engine re-sets the
     // same blend/depth/cull states constantly between draws.
     if ((unsigned)State < 256) {
@@ -244,6 +255,8 @@ void GLDevice::commitSampleShading() {
 }
 
 HRESULT WINAPI GLDevice::SetSamplerState(DWORD Sampler, D3DSAMPLERSTATETYPE Type, DWORD Value) {
+    KB_SPEC("SetSamplerState %s %u=%u", KB_SpecThread(), (unsigned)Type, (unsigned)Value);
+    KB_SPEC("SetSamplerState stage=%u", (unsigned)Sampler);
     if (Sampler >= (DWORD)kMaxStages) return D3D_OK;
     GLSamplerState &s = samplers_[Sampler];
     DWORD *slot = nullptr;
@@ -264,6 +277,7 @@ HRESULT WINAPI GLDevice::SetSamplerState(DWORD Sampler, D3DSAMPLERSTATETYPE Type
 // tex/diffuse combine (D3DTSS_COLOROP/COLORARG1/COLORARG2); other stages and the
 // alpha-op cascade are accepted and ignored (the 2D path never uses them).
 HRESULT WINAPI GLDevice::SetTextureStageState(DWORD Stage, D3DTEXTURESTAGESTATETYPE Type, DWORD Value) {
+    KB_SPEC("SetTextureStageState %s stage=%u %u=%u", KB_SpecThread(), (unsigned)Stage, (unsigned)Type, (unsigned)Value);
     if (Stage != 0) return D3D_OK;
     switch (Type) {
         case D3DTSS_COLOROP:   texStage0_.colorOp   = Value; break;
@@ -275,6 +289,28 @@ HRESULT WINAPI GLDevice::SetTextureStageState(DWORD Stage, D3DTEXTURESTAGESTATET
 }
 
 HRESULT WINAPI GLDevice::SetTexture(DWORD Stage, IDirect3DBaseTexture9 *pTexture) {
+    if (g_kbSpec) {
+        const char *kind = "null";
+        unsigned fmt = 0;
+        if (pTexture) {
+            switch (pTexture->GetType()) {
+            case D3DRTYPE_CUBETEXTURE: {
+                GLCubeTexture *t = static_cast<GLCubeTexture *>(static_cast<IDirect3DCubeTexture9 *>(pTexture));
+                kind = "cube"; fmt = (unsigned)t->format(); t->specUsed = true; break;
+            }
+            case D3DRTYPE_VOLUMETEXTURE: {
+                GLVolumeTexture *t = static_cast<GLVolumeTexture *>(static_cast<IDirect3DVolumeTexture9 *>(pTexture));
+                kind = "volume"; fmt = (unsigned)t->format(); t->specUsed = true; break;
+            }
+            default: {
+                GLTexture *t = static_cast<GLTexture *>(static_cast<IDirect3DTexture9 *>(pTexture));
+                kind = t->isDepth() ? "deptex" : "2d"; fmt = (unsigned)t->format(); t->specUsed = true; break;
+            }
+            }
+        }
+        KB_SpecNote("SetTexture %s stage=%u %s fmt=%u", KB_SpecThread(), (unsigned)Stage, kind, fmt);
+        if (Stage < 16) { specTexKind_[Stage] = kind; specTexFmt_[Stage] = fmt; }
+    }
     if (Stage >= (DWORD)kMaxStages) return D3D_OK;
     // Resolve to a GL name + target now (via the resource's D3D type) so the bind
     // path stays type-correct for 2D, cube and volume textures alike — a blind
@@ -319,6 +355,9 @@ void KB_GLRetargetTexture(IDirect3DDevice9 *device, unsigned oldName, unsigned n
 }
 
 HRESULT WINAPI GLDevice::SetScissorRect(const RECT *pRect) {
+    KB_SPEC("SetScissorRect %s null=%d inside=%d", KB_SpecThread(), pRect == nullptr,
+            pRect ? (int)(pRect->left >= 0 && pRect->top >= 0 && pRect->right <= fbWidth_ && pRect->bottom <= fbHeight_ &&
+                          pRect->left <= pRect->right && pRect->top <= pRect->bottom) : -1);
     if (pRect) {
         // No Y flip: targets hold D3D's row order (see SetViewport).
         int x = pRect->left;

@@ -1,6 +1,8 @@
 // gl_shader.cpp — DX9 bytecode → GLSL 120 translator + GL shader objects.
 #include "gl_shader.h"
 #include "gl_platform.h"
+#include "gl_spec.h"
+#include "../gfx_shader/sm3.h"
 
 #include <GL/glew.h>
 #include <map>
@@ -12,52 +14,23 @@
 
 namespace {
 
-// --- DX9 bytecode constants (documented format) ---
-enum {  // opcodes (token & 0xFFFF) — D3DSIO_*
-    OP_MOV = 1, OP_ADD = 2, OP_SUB = 3, OP_MAD = 4, OP_MUL = 5, OP_RCP = 6, OP_RSQ = 7,
-    OP_DP3 = 8, OP_DP4 = 9, OP_MIN = 10, OP_MAX = 11, OP_SLT = 12, OP_SGE = 13,
-    OP_EXP = 14, OP_LOG = 15, OP_LRP = 18, OP_FRC = 19,
-    OP_CALL = 25, OP_CALLNZ = 26, OP_LOOP = 27, OP_RET = 28, OP_ENDLOOP = 29, OP_LABEL = 30,
-    OP_POW = 32, OP_ABS = 35, OP_NRM = 36, OP_SINCOS = 37,
-    OP_REP = 38, OP_ENDREP = 39, OP_IF = 40, OP_IFC = 41, OP_ELSE = 42, OP_ENDIF = 43,
-    OP_BREAK = 44, OP_BREAKC = 45, OP_MOVA = 46, OP_DEFB = 47, OP_DEFI = 48,
-    OP_TEXKILL = 65, OP_TEXLD = 66, OP_CMP = 88, OP_DP2ADD = 90, OP_SETP = 94,
-    OP_DSX = 91, OP_DSY = 92, OP_TEXLDD = 93, OP_TEXLDL = 95,
-    OP_DCL = 31, OP_DEF = 81, OP_COMMENT = 0xFFFE, OP_END = 0xFFFF,
-};
-enum {  // register types
-    RT_TEMP = 0, RT_INPUT = 1, RT_CONST = 2, RT_TEXTURE = 3, RT_RASTOUT = 4,
-    RT_ATTROUT = 5, RT_OUTPUT = 6, RT_COLOROUT = 8, RT_DEPTHOUT = 9, RT_SAMPLER = 10,
-    RT_MISCTYPE = 17,   // ps_3.0 vPos (reg 0 = pixel position) / vFace (reg 1)
-};
+using namespace sm3;
 
-struct Operand { int type, reg, swizzle, writemask, mod, dmod;
+// One operand as the emitters below take it: a source (swizzle, mod) or a destination
+// (writemask, dmod), from the parsed shader (sm3.h).
+struct Operand { int type = 0, reg = 0, swizzle = 0xE4, writemask = 0xF, mod = 0, dmod = 0;
                  bool rel = false; int relComp = 0; };  // c[a0.<relComp> + reg]
 
-Operand decodeParam(DWORD t) {
+Operand fromSrc(const Src &s) {
     Operand o;
-    o.reg       = (int)(t & 0x7FF);
-    o.type      = (int)(((t >> 28) & 0x7) | ((t & 0x1800) >> 8));
-    o.writemask = (int)((t >> 16) & 0xF);
-    o.swizzle   = (int)((t >> 16) & 0xFF);
-    o.mod       = (int)((t >> 24) & 0xF);   // source modifier (D3DSPSM_*)
-    o.dmod      = (int)((t >> 20) & 0xF);   // dest modifier (_sat = bit 0)
+    o.type = s.type; o.reg = s.reg; o.swizzle = s.swizzle; o.mod = s.mod; o.rel = s.rel; o.relComp = s.relComp;
     return o;
 }
 
-// Decode a parameter that may use RELATIVE ADDRESSING (bit 13): `c[a0.x + N]`, the
-// skinned-mesh bone-matrix indexing pattern. In sm2.0+ the relative flag adds an
-// EXTRA address token after the parameter; treating it as the next source operand
-// read bones from garbage registers (the M16 viewmodel spazz). Returns tokens used.
-int decodeParamRel(const DWORD *tok, Operand &o) {
-    o = decodeParam(tok[0]);
-    if (tok[0] & 0x2000) {                    // D3DSHADER_ADDRMODE_RELATIVE
-        o.rel = true;
-        Operand a = decodeParam(tok[1]);      // address token: a0 (or aL) + swizzle
-        o.relComp = a.swizzle & 0x3;          // .x/.y/.z/.w of the address register
-        return 2;
-    }
-    return 1;
+Operand fromDst(const Dst &d) {
+    Operand o;
+    o.type = d.type; o.reg = d.reg; o.writemask = d.mask; o.dmod = d.mod;
+    return o;
 }
 
 const char *kComp = "xyzw";
@@ -74,61 +47,6 @@ std::string swizStr(int sw) {  // src swizzle as a 4-component selector, "" if i
     std::string s = ".";
     for (int i = 0; i < 4; ++i) s += kComp[(sw >> (i * 2)) & 0x3];
     return s;
-}
-
-// ---- D3D9 disassembler (KB_DUMPENV) ------------------------------------------
-// Faithful asm text rebuilt from the SAME token stream the translator consumes, but
-// through NONE of the translation logic — so a translated-GLSL-vs-asm diff exposes
-// translator bugs instead of reflecting them (the envmap over-reflection hunt).
-static const char *kbOpName(int op) {
-    switch (op) {
-        case OP_MOV: return "mov";   case OP_ADD: return "add";   case OP_SUB: return "sub";
-        case OP_MAD: return "mad";   case OP_MUL: return "mul";   case OP_RCP: return "rcp";
-        case OP_RSQ: return "rsq";   case OP_DP3: return "dp3";   case OP_DP4: return "dp4";
-        case OP_MIN: return "min";   case OP_MAX: return "max";   case OP_SLT: return "slt";
-        case OP_SGE: return "sge";   case OP_EXP: return "exp";   case OP_LOG: return "log";
-        case OP_LRP: return "lrp";   case OP_FRC: return "frc";   case OP_POW: return "pow";
-        case OP_ABS: return "abs";   case OP_NRM: return "nrm";   case OP_SINCOS: return "sincos";
-        case OP_MOVA: return "mova"; case OP_TEXKILL: return "texkill";
-        case OP_TEXLD: return "texld"; case OP_CMP: return "cmp"; case OP_DP2ADD: return "dp2add";
-        case OP_DSX: return "dsx";   case OP_DSY: return "dsy";   case OP_TEXLDD: return "texldd";
-        case OP_TEXLDL: return "texldl";
-        default: return "op?";
-    }
-}
-static std::string kbRegAsm(const Operand &o) {
-    const char *t;
-    switch (o.type) {
-        case RT_TEMP: t = "r"; break;       case RT_INPUT: t = "v"; break;
-        case RT_CONST: t = "c"; break;      case RT_TEXTURE: t = "t"; break;
-        case RT_SAMPLER: t = "s"; break;    case RT_COLOROUT: t = "oC"; break;
-        case RT_DEPTHOUT: t = "oDepth"; break; case RT_OUTPUT: t = "o"; break;
-        case RT_RASTOUT: t = "oPos"; break; case RT_MISCTYPE: t = "vMisc"; break;
-        default: t = "x"; break;
-    }
-    char buf[32]; snprintf(buf, sizeof buf, "%s%d", t, o.reg);
-    return buf;
-}
-static std::string kbSrcAsm(const Operand &o) {
-    std::string s = kbRegAsm(o);
-    if (o.rel) { s += "[a0."; s += kComp[o.relComp & 3]; s += "]"; }
-    s += swizStr(o.swizzle);
-    switch (o.mod) {   // D3DSPSM_*
-        case 1:  return "-" + s;
-        case 2:  return s + "_bias";
-        case 3:  return "-" + s + "_bias";
-        case 4:  return s + "_bx2";
-        case 5:  return "-" + s + "_bx2";
-        case 6:  return "1-" + s;
-        case 7:  return s + "_x2";
-        case 8:  return "-" + s + "_x2";
-        case 9:  return s + "_dz";
-        case 10: return s + "_dw";
-        case 11: return s + "_abs";
-        case 12: return "-" + s + "_abs";
-        case 13: return "!" + s;
-        default: return s;
-    }
 }
 
 // GLSL output dialect: `#version 120` compat GLSL (Linux), or `#version 300 es`
@@ -284,7 +202,7 @@ void emitInstr(Ctx &c, int op, const Operand *src, int nsrc, const Operand &dst,
         // core in both GLSL ES 3.00 and desktop 1.20.
         case OP_DSX:   expr = "dFdx(" + s(0) + ")"; break;
         case OP_DSY:   expr = "dFdy(" + s(0) + ")"; break;
-        case OP_TEXLD: {
+        case OP_TEX: {
             // The instruction-token control bits select the texld FLAVOUR (ignored before
             // -- which broke every projected lookup): 1 = texldp (projective divide; on a
             // depth texture this is the D3D9 hardware-shadow compare), 2 = texldb (bias).
@@ -414,15 +332,32 @@ static bool KB_DumpEnvWanted() {
 
 bool TranslateD3D9Shader(const DWORD *tok, std::string &out, bool *outIsPixel,
                          unsigned shadowSamplerMask, unsigned *outSamplerMask) {
+    sm3::Shader sh;
+    std::string perr;
+    if (!sm3::Parse(tok, sh, perr)) {
+        out = "// " + perr + "\n";
+        return false;
+    }
     Ctx c;
-    DWORD ver = *tok++;
-    c.isPixel = (ver >> 16) == 0xFFFF;
+    c.isPixel = sh.pixel;
     c.shadowMask = shadowSamplerMask;
     if (outIsPixel) *outIsPixel = c.isPixel;
+    for (const Decl &d : sh.decls) {
+        if (d.type == RT_SAMPLER) {
+            c.samplers.insert(d.reg);
+            // dcl_2d/dcl_cube/dcl_volume: ignoring this typed EVERY sampler sampler2D;
+            // sampling the bound 3D model-lighting volume (or a cubemap) through a
+            // sampler2D is a sampler-type conflict that INVALIDATES the draw — static
+            // models went black/vanished (cupboard/drapes/paintings).
+            c.samplerDim[d.reg] = d.dim;
+        }
+        else if (d.type == RT_INPUT)  c.inputs[d.reg]  = {d.usage, d.index};
+        else if (d.type == RT_OUTPUT) c.outputs[d.reg] = {d.usage, d.index};
+    }
+    for (const auto &d : sh.defs) std::memcpy(c.defs[d.first], d.second.data(), sizeof(float[4]));
+    for (const auto &d : sh.idefs) c.idefs[d.first] = d.second[0];
 
     std::ostringstream body;
-    std::ostringstream dis;                       // ?dumpenv: side-channel D3D9 disassembly
-    const bool wantAsm = KB_DumpEnvWanted();
     int indent = 1, loopId = 0;
     auto ind = [](int n) { return std::string(2 * (n < 1 ? 1 : n), ' '); };
     // D3DSHADER_COMPARISON (ctrl): 1 GT, 2 EQ, 3 GE, 4 LT, 5 NE, 6 LE.
@@ -431,85 +366,35 @@ bool TranslateD3D9Shader(const DWORD *tok, std::string &out, bool *outIsPixel,
         const char *o = (cc >= 1 && cc <= 6) ? ops[cc] : ">";
         return "(" + srcExpr(c, a) + ").x " + o + " (" + srcExpr(c, b) + ").x";
     };
-    for (;;) {
-        DWORD t = *tok++;
-        int op = (int)(t & 0xFFFF);
-        if (op == OP_END) break;
-        if (op == OP_COMMENT) { tok += (t >> 16) & 0x7FFF; continue; }
-        int len  = (int)((t >> 24) & 0xF);
-        int ctrl = (int)((t >> 16) & 0xFF);   // comparison field for IFC/BREAKC
-
-        if (op == OP_DCL) {
-            DWORD usageTok = *tok;
-            Operand reg = decodeParam(tok[1]);
-            tok += len;
-            if (wantAsm) {
-                static const char *dims[] = {"?", "?", "2d", "cube", "volume"};
-                int d = (int)((usageTok >> 27) & 0xF);
-                dis << "dcl" << (reg.type == RT_SAMPLER ? (std::string("_") + (d >= 2 && d <= 4 ? dims[d] : "?")) : "")
-                    << " " << kbRegAsm(reg) << "\n";
-            }
-            if (reg.type == RT_SAMPLER) {
-                c.samplers.insert(reg.reg);
-                // dcl_2d/dcl_cube/dcl_volume: texture type in usage token bits 27..30.
-                // Ignoring this typed EVERY sampler sampler2D; sampling the bound 3D
-                // model-lighting volume (or a cubemap) through a sampler2D is a
-                // sampler-type conflict that INVALIDATES the draw — static
-                // models went black/vanished (cupboard/drapes/paintings).
-                c.samplerDim[reg.reg] = (int)((usageTok >> 27) & 0xF);
-            }
-            else {
-                int usage = (int)(usageTok & 0x1F);
-                int index = (int)((usageTok >> 16) & 0xF);
-                if (reg.type == RT_INPUT)       c.inputs[reg.reg]  = {usage, index};
-                else if (reg.type == RT_OUTPUT) c.outputs[reg.reg] = {usage, index};
-            }
-            continue;
-        }
-        if (op == OP_DEF) {
-            Operand reg = decodeParam(tok[0]);
-            float f[4]; std::memcpy(f, &tok[1], sizeof(f));
-            std::memcpy(c.defs[reg.reg], f, sizeof(f));
-            if (wantAsm)
-                dis << "def c" << reg.reg << ", " << f[0] << ", " << f[1] << ", " << f[2] << ", " << f[3] << "\n";
-            tok += len; continue;
-        }
-        if (op == OP_DEFI) { Operand reg = decodeParam(tok[0]); c.idefs[reg.reg] = (int)tok[1]; tok += len; continue; }
-        if (op == OP_DEFB || op == OP_LABEL || op == OP_CALL || op == OP_CALLNZ ||
-            op == OP_RET  || op == OP_SETP) { tok += len; continue; }
+    // Control-flow operands are read without relative addressing.
+    auto plain = [](const Src &s) { Operand o = fromSrc(s); o.rel = false; return o; };
+    for (const Instr &in : sh.code) {
+        const int op = in.op;
+        if (op == OP_LABEL || op == OP_CALL || op == OP_CALLNZ || op == OP_RET || op == OP_SETP) continue;
 
         // Structured control flow. (Dropping IF/ELSE/ENDIF would run BOTH branches
         // unconditionally, so an `if(lit) {..} else {flat}` left the world flat.)
-        if (op == OP_ELSE)    { if (indent > 1) --indent; body << ind(indent) << "} else {\n"; ++indent; tok += len; continue; }
-        if (op == OP_ENDIF || op == OP_ENDREP || op == OP_ENDLOOP) { if (indent > 1) --indent; body << ind(indent) << "}\n"; tok += len; continue; }
-        if (op == OP_BREAK)   { body << ind(indent) << "break;\n"; tok += len; continue; }
-        if (op == OP_IF)      { Operand a = decodeParam(tok[0]); body << ind(indent) << "if (bool((" << srcExpr(c, a) << ").x)) {\n"; ++indent; tok += len; continue; }
-        if (op == OP_IFC)     { Operand a = decodeParam(tok[0]), b = decodeParam(tok[1]); body << ind(indent) << "if (" << cmpStr(ctrl, a, b) << ") {\n"; ++indent; tok += len; continue; }
-        if (op == OP_BREAKC)  { Operand a = decodeParam(tok[0]), b = decodeParam(tok[1]); body << ind(indent) << "if (" << cmpStr(ctrl, a, b) << ") break;\n"; tok += len; continue; }
+        if (op == OP_ELSE)    { if (indent > 1) --indent; body << ind(indent) << "} else {\n"; ++indent; continue; }
+        if (op == OP_ENDIF || op == OP_ENDREP || op == OP_ENDLOOP) { if (indent > 1) --indent; body << ind(indent) << "}\n"; continue; }
+        if (op == OP_BREAK)   { body << ind(indent) << "break;\n"; continue; }
+        if (op == OP_IF)      { body << ind(indent) << "if (bool((" << srcExpr(c, plain(in.src[0])) << ").x)) {\n"; ++indent; continue; }
+        if (op == OP_IFC)     { body << ind(indent) << "if (" << cmpStr(in.ctrl, plain(in.src[0]), plain(in.src[1])) << ") {\n"; ++indent; continue; }
+        if (op == OP_BREAKC)  { body << ind(indent) << "if (" << cmpStr(in.ctrl, plain(in.src[0]), plain(in.src[1])) << ") break;\n"; continue; }
         if (op == OP_REP || op == OP_LOOP) {
-            Operand cnt = decodeParam(tok[0]);
-            int n = 4; auto di = c.idefs.find(cnt.reg); if (di != c.idefs.end() && di->second > 0) n = di->second;
+            // The count is the first operand's register's defi .x (for loop that operand
+            // is aL, register 0).
+            int n = 4; auto di = c.idefs.find(in.src[0].reg); if (di != c.idefs.end() && di->second > 0) n = di->second;
             int id = loopId++;
             body << ind(indent) << "for (int aL" << id << " = 0; aL" << id << " < " << n << "; ++aL" << id << ") {\n";
-            ++indent; tok += len; continue;
+            ++indent; continue;
         }
 
-        // Arithmetic / sample: dst then sources, decoded sequentially — a parameter
-        // with the relative-addressing bit consumes an extra address token, so fixed
-        // tok[1+i] offsets would read the address token as the next source.
-        Operand dst;
-        int k = decodeParamRel(tok, dst);
-        Operand src[4];                      // texldd carries 4 sources (coords, sampler, ddx, ddy)
-        int nsrc = 0;
-        while (k < len && nsrc < 4) k += decodeParamRel(tok + k, src[nsrc++]);
-        tok += len;
-        if (wantAsm) {
-            dis << kbOpName(op) << ((dst.dmod & 1) ? "_sat" : "") << " "
-                << kbRegAsm(dst) << maskStr(dst.writemask);
-            for (int si = 0; si < nsrc; ++si) dis << ", " << kbSrcAsm(src[si]);
-            dis << "\n";
-        }
-        emitInstr(c, op, src, nsrc, dst, body, ind(indent), ctrl);
+        // Arithmetic / sample: the destination, then up to 4 sources (texldd carries
+        // coords, sampler, ddx, ddy).
+        Operand dst = fromDst(in.dst);
+        Operand src[4];
+        for (int i = 0; i < in.nsrc; ++i) src[i] = fromSrc(in.src[i]);
+        emitInstr(c, op, src, in.nsrc, dst, body, ind(indent), in.ctrl);
     }
 
     // Assemble the GLSL translation unit. Two dialects, parameterized on c.emitES:
@@ -655,12 +540,11 @@ bool TranslateD3D9Shader(const DWORD *tok, std::string &out, bool *outIsPixel,
                             "[gl] --- d3d9 asm ---\n%s"
                             "[gl] --- glsl ---\n%s\n[gl] ===== END DUMP =====\n",
                     isWorld ? "W" : "M", slot, isWorld ? 1 : 0,
-                    dis.str().c_str(), out.c_str());
+                    sm3::Disassemble(sh).c_str(), out.c_str());
         }
     }
     return true;
 }
-
 // ---- GL shader objects ----------------------------------------------------
 
 static unsigned compileGL(GLenum stage, const std::string &src, const char *label) {
@@ -702,10 +586,26 @@ static unsigned compileGL(GLenum stage, const std::string &src, const char *labe
     return s;
 }
 
+// KB_DUMP_SHADERS=<dir>: each shader's bytecode as <dir>/<hash>.vs or .ps, once.
+static void KB_DumpShader(const DWORD *t, unsigned hash, bool pixel) {
+    static const char *dir = getenv("KB_DUMP_SHADERS");
+    if (!dir) return;
+    size_t n = 1;
+    while (t[n] != 0x0000FFFFu)
+        n += (t[n] & 0xFFFFu) == 0xFFFEu ? ((t[n] >> 16) & 0x7FFF) + 1 : 1;
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%08x.%s", dir, hash, pixel ? "ps" : "vs");
+    if (FILE *f = fopen(path, "rb")) { fclose(f); return; }
+    if (FILE *f = fopen(path, "wb")) { fwrite(t, sizeof(DWORD), n + 1, f); fclose(f); }
+}
+
 // Constructors only TRANSLATE (pure CPU, any thread). The GL compile happens lazily
 // in glShader() on the thread that links/draws, which is the one with the GL context
 // current — see the note in gl_shader.h (loader threads have no GL context).
 GLVertexShader::GLVertexShader(IDirect3DDevice9 *device, const DWORD *function) : device_(device) {
+    hash = KB_ShaderHash(function);
+    KB_SPEC("CreateVertexShader %s", KB_SpecThread());
+    KB_DumpShader(function, hash, false);
     bool isPixel = false;
     translatedOk_ = TranslateD3D9Shader(function, glsl_, &isPixel) && !isPixel;
 }
@@ -745,6 +645,9 @@ static size_t shaderTokenLen(const DWORD *t) {
 }
 
 GLPixelShader::GLPixelShader(IDirect3DDevice9 *device, const DWORD *function) : device_(device) {
+    hash = KB_ShaderHash(function);
+    KB_SPEC("CreatePixelShader %s", KB_SpecThread());
+    KB_DumpShader(function, hash, true);
     bool isPixel = false;
     translatedOk_ = TranslateD3D9Shader(function, glsl_, &isPixel, 0, &samplerMask_) && isPixel;
     if (translatedOk_) {

@@ -1,6 +1,7 @@
 // gl_resources.cpp — GL-backed vertex/index buffers + vertex declaration.
 #include "gl_resources.h"
 #include "gl_format.h"
+#include "gl_spec.h"
 
 #include <GL/glew.h>
 #include <cstdio>
@@ -85,6 +86,7 @@ GLVertexBuffer::~GLVertexBuffer() {
 }
 
 HRESULT WINAPI GLVertexBuffer::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice VertexBuffer %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_;
     if (device_) device_->AddRef();
@@ -93,6 +95,14 @@ HRESULT WINAPI GLVertexBuffer::GetDevice(IDirect3DDevice9 **ppDevice) {
 
 HRESULT WINAPI GLVertexBuffer::Lock(UINT OffsetToLock, UINT SizeToLock, void **ppbData, DWORD Flags) {
     if (!ppbData) return E_INVALIDARG;
+    KB_SPEC("LockVB %s usage=%x flags=%x off0=%d size0=%d used=%d", KB_SpecThread(), (unsigned)usage_, (unsigned)Flags,
+            OffsetToLock == 0, SizeToLock == 0, (int)specUsed);
+    if (g_kbSpec) {
+        extern unsigned long g_kbPresentEnter;
+        if (Flags & D3DLOCK_DISCARD) specDiscardPresent = g_kbPresentEnter;
+        else if ((Flags & D3DLOCK_NOOVERWRITE) && specDiscardPresent != g_kbPresentEnter)
+            KB_SpecNote("LockVB NOOVERWRITE after a DISCARD in an earlier frame %s", specDiscardPresent == ~0ul ? "(never)" : "");
+    }
     if (SizeToLock == 0) SizeToLock = length_ - OffsetToLock;  // 0 means "to end" in D3D
     {
         // Locks legitimately overlap across threads (frontend appends frame N+1 into the
@@ -112,6 +122,7 @@ HRESULT WINAPI GLVertexBuffer::Lock(UINT OffsetToLock, UINT SizeToLock, void **p
 }
 
 HRESULT WINAPI GLVertexBuffer::Unlock() {
+    KB_SPEC("UnlockVB %s", KB_SpecThread());
     // FLUSH ONLY ON DISCARD: a DISCARD lock orphans the buffer (new storage), so any
     // pending batched draws that reference the OLD storage by offset would render
     // garbage — flush them first. A NOOVERWRITE lock appends to a fresh region and
@@ -161,6 +172,7 @@ HRESULT WINAPI GLVertexBuffer::Unlock() {
 }
 
 HRESULT WINAPI GLVertexBuffer::GetDesc(D3DVERTEXBUFFER_DESC *pDesc) {
+    KB_SPEC("VertexBuffer GetDesc %s", KB_SpecThread());
     if (!pDesc) return E_INVALIDARG;
     *pDesc = D3DVERTEXBUFFER_DESC{};
     pDesc->Format = D3DFMT_UNKNOWN; pDesc->Type = D3DRTYPE_VERTEXBUFFER;
@@ -212,6 +224,7 @@ GLIndexBuffer::~GLIndexBuffer() {
 }
 
 HRESULT WINAPI GLIndexBuffer::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice IndexBuffer %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_;
     if (device_) device_->AddRef();
@@ -220,6 +233,14 @@ HRESULT WINAPI GLIndexBuffer::GetDevice(IDirect3DDevice9 **ppDevice) {
 
 HRESULT WINAPI GLIndexBuffer::Lock(UINT OffsetToLock, UINT SizeToLock, void **ppbData, DWORD Flags) {
     if (!ppbData) return E_INVALIDARG;
+    KB_SPEC("LockIB %s usage=%x flags=%x off0=%d size0=%d used=%d", KB_SpecThread(), (unsigned)usage_, (unsigned)Flags,
+            OffsetToLock == 0, SizeToLock == 0, (int)specUsed);
+    if (g_kbSpec) {
+        extern unsigned long g_kbPresentEnter;
+        if (Flags & D3DLOCK_DISCARD) specDiscardPresent = g_kbPresentEnter;
+        else if ((Flags & D3DLOCK_NOOVERWRITE) && specDiscardPresent != g_kbPresentEnter)
+            KB_SpecNote("LockIB NOOVERWRITE after a DISCARD in an earlier frame %s", specDiscardPresent == ~0ul ? "(never)" : "");
+    }
     if (SizeToLock == 0) SizeToLock = length_ - OffsetToLock;
     {
         // See GLVertexBuffer::Lock — outstanding-range UNION; concurrent FE/BE locks.
@@ -237,6 +258,7 @@ HRESULT WINAPI GLIndexBuffer::Lock(UINT OffsetToLock, UINT SizeToLock, void **pp
 }
 
 HRESULT WINAPI GLIndexBuffer::Unlock() {
+    KB_SPEC("UnlockIB %s", KB_SpecThread());
     // Flush pending batched draws only on DISCARD (orphan) — see GLVertexBuffer::Unlock.
     UINT upMin = ~0u, upMax = 0;
     bool upDiscard = false, upSync = false, uploadNow = false;
@@ -269,6 +291,7 @@ HRESULT WINAPI GLIndexBuffer::Unlock() {
 }
 
 HRESULT WINAPI GLIndexBuffer::GetDesc(D3DINDEXBUFFER_DESC *pDesc) {
+    KB_SPEC("IndexBuffer GetDesc %s", KB_SpecThread());
     if (!pDesc) return E_INVALIDARG;
     *pDesc = D3DINDEXBUFFER_DESC{};
     pDesc->Format = format_; pDesc->Type = D3DRTYPE_INDEXBUFFER;
@@ -411,6 +434,7 @@ void GLTexture::ensureDepthStorage() {
 GLTexture::~GLTexture() { if (tex_) glDeleteTextures(1, &tex_); }
 
 HRESULT WINAPI GLTexture::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice Texture %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_;
     if (device_) device_->AddRef();
@@ -418,6 +442,7 @@ HRESULT WINAPI GLTexture::GetDevice(IDirect3DDevice9 **ppDevice) {
 }
 
 HRESULT WINAPI GLTexture::GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) {
+    KB_SPEC("Texture GetLevelDesc %s", KB_SpecThread());
     if (!pDesc || Level >= levels_) return E_INVALIDARG;
     *pDesc = D3DSURFACE_DESC{};
     pDesc->Format = format_; pDesc->Type = D3DRTYPE_SURFACE; pDesc->Usage = usage_; pDesc->Pool = pool_;
@@ -428,13 +453,16 @@ HRESULT WINAPI GLTexture::GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) {
 }
 
 HRESULT WINAPI GLTexture::GetSurfaceLevel(UINT Level, IDirect3DSurface9 **ppSurfaceLevel) {
+    KB_SPEC("GetSurfaceLevel %s level=%s usage=%x fmt=%u", KB_SpecThread(), Level ? "n" : "0", (unsigned)usage_, (unsigned)format_);
     if (!ppSurfaceLevel || Level >= levels_) return E_INVALIDARG;
     *ppSurfaceLevel = new GLSurface(this, Level);
     return D3D_OK;
 }
 
-HRESULT WINAPI GLTexture::LockRect(UINT Level, D3DLOCKED_RECT *pLockedRect, const RECT *, DWORD) {
+HRESULT WINAPI GLTexture::LockRect(UINT Level, D3DLOCKED_RECT *pLockedRect, const RECT *pRect, DWORD Flags) {
     if (!pLockedRect || Level >= levels_) return E_INVALIDARG;
+    KB_SPEC("LockRect %s fmt=%u usage=%x pool=%u level=%s flags=%x rect=%d used=%d", KB_SpecThread(), (unsigned)format_,
+            (unsigned)usage_, (unsigned)pool_, Level ? "n" : "0", (unsigned)Flags, pRect != nullptr, (int)specUsed);
     UINT w = width_  >> Level ? width_  >> Level : 1;
     UINT h = height_ >> Level ? height_ >> Level : 1;
     int blockBytes = 0;
@@ -455,6 +483,7 @@ HRESULT WINAPI GLTexture::LockRect(UINT Level, D3DLOCKED_RECT *pLockedRect, cons
 }
 
 HRESULT WINAPI GLTexture::UnlockRect(UINT Level) {
+    KB_SPEC("UnlockRect %s", KB_SpecThread());
     if (Level >= levels_ || !dirty_) return D3D_OK;
     dirty_ = false;
     if (!tex_) {
@@ -556,10 +585,12 @@ GLVolumeTexture::~GLVolumeTexture() {
 }
 
 HRESULT WINAPI GLVolumeTexture::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice VolumeTexture %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_; if (device_) device_->AddRef(); return D3D_OK;
 }
 HRESULT WINAPI GLVolumeTexture::GetLevelDesc(UINT Level, D3DVOLUME_DESC *pDesc) {
+    KB_SPEC("VolumeTexture GetLevelDesc %s", KB_SpecThread());
     if (!pDesc || Level >= levels_) return E_INVALIDARG;
     *pDesc = D3DVOLUME_DESC{};
     pDesc->Format = format_; pDesc->Type = D3DRTYPE_VOLUME; pDesc->Usage = usage_; pDesc->Pool = pool_;
@@ -568,8 +599,10 @@ HRESULT WINAPI GLVolumeTexture::GetLevelDesc(UINT Level, D3DVOLUME_DESC *pDesc) 
     pDesc->Depth  = depth_  >> Level ? depth_  >> Level : 1;
     return D3D_OK;
 }
-HRESULT WINAPI GLVolumeTexture::LockBox(UINT Level, D3DLOCKED_BOX *pLockedVolume, const D3DBOX *, DWORD) {
+HRESULT WINAPI GLVolumeTexture::LockBox(UINT Level, D3DLOCKED_BOX *pLockedVolume, const D3DBOX *pBox, DWORD Flags) {
     if (!pLockedVolume || Level >= levels_) return E_INVALIDARG;
+    KB_SPEC("LockBox %s fmt=%u usage=%x pool=%u level=%s flags=%x box=%d used=%d levels=%u", KB_SpecThread(), (unsigned)format_,
+            (unsigned)usage_, (unsigned)pool_, Level ? "n" : "0", (unsigned)Flags, pBox != nullptr, (int)specUsed, levels_);
     UINT w = width_  >> Level ? width_  >> Level : 1;
     UINT h = height_ >> Level ? height_ >> Level : 1;
     UINT d = depth_  >> Level ? depth_  >> Level : 1;
@@ -582,6 +615,7 @@ HRESULT WINAPI GLVolumeTexture::LockBox(UINT Level, D3DLOCKED_BOX *pLockedVolume
     return D3D_OK;
 }
 HRESULT WINAPI GLVolumeTexture::UnlockBox(UINT Level) {
+    KB_SPEC("UnlockBox %s", KB_SpecThread());
     if (Level >= levels_ || !dirty_) return D3D_OK;
     dirty_ = false;
     if (!tex_) { pendLevels_ |= 1u << Level; return D3D_OK; }
@@ -686,10 +720,12 @@ void GLCubeTexture::sync() {
 GLCubeTexture::~GLCubeTexture() { if (tex_) glDeleteTextures(1, &tex_); }
 
 HRESULT WINAPI GLCubeTexture::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice CubeTexture %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_; if (device_) device_->AddRef(); return D3D_OK;
 }
 HRESULT WINAPI GLCubeTexture::GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) {
+    KB_SPEC("CubeTexture GetLevelDesc %s", KB_SpecThread());
     if (!pDesc || Level >= levels_) return E_INVALIDARG;
     *pDesc = D3DSURFACE_DESC{};
     pDesc->Format = format_; pDesc->Type = D3DRTYPE_SURFACE; pDesc->Usage = usage_; pDesc->Pool = pool_;
@@ -701,12 +737,15 @@ HRESULT WINAPI GLCubeTexture::GetLevelDesc(UINT Level, D3DSURFACE_DESC *pDesc) {
 HRESULT WINAPI GLCubeTexture::GetCubeMapSurface(D3DCUBEMAP_FACES face, UINT level,
                                                 IDirect3DSurface9 **ppSurface) {
     if (!ppSurface || (unsigned)face >= 6 || level >= levels_) return E_INVALIDARG;
+    KB_SPEC("GetCubeMapSurface %s level=%s usage=%x fmt=%u", KB_SpecThread(), level ? "n" : "0", (unsigned)usage_, (unsigned)format_);
     *ppSurface = new GLSurface(this, face, level);
     return D3D_OK;
 }
 HRESULT WINAPI GLCubeTexture::LockRect(D3DCUBEMAP_FACES FaceType, UINT Level,
-                                       D3DLOCKED_RECT *pLockedRect, const RECT *, DWORD) {
+                                       D3DLOCKED_RECT *pLockedRect, const RECT *pRect, DWORD Flags) {
     if (!pLockedRect || (unsigned)FaceType >= 6 || Level >= levels_) return E_INVALIDARG;
+    KB_SPEC("LockRectCube %s fmt=%u usage=%x pool=%u level=%s flags=%x rect=%d used=%d", KB_SpecThread(), (unsigned)format_,
+            (unsigned)usage_, (unsigned)pool_, Level ? "n" : "0", (unsigned)Flags, pRect != nullptr, (int)specUsed);
     UINT e = edge_ >> Level ? edge_ >> Level : 1;
     std::vector<unsigned char> &shadow = levelShadow_[FaceType][Level];
     int blockBytes = 0;
@@ -724,6 +763,7 @@ HRESULT WINAPI GLCubeTexture::LockRect(D3DCUBEMAP_FACES FaceType, UINT Level,
     return D3D_OK;
 }
 HRESULT WINAPI GLCubeTexture::UnlockRect(D3DCUBEMAP_FACES FaceType, UINT Level) {
+    KB_SPEC("UnlockRectCube %s", KB_SpecThread());
     if ((unsigned)FaceType >= 6 || Level >= levels_ || !dirty_) return D3D_OK;
     dirty_ = false;
     if (!tex_) {
@@ -823,6 +863,7 @@ unsigned GLSurface::texName() const {
 }
 
 HRESULT WINAPI GLSurface::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice Surface %s", KB_SpecThread());
     if (owner_) return owner_->GetDevice(ppDevice);
     if (cubeOwner_) return cubeOwner_->GetDevice(ppDevice);
     if (!ppDevice) return E_INVALIDARG;
@@ -832,6 +873,7 @@ HRESULT WINAPI GLSurface::GetDevice(IDirect3DDevice9 **ppDevice) {
 }
 
 HRESULT WINAPI GLSurface::GetDesc(D3DSURFACE_DESC *pDesc) {
+    KB_SPEC("SurfaceGetDesc %s", KB_SpecThread());
     if (owner_) return owner_->GetLevelDesc(level_, pDesc);
     if (cubeOwner_) return cubeOwner_->GetLevelDesc(level_, pDesc);
     if (!pDesc) return E_INVALIDARG;
@@ -845,6 +887,9 @@ HRESULT WINAPI GLSurface::GetDesc(D3DSURFACE_DESC *pDesc) {
 }
 
 HRESULT WINAPI GLSurface::LockRect(D3DLOCKED_RECT *lr, const RECT *r, DWORD f) {
+    if (!owner_ && !cubeOwner_)
+        KB_SPEC("SurfaceLockRect %s sysmem=%d fmt=%u rect=%d flags=%x", KB_SpecThread(), (int)sysmem_, (unsigned)format_,
+                r != nullptr, (unsigned)f);
     if (owner_) return owner_->LockRect(level_, lr, r, f);
     if (cubeOwner_) return cubeOwner_->LockRect(cubeFace_, level_, lr, r, f);
     if (!lr) return E_INVALIDARG;
@@ -861,6 +906,7 @@ HRESULT WINAPI GLSurface::UnlockRect() {
 }
 
 HRESULT WINAPI GLSurface::GetContainer(REFIID, void **ppContainer) {
+    KB_SPEC("SurfaceGetContainer %s", KB_SpecThread());
     if (!ppContainer) return E_INVALIDARG;
     if (owner_) { owner_->AddRef(); *ppContainer = owner_; }
     else if (cubeOwner_) { cubeOwner_->AddRef(); *ppContainer = cubeOwner_; }
@@ -873,13 +919,19 @@ GLVertexDeclaration::GLVertexDeclaration(IDirect3DDevice9 *device,
                                          const D3DVERTEXELEMENT9 *elements)
     : device_(device) {
     // Copy up to (and excluding) the D3DDECL_END terminator (Stream == 0xFF).
-    for (const D3DVERTEXELEMENT9 *e = elements; e && e->Stream != 0xFF; ++e)
+    for (const D3DVERTEXELEMENT9 *e = elements; e && e->Stream != 0xFF; ++e) {
         elements_.push_back(*e);
+        char el[48];
+        snprintf(el, sizeof(el), "%s%u:%u:%u:%u:%u", specSig.empty() ? "" : ",", (unsigned)e->Stream, (unsigned)e->Offset,
+                 (unsigned)e->Type, (unsigned)e->Usage, (unsigned)e->UsageIndex);
+        specSig += el;
+    }
 }
 
 GLVertexDeclaration::~GLVertexDeclaration() { KB_VaoNoteDeadDecl(this); }
 
 HRESULT WINAPI GLVertexDeclaration::GetDevice(IDirect3DDevice9 **ppDevice) {
+    KB_SPEC("GetDevice VertexDeclaration %s", KB_SpecThread());
     if (!ppDevice) return E_INVALIDARG;
     *ppDevice = device_;
     if (device_) device_->AddRef();
@@ -887,6 +939,7 @@ HRESULT WINAPI GLVertexDeclaration::GetDevice(IDirect3DDevice9 **ppDevice) {
 }
 
 HRESULT WINAPI GLVertexDeclaration::GetDeclaration(D3DVERTEXELEMENT9 *pElement, UINT *pNumElements) {
+    KB_SPEC("GetDeclaration %s", KB_SpecThread());
     UINT n = (UINT)elements_.size() + 1;  // +1 for the terminator D3D reports
     if (pNumElements) *pNumElements = n;
     if (pElement) {
