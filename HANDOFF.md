@@ -394,10 +394,10 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 The user's own gameplay changes (queued 2026-10-09 for after the performance work) are done:
-stages A, B and C (sessions 16-18) cover all 10. **Nothing is queued now: ask the user what to do
-next** (don't pick). What remains is optional: the Metal leftovers in 0 and the items 1-9 below
-(graphics leftovers, the FX freeze seen once, sound leftovers, the match-end crash seen once, the
-main menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wishes).
+stages A, B and C (sessions 16-18) cover all 10. **Next: the Metal leftovers in 0** (the user's
+choice at the end of session 18, from the optional work: those, and the items 1-9 below: graphics
+leftovers, the FX freeze seen once, sound leftovers, the match-end crash seen once, the main
+menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wishes).
 
 - The list: 1 lean exactly as OpenMoHAA's (speed, angle, everything); 2 no grenades of any
   kind; 3 no death cam; 4 permanent god mode for the player; 5 no music or announcer; 6 no
