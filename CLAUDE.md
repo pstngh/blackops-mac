@@ -168,4 +168,7 @@ g_main_mp.cpp among them); search with `command grep -a`.
 - Pointer <-> 32-bit int: `Ptr32_Encode` / `Ptr32_Decode`. Never `.v`/`.get()`
   on a Ptr32 (it is `T*` on 32-bit builds): use `Ptr32_Raw`/`Ptr32_SetRaw` or a cast.
 - Asset and networked structs keep the i386 layout: `tools/layout_diff.py`.
+- Scalar locals IDA split out of one array (`Vec3Normalize(&v10)` with v10-v12 floats,
+  `char s;` used as a buffer): `tools/audit_splitlocals.py` lists them; keep it at 0 open
+  sites (rebuild the array from IDA's stack offsets, or add a reviewed entry).
 - Commit messages end with the Co-Authored-By line the session provides.
