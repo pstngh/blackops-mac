@@ -166,6 +166,10 @@ private:
     bool              isDepth_   = false;  // D24S8/D16-family: GL depth texture + compare mode
 };
 
+// A texture changed its GL name (GLVolumeTexture's ring): stages bound to the old
+// name take the new one (gl_state.cpp).
+void KB_GLRetargetTexture(IDirect3DDevice9 *device, unsigned oldName, unsigned newName);
+
 // A 3D (volume) texture — colour-grading LUTs etc. Maps to a GL_TEXTURE_3D.
 class GLVolumeTexture final : public GLObject<IDirect3DVolumeTexture9> {
 public:
@@ -200,6 +204,13 @@ private:
     std::vector<std::vector<unsigned char>> levelShadow_;
     bool              dirty_ = false;
     unsigned          pendLevels_ = 0;
+    // A single-level volume rewritten after creation (the model lighting, patched every
+    // frame) rotates through three textures: Apple's GL waits for the GPU to finish
+    // with a texture before rewriting it. ring_[0] is the original texture.
+    unsigned          uploads_ = 0;
+    unsigned          ring_[3] = {};
+    unsigned          ringIndex_ = 0;
+    bool              ringStorage_[3] = {};
 };
 
 // A cube texture (sky / reflection probes). Maps to a GL_TEXTURE_CUBE_MAP; D3D's

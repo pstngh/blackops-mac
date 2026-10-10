@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-09, session 11)
+## Status (2026-10-09, session 12)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -18,7 +18,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **Dedicated server** with 4 bots: deaths, killstreaks, ragdolls, no asserts; also
   clean under ASan with heap redzones (120 s).
 - **Client**: main menu, team menu over the blurred world, local matches that render
-  on every MP map; ~95-130 fps on an M4. Keyboard, mouse and console work.
+  on every MP map; 116-304 fps uncapped on an M4 at 1280x720 (Performance below). Keyboard, mouse and console work.
   `KB_CMDS` (CLAUDE.md) plays without a keyboard: join, class, move, fire, grenade,
   reload, weapon switch, death and respawn. A soak of all 14 MP maps x 180 s with
   the scripted player ran without a crash; 1-minute matches end (scoreboard) and
@@ -166,8 +166,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   on desktop), lightmap and material texture arrays, world draw merging, instanced
   XSurface draws, the vertex buffer arena and the `KB_DEVHOT` devirtualisation. Gone;
   same rendering on mp_nuked (HUD, lighting, killcam DOF, no builtin fallbacks).
+- **Performance** (session 12): measured (Performance below) and three engine bugs
+  fixed that cost every build (Decisions session 12): +17-29% uncapped on the fixed
+  views with bots. The render thread is the limit, and in it Apple's GL driver.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
-  maximum, and the buffer swap's average time to stderr every interval;
+  maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
+  blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
+  stderr every interval;
   `KB_SCREENSHOT=<dir>` (+`KB_SCREENSHOT_EVERY=n`) writes the back
   buffer as a top-down TGA every n presents with per-interval draw counters
   (`KB_SCREENSHOT_WINDOW=1` adds `window_N.tga`, what the window shows after
@@ -178,7 +183,99 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   (`resolve_N.tga`). `KB_PTR32STATS=1` prints the busiest slow-path
   `Ptr32_Encode` call sites (return addresses; `atos` after the slide).
 
+## Performance (session 12)
+
+The user wants the client well past their 240 Hz display: benchmark uncapped
+(`+set r_vsync 0 +set com_maxfps 0`). Their config (`codbo/players/config_mp.cfg`):
+1280x720 fullscreen, no AA, r_picmip 2, and since 2026-10-09 22:18 already r_vsync 0,
+com_maxfps 0.
+
+**Method** (scripts were in the session's scratchpad; easy to rebuild):
+- Fixed views: `+map mp_nuked` (no bots, or the launcher's 3+4 managed bots in TDM),
+  `KB_FPS=1`, and `KB_CMDS` joining (`openscriptmenu team_marinesopfor autoassign`,
+  `changeclass assault_mp,0`, `god`) then `setviewpos <x y z yaw pitch>` every 8-10 s;
+  average the `[fps]` lines of each position after the first two. Views: A `-1868 153
+  -4 25 0` (spawn, heaviest), B `-667 -263 1 301 0`, C `-1419 -12 -4 217 0`, D `-1704 569
+  -4 132 0` (lightest), E `-1668 555 -4 49 0`, F `-1380 104 12 132 0`, sky `-1868 153 -4
+  25 -85`. A/B/D/E repeat within ~3%; C and F vary more between runs. Free play with the
+  scripted player is too noisy to compare builds (where it looks dominates).
+- CPU: `sample <pid> 10` while sitting at one view; sum each thread's self time by
+  function and library, and inclusive time of the GL calls (`RB_RenderThread` is the
+  thread holding `com.Metal.CommandQueueDispatch`).
+- GPU: `xcrun xctrace record --template 'Metal System Trace' --attach <pid>
+  --time-limit 4s`, then `xctrace export --xpath` of the `metal-gpu-intervals` table
+  (busy = union of the intervals) and `metal-application-command-buffer-submissions`.
+  A GL_TIME_ELAPSED query around the frame is useless here: it reports about the CPU's
+  submission time, and the queries cost ~1.5 ms a frame.
+- Rendering checks: the console `screenshot` command at each view (`<fs_h>/main/
+  screenshots`), compared pixel by pixel with an unmodified build (a `git worktree` of
+  HEAD built in its own directory).
+
+**Numbers** (uncapped, 1280x720 fullscreen, the user's settings; fps):
+
+| view | draws/frame before -> after | before | after | after, prepass off |
+|---|---|---|---|---|
+| A | 6950 -> 4400 | 104-106 | 133 | 150 |
+| B | 4600 -> 3220 | 140-147 | 178 | 194 |
+| C | 2200-2950 -> 1710 | 178-223 | 241 | 279 |
+| D | 1160 -> 990 | 246-251 | 324-359 | 387 |
+| E | 4150 -> 3100 | 143-145 | 180 | 183 |
+| F | 2440-4190 -> 2150 | 146-170 | 210-223 | 240 |
+| sky | ~200 | 400-440 | 530 | |
+
+With 7 bots playing TDM, same views: 94/136/204/236/139/158 before, 116/162/237/304/
+163/199 after (harmonic mean 148 -> 179). "Prepass off" is `+set r_depthPrepass 0`
+with `KB_NOPREPASS=1` (the lit pass's EQUAL depth test becomes LEQUAL; the original game
+has no such switch, session 2's port wired the dvar up).
+
+**Where the time goes** (after the fixes):
+- The render thread is busy 100% of the time at every view; the main thread waits
+  ~85% (at view A ~1.3 ms of work per frame without bots; with the 7 bots at view D
+  ~0.7 ms at ~310 fps, 21% busy: the listen server's frames are not the limit). 640x480 instead of 1280x720: +5-8%. The GPU is busy ~40-43%: 4.1 ms a frame at
+  view A (before the fixes), 1.7 ms at D, 1.1 ms at the sky.
+- View A, render thread: Apple's GL driver ~65-70% (`glDrawElementsBaseVertex` 64%
+  inclusive, ~1.2 us a draw: pipeline-state lookups, texture/sampler and uniform
+  binding, Metal encoding), IOKit command-buffer submissions ~15%, the D3D9->GL layer
+  ~6%, the engine's backend ~8%.
+- Apple's GL submits a Metal command buffer for nearly every render pass: ~15 command
+  buffers (~28 encoders) a frame, ~80 us each; every `glBlitFramebuffer` (StretchRect,
+  6 a frame), framebuffer switch and renderbuffer reallocation does one.
+- The sky view (530 fps, 1.9 ms): ~65% of the render thread is in the kernel: the swap
+  (`NSOpenGLContext flushBuffer`: synchronous WindowServer calls `_CGSWindowIsOrderedIn`
+  and `SLSGetSurfaceOpacity`, ~0.7 ms) and the submissions.
+- Tried and dropped: Apple's multithreaded GL engine (`CGLEnable(kCGLCEMPEngine)`): +9%
+  at A, 3-8% slower elsewhere. Every `glMapBufferRange` (dynamic index uploads) and
+  occlusion-query read waits for the GL worker thread to drain (67% of the render
+  thread waiting), and the late query results made the engine draw more (990 -> 1500
+  draws at D).
+
+**Options** (the user's choice; numbers above):
+- Keep GL: what's left is small (the layer's own ~6%, uniform upload size, fewer
+  passes); the driver's per-draw cost and per-pass submissions stay. Ceiling roughly
+  150-170 fps at view A, ~400 at D, with prepass off.
+- ANGLE (GLES on Metal): would batch passes into one command buffer and present
+  through CAMetalLayer, but adds its own validation and state tracking per draw; a
+  large download and build (depot_tools/gn). Ceiling between GL and Metal, unmeasured.
+- Native Metal backend (D3D9 -> Metal, replacing src/gfx_gl on macOS): one or two
+  command buffers a frame, no per-pass submissions, CAMetalLayer presentation, cached
+  pipeline states, constants by `setVertexBytes`, ~0.2-0.3 us of encoding a draw.
+  Estimated render thread at view A ~2.5-3 ms (engine backend ~0.7 ms + translation +
+  encoding), so the GPU (~3.5-4 ms there today, less with fewer passes and proper
+  load/store actions) becomes the limit: ~250-350 fps at A, 500-800 at D. Several
+  sessions: resources, state -> pipeline cache, D3D9 bytecode -> MSL (from the GLSL
+  translator), render passes, presentation, then correctness passes.
+
 ## Next steps (in order)
+
+0. **Native Metal backend** (the user's choice, 2026-10-09; Performance (session 12)
+   has the numbers and the estimate): a D3D9 -> Metal device for macOS beside
+   src/gfx_gl (which stays for Linux and as the fallback), so the decompiled renderer
+   in src/gfx_d3d keeps calling Direct3DCreate9/CreateDevice. Goals: one or two
+   command buffers a frame, CAMetalLayer presentation, cached pipeline and
+   depth-stencil states, constants by setVertexBytes/setFragmentBytes, buffer locks
+   writing straight into shared MTLBuffers (rings for DISCARD), D3D9 SM3 bytecode ->
+   MSL (gl_shader.cpp's translator is the model). Measure against the GL numbers
+   there with the same fixed views.
 
 Done in session 11 (see Status and Decisions): weapons, footsteps and impacts are
 heard (an xWMA decoder), and script vehicles (the bots' RC-XD) no longer crash or
@@ -369,6 +466,39 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 12)
+
+- **Pre-tessellated indices never reset** (r_pretess.cpp, every build):
+  `gfxBuf.preTessIndexBuffer->used` only grew, so the 1M-index buffer filled a few
+  frames into a map and every later `R_AllocPreTessIndices` failed. The BSP and static
+  model surfaces it merges then drew one by one, each with its own index upload
+  (`R_SetIndexData`, ~3800 uploads a frame at view A), and `RB_UpdateDynamicBuffers`
+  copied the stale 2 MB every frame. Nothing in the decompile resets it (IDA's
+  `R_BeginPreTess` has only the wait). `R_BeginPreTess(1)` now empties the buffer the
+  first time a frame locks it (a static records the frame per pool buffer; a second
+  view appends), after waiting for the backend, which publishes with a release fence.
+  View A: 6950 -> 4400 draws.
+- **Empty skinned cache** (rb_backend.cpp, every build): `RB_UpdateDynamicBuffers`
+  locked the skinned-vertex buffer with `used` bytes even at 0, and a D3D9 lock of
+  size 0 means the whole buffer: the GL device copied and orphaned 8 MB every frame
+  without skinned models. It skips the lock like the other dynamic meshes. Uploads
+  11.5 MB -> 0.6 MB a frame at view A.
+- **Model lighting volume** (gl_resources.cpp): `RB_PatchModelLighting` patches the
+  256xHx4 volume every frame and the device re-uploaded it whole; Apple's GL first
+  waited for the GPU to finish with the texture (a submission and a stall, 7% of the
+  render thread at A). A single-level volume rewritten after creation now rotates
+  through three textures (`KB_GLRetargetTexture` moves the bound stages to the new
+  name). The whole volume is still copied (~0.2 ms); a dirty box from the engine would
+  cut that.
+- **Render targets** (gl_d3d9.cpp, gl_surface_ops.cpp): one auto depth-stencil
+  renderbuffer per target size (`selectAutoDepth`) instead of reallocating one for each
+  size change (the bloom chain; each reallocation submitted a command buffer), and
+  StretchRect reuses two framebuffers instead of creating and deleting two per call.
+- Rendering at the 7 views matches the unmodified build (0.2-0.4% of pixels differ by
+  more than 24/255: the weapon's idle sway and the fps counter). ASan client: the bot
+  benchmark and a 5-minute soak with 1-minute TDM matches (7 hard bots, scripted
+  player; mp_nuked, mp_array, mp_cracked), no report.
 
 ## Decisions (session 11)
 

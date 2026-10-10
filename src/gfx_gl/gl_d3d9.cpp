@@ -91,7 +91,8 @@ GLDevice::~GLDevice() {
     if (builtinProg_) glDeleteProgram(builtinProg_);
     if (vao_)         glDeleteVertexArrays(1, &vao_);
     if (fbo_)         glDeleteFramebuffers(1, &fbo_);
-    if (fboDepth_)    glDeleteRenderbuffers(1, &fboDepth_);
+    for (auto &rb : autoDepthRbs_) glDeleteRenderbuffers(1, &rb.second);
+    if (blitFbo_[0])  glDeleteFramebuffers(2, blitFbo_);
     if (bbFbo_)       glDeleteFramebuffers(1, &bbFbo_);
     if (bbColorRb_)   glDeleteRenderbuffers(1, &bbColorRb_);
     if (bbDepthRb_)   glDeleteRenderbuffers(1, &bbDepthRb_);
@@ -232,6 +233,18 @@ void GLDevice::kbEnsureRTComplete(unsigned tex, int w, int h) {
                 (int)dbgBound, dbgErr1, dbgStColorDepth, dbgStColorOnly, dbgErr2);
 }
 
+void GLDevice::selectAutoDepth(int w, int h) {
+    if (fboDepth_ && fboDepthW_ == w && fboDepthH_ == h) return;
+    unsigned &rb = autoDepthRbs_[((unsigned)w << 16) | (unsigned)(h & 0xFFFF)];
+    if (!rb) {
+        glGenRenderbuffers(1, &rb);
+        glBindRenderbuffer(GL_RENDERBUFFER, rb);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    }
+    fboDepth_ = rb; fboDepthW_ = w; fboDepthH_ = h;
+}
+
 void GLDevice::kbRestoreAutoDepth(int w, int h) {
     // Detach ALL depth-ish attachments (a leftover DEPTH-only or stencil attachment
     // from the broken DS attach would conflict), then attach a fresh DEPTH24_STENCIL8
@@ -241,13 +254,7 @@ void GLDevice::kbRestoreAutoDepth(int w, int h) {
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
     if (w > 0 && h > 0) {
-        if (fboDepthW_ != w || fboDepthH_ != h || !fboDepth_) {
-            if (!fboDepth_) glGenRenderbuffers(1, &fboDepth_);
-            glBindRenderbuffer(GL_RENDERBUFFER, fboDepth_);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
-            glBindRenderbuffer(GL_RENDERBUFFER, 0);
-            fboDepthW_ = w; fboDepthH_ = h;
-        }
+        selectAutoDepth(w, h);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, fboDepth_);
     } else {
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, 0);
@@ -337,13 +344,7 @@ HRESULT WINAPI GLDevice::SetRenderTarget(DWORD RenderTargetIndex, IDirect3DSurfa
     dsLive_ = false;
     {
         // Auto depth-stencil renderbuffer sized to the colour target (the default path).
-        if (fboDepthW_ != w || fboDepthH_ != h) {
-            if (!fboDepth_) glGenRenderbuffers(1, &fboDepth_);
-            glBindRenderbuffer(GL_RENDERBUFFER, fboDepth_);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
-            glBindRenderbuffer(GL_RENDERBUFFER, 0);
-            fboDepthW_ = w; fboDepthH_ = h;
-        }
+        selectAutoDepth(w, h);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, fboDepth_);
     }
 

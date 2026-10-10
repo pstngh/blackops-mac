@@ -133,6 +133,8 @@ public:
     HRESULT WINAPI CreatePixelShader(const DWORD *pFunction, IDirect3DPixelShader9 **ppShader) override;
     HRESULT WINAPI CreateQuery(D3DQUERYTYPE Type, IDirect3DQuery9 **ppQuery) override;
 
+    void retargetTexture(unsigned oldName, unsigned newName);   // see KB_GLRetargetTexture
+
 private:
     // ps_3_0 addresses 16 sampler stages (s0..s15). The lit world/material
     // shaders use the high samplers (s11 lightmap, s15 lookup, s12..s14) — with
@@ -176,6 +178,12 @@ private:
     unsigned fboDepth_  = 0;  // its depth-stencil renderbuffer
     int      fboDepthW_ = 0;
     int      fboDepthH_ = 0;
+    // One auto depth-stencil renderbuffer per target size: reallocating a single one
+    // for each size (the bloom chain alternates sizes) makes Apple's GL submit the
+    // command buffer. selectAutoDepth points fboDepth_ at the one for w x h.
+    std::map<unsigned, unsigned> autoDepthRbs_;
+    void     selectAutoDepth(int w, int h);
+    unsigned blitFbo_[2] = {};    // StretchRect's read and draw framebuffers
     bool inScene_   = false;
 
     // Back buffer / swap chain, exposed to the renderer through

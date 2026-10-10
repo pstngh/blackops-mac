@@ -3,6 +3,8 @@
 #include "r_warn.h"
 #include <win32/win_net.h>
 
+#include <atomic>
+
 void __cdecl R_InitDrawSurfListInfo(GfxDrawSurfListInfo *info)
 {
     int n; // [esp+0h] [ebp-4h]
@@ -153,6 +155,9 @@ unsigned int __cdecl R_GetKeyCount(
     return usedCount;
 }
 
+// The frame that last emptied each pre-tessellated index buffer (gfxBuf.preTessBufferFrame).
+static unsigned int s_preTessResetFrame[2];
+
 void __cdecl R_BeginPreTess(bool lockBuffer)
 {
 
@@ -162,6 +167,17 @@ void __cdecl R_BeginPreTess(bool lockBuffer)
                  && *frontEndDataOut->dynamicBufferCurrentFrame < frontEndDataOut->frameCount )
         {
             NET_Sleep(0);
+        }
+        std::atomic_thread_fence(std::memory_order_acquire);  // RB_UpdateDynamicBuffers is done with the buffer
+        // The first view of the frame starts the pre-tessellated indices over: the
+        // backend has copied the ones this buffer held two frames ago (a second view
+        // appends). Nothing reset the count, so the buffer filled within a few frames
+        // and every later R_AllocPreTessIndices failed: unmerged BSP and static model
+        // draws, each with its own index upload, and the stale 2 MB copied every frame.
+        if ( s_preTessResetFrame[gfxBuf.preTessBufferFrame] != frontEndDataOut->frameCount )
+        {
+            s_preTessResetFrame[gfxBuf.preTessBufferFrame] = frontEndDataOut->frameCount;
+            gfxBuf.preTessIndexBuffer->used = 0;
         }
         *frontEndDataOut->dynamicBufferCurrentFrame = frontEndDataOut->frameCount;
     }

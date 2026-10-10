@@ -309,6 +309,15 @@ HRESULT WINAPI GLDevice::SetTexture(DWORD Stage, IDirect3DBaseTexture9 *pTexture
     return D3D_OK;
 }
 
+void GLDevice::retargetTexture(unsigned oldName, unsigned newName) {
+    for (int i = 0; i < kMaxStages; ++i)
+        if (boundTexName_[i] == oldName) boundTexName_[i] = newName;
+}
+
+void KB_GLRetargetTexture(IDirect3DDevice9 *device, unsigned oldName, unsigned newName) {
+    if (device) static_cast<GLDevice *>(device)->retargetTexture(oldName, newName);
+}
+
 HRESULT WINAPI GLDevice::SetScissorRect(const RECT *pRect) {
     if (pRect) {
         // No Y flip: targets hold D3D's row order (see SetViewport).

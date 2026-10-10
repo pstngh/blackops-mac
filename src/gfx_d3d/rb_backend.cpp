@@ -40,6 +40,8 @@
 #include "rb_compositing.h"
 #include <ui/ui_main_pc.h>
 
+#include <atomic>
+
 int g_msgTime;
 bool assets_released;
 bool g_showCursor;
@@ -5166,13 +5168,18 @@ void __cdecl RB_UpdateDynamicBuffers(GfxBackEndData *backendData)
     unsigned __int8 *bufferc; // [esp+18h] [ebp-8h]
 
     PROF_SCOPED("RB_UpdateDynamicBuffers");
-    buffer = (unsigned __int8 *)R_LockVertexBuffer(
-                                                                backendData->skinnedCacheVb->buffer,
-                                                                0,
-                                                                backendData->skinnedCacheVb->used,
-                                                                0x2000u);
-    memcpy(buffer, backendData->skinnedCacheVb->verts, backendData->skinnedCacheVb->used);
-    R_UnlockVertexBuffer(backendData->skinnedCacheVb->buffer);
+    // Nothing skinned this frame: a lock of size 0 means the whole 8 MB buffer, which a
+    // D3D9 driver maps for free but the GL device copies and reallocates.
+    if ( backendData->skinnedCacheVb->used )
+    {
+        buffer = (unsigned __int8 *)R_LockVertexBuffer(
+                                                                    backendData->skinnedCacheVb->buffer,
+                                                                    0,
+                                                                    backendData->skinnedCacheVb->used,
+                                                                    0x2000u);
+        memcpy(buffer, backendData->skinnedCacheVb->verts, backendData->skinnedCacheVb->used);
+        R_UnlockVertexBuffer(backendData->skinnedCacheVb->buffer);
+    }
     if ( backendData->markMesh.vb.buffer && backendData->markMesh.vb.used )
     {
         if ( backendData->markMesh.vb.used >= backendData->markMesh.vb.total )
@@ -5213,6 +5220,7 @@ void __cdecl RB_UpdateDynamicBuffers(GfxBackEndData *backendData)
         memcpy(bufferc, (unsigned __int8 *)backendData->preTessIb->indices, v2);
         R_UnlockIndexBuffer(backendData->preTessIb->buffer);
     }
+    std::atomic_thread_fence(std::memory_order_release);  // R_BeginPreTess reuses the buffers after this
     *backendData->dynamicBufferCurrentFrame = 0;
 }
 

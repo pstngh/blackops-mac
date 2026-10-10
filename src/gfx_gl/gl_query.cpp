@@ -12,6 +12,9 @@ unsigned long g_kbSkipPending = 0;   // draws skipped because the program is sti
 unsigned long g_kbBuiltinFall = 0;   // draws degraded to the builtin program (translate/compile gave 0)
 unsigned long g_kbBlits       = 0;   // StretchRect / glBlitFramebuffer calls
 unsigned long g_kbPresentEnter= 0;   // presents (SwapBuffers entries)
+unsigned long g_kbUploads     = 0;   // vertex/index buffer uploads (KB_FPS)
+unsigned long long g_kbUploadBytes = 0;   // ... their bytes
+unsigned long long g_kbOrphanBytes = 0;   // bytes of buffer storage orphaned by DISCARD locks
 
 // GL_SAMPLES_PASSED: the exact sample count, as D3D9's occlusion query returns it.
 static constexpr GLenum KB_OCCLUSION_TARGET = GL_SAMPLES_PASSED;

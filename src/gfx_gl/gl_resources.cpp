@@ -35,7 +35,11 @@ GLVertexBuffer::GLVertexBuffer(IDirect3DDevice9 *device, UINT length, DWORD usag
 // dynamic index upload held a match to ~6 fps. NOOVERWRITE and DISCARD locks promise
 // the range is not in use (DISCARD has just orphaned the storage), so write those
 // through an unsynchronized mapping.
+extern unsigned long g_kbUploads;
+extern unsigned long long g_kbUploadBytes, g_kbOrphanBytes;
 static void KB_BufferUpload(GLenum target, GLintptr off, GLsizeiptr size, const void *src, bool synced) {
+    ++g_kbUploads;
+    g_kbUploadBytes += size;
     if (!synced) {
         void *dst = glMapBufferRange(target, off, size,
                                      GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT | GL_MAP_INVALIDATE_RANGE_BIT);
@@ -146,8 +150,10 @@ HRESULT WINAPI GLVertexBuffer::Unlock() {
         // reading last frame's geometry from this VBO — without it glBufferSubData forces
         // an implicit sync (the main per-frame dynamic-mesh stall). The engine only
         // DISCARDs at offset 0 (see rb_backend/r_shade), so the orphaned tail is never drawn.
-        if (upDiscard)
+        if (upDiscard) {
             glBufferData(GL_ARRAY_BUFFER, length_, nullptr, GL_DYNAMIC_DRAW);
+            g_kbOrphanBytes += length_;
+        }
         KB_BufferUpload(GL_ARRAY_BUFFER, upMin, upMax - upMin, shadow_.data() + upMin, upSync);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
@@ -252,8 +258,10 @@ HRESULT WINAPI GLIndexBuffer::Unlock() {
     if (uploadNow && upMax > upMin) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_);
         // See GLVertexBuffer::Unlock — orphan on DISCARD to avoid the GPU sync stall.
-        if (upDiscard)
+        if (upDiscard) {
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, length_, nullptr, GL_DYNAMIC_DRAW);
+            g_kbOrphanBytes += length_;
+        }
         KB_BufferUpload(GL_ELEMENT_ARRAY_BUFFER, upMin, upMax - upMin, shadow_.data() + upMin, upSync);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
@@ -542,7 +550,10 @@ void GLVolumeTexture::sync() {
             if (p & 1) uploadLevel(L);
     }
 }
-GLVolumeTexture::~GLVolumeTexture() { if (tex_) glDeleteTextures(1, &tex_); }
+GLVolumeTexture::~GLVolumeTexture() {
+    if (ring_[0]) glDeleteTextures(3, ring_);
+    else if (tex_) glDeleteTextures(1, &tex_);
+}
 
 HRESULT WINAPI GLVolumeTexture::GetDevice(IDirect3DDevice9 **ppDevice) {
     if (!ppDevice) return E_INVALIDARG;
@@ -584,6 +595,32 @@ void GLVolumeTexture::uploadLevel(UINT Level) {
     UINT d = depth_  >> Level ? depth_  >> Level : 1;
     unsigned internal, format, type; int bpp;
     if (D3DToGLFormat(format_, &internal, &format, &type, &bpp)) {
+        if (levels_ == 1 && ++uploads_ > 1) {
+            if (!ring_[0]) {
+                ring_[0] = tex_;
+                ringStorage_[0] = true;
+                glGenTextures(2, &ring_[1]);
+                for (int i = 1; i < 3; ++i) {
+                    glBindTexture(GL_TEXTURE_3D, ring_[i]);
+                    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, 0);
+                }
+            }
+            const unsigned old = tex_;
+            ringIndex_ = (ringIndex_ + 1) % 3;
+            tex_ = ring_[ringIndex_];
+            glBindTexture(GL_TEXTURE_3D, tex_);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            if (ringStorage_[ringIndex_])
+                glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, w, h, d, format, type, levelShadow_[0].data());
+            else
+                glTexImage3D(GL_TEXTURE_3D, 0, internal, w, h, d, 0, format, type, levelShadow_[0].data());
+            ringStorage_[ringIndex_] = true;
+            glBindTexture(GL_TEXTURE_3D, 0);
+            KB_GLRetargetTexture(device_, old, tex_);
+            return;
+        }
         glBindTexture(GL_TEXTURE_3D, tex_);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage3D(GL_TEXTURE_3D, Level, internal, w, h, d, 0, format, type, levelShadow_[Level].data());

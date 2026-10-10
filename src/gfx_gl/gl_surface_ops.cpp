@@ -150,7 +150,7 @@ HRESULT WINAPI GLDevice::StretchRect(IDirect3DSurface9 *pSourceSurface, const RE
         }
     }
     // Both sides hold D3D row order, so D3D rects map straight onto GL rows.
-    GLuint fbos[2] = {0, 0};
+    if (!blitFbo_[0]) glGenFramebuffers(2, blitFbo_);
     if (src->isBackbuffer()) {
         // A multisampled back buffer resolves straight into an RGBA8 target of a 1:1
         // rectangle (the scene resolves, several a frame); anything else reads the
@@ -160,8 +160,7 @@ HRESULT WINAPI GLDevice::StretchRect(IDirect3DSurface9 *pSourceSurface, const RE
         glBindFramebuffer(GL_READ_FRAMEBUFFER, direct ? backbufferFbo() : resolvedBackbufferFbo());
         glReadBuffer(GL_COLOR_ATTACHMENT0);
     } else {
-        glGenFramebuffers(1, &fbos[0]);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbos[0]);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, blitFbo_[0]);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, src->texName(), src->level());
         glReadBuffer(GL_COLOR_ATTACHMENT0);
     }
@@ -169,8 +168,7 @@ HRESULT WINAPI GLDevice::StretchRect(IDirect3DSurface9 *pSourceSurface, const RE
     if (dst->isBackbuffer()) {
         blitToBackbuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, Filter == D3DTEXF_NONE ? GL_NEAREST : GL_LINEAR);
     } else {
-        glGenFramebuffers(1, &fbos[1]);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbos[1]);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, blitFbo_[1]);
         glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst->texName(), dst->level());
         glDrawBuffer(GL_COLOR_ATTACHMENT0);
         glBlitFramebuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, GL_COLOR_BUFFER_BIT,
@@ -182,7 +180,5 @@ HRESULT WINAPI GLDevice::StretchRect(IDirect3DSurface9 *pSourceSurface, const RE
     // SetRenderTarget to the WRONG framebuffer — invisible geometry for the rest of the
     // pass, varying with FX/command timing (the world flicker candidate).
     glBindFramebuffer(GL_FRAMEBUFFER, curFbo());
-    if (fbos[0]) glDeleteFramebuffers(1, &fbos[0]);
-    if (fbos[1]) glDeleteFramebuffers(1, &fbos[1]);
     return D3D_OK;
 }

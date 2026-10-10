@@ -23,11 +23,14 @@
 // resets when it changes; without the increment here only the first 4 programs ever
 // linked and every other draw was skipped as "still linking".
 extern unsigned long g_kbPresentEnter;
+extern unsigned long g_kbDraws, g_kbBlits, g_kbUploads;   // gl_query.cpp, for KB_FPS
+extern unsigned long long g_kbUploadBytes, g_kbOrphanBytes;
 
 namespace {
-// KB_FPS=<seconds>: frames per second, the time between presents (average, worst) and
-// the time spent in the swap itself (waiting for vsync or the GPU), every <seconds>
-// (1 if empty or 0). The render thread presents.
+// KB_FPS=<seconds>: frames per second, the time between presents (average, worst),
+// the time spent in the swap itself (waiting for vsync or the GPU) and, per frame, the
+// draw calls, StretchRect blits, buffer uploads (count, bytes) and buffer storage
+// orphaned by DISCARD locks, every <seconds> (1 if empty or 0). The render thread presents.
 void SwapWithStats(SDL_Window *win) {
     static const double interval = [] {
         const char *e = getenv("KB_FPS");
@@ -39,6 +42,8 @@ void SwapWithStats(SDL_Window *win) {
     using clock = std::chrono::steady_clock;
     static clock::time_point start = clock::now(), last = start;
     static unsigned frames;
+    static unsigned long draws0, blits0, uploads0;
+    static unsigned long long uploadBytes0, orphanBytes0;
     static double sumFrame, maxFrame, sumSwap;
     const clock::time_point t0 = clock::now();
     SDL_GL_SwapWindow(win);
@@ -51,10 +56,15 @@ void SwapWithStats(SDL_Window *win) {
     sumSwap += std::chrono::duration<double, std::milli>(t1 - t0).count();
     const double elapsed = std::chrono::duration<double>(t1 - start).count();
     if (elapsed >= interval) {
-        fprintf(stderr, "[fps] %.1f fps, frame %.2f ms avg %.2f max, swap %.2f ms avg\n",
-                frames / elapsed, sumFrame / frames, maxFrame, sumSwap / frames);
+        fprintf(stderr, "[fps] %.1f fps, frame %.2f ms avg %.2f max, swap %.2f ms avg, %lu draws/frame; "
+                        "per frame: %lu blits, %lu uploads %llu KB, %llu KB orphaned\n",
+                frames / elapsed, sumFrame / frames, maxFrame, sumSwap / frames, (g_kbDraws - draws0) / frames,
+                (g_kbBlits - blits0) / frames, (g_kbUploads - uploads0) / frames,
+                (g_kbUploadBytes - uploadBytes0) / frames / 1024, (g_kbOrphanBytes - orphanBytes0) / frames / 1024);
         start = t1;
         frames = 0;
+        draws0 = g_kbDraws; blits0 = g_kbBlits; uploads0 = g_kbUploads;
+        uploadBytes0 = g_kbUploadBytes; orphanBytes0 = g_kbOrphanBytes;
         sumFrame = maxFrame = sumSwap = 0.0;
     }
 }
