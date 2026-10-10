@@ -1,0 +1,36 @@
+# Views for tools/bench_views.py: <map> <name> <x y z yaw pitch> (setviewpos, with noclip).
+# mp_nuked: session 12's benchmark views; "a" is the heaviest (spawn), "d" the lightest.
+mp_nuked a -1868 153 -4 25 0
+mp_nuked b -667 -263 1 301 0
+mp_nuked c -1419 -12 -4 217 0
+mp_nuked d -1704 569 -4 132 0
+mp_nuked e -1668 555 -4 49 0
+mp_nuked f -1380 104 12 132 0
+mp_nuked sky -1868 153 -4 25 -85
+# Every map: "overview", the spectator camera's position at map start (its angle drifts).
+mp_area51 overview 1078 -605 292 147 3
+mp_array overview 2536 3173 1121 -137 -7
+mp_berlinwall2 overview -2771 902 320 -52 9
+mp_cairo overview 1672 8 200 -180 0
+mp_cosmodrome overview -720 -1541 -134 40 -27
+mp_cracked overview -1530 1040 -120 -104 -4
+mp_crisis overview -3135 300 296 17 3
+mp_discovery overview -223 768 143 -132 -4
+mp_drivein overview 759 -463 232 140 5
+mp_duga overview -192 -5112 74 109 -11
+mp_firingrange overview 86 1044 205 53 7
+mp_golfcourse overview -2921 2 79 0 0
+mp_gridlock overview 932 -220 342 127 13
+mp_hanoi overview 1062 -134 -14 -152 -12
+mp_havoc overview 2120 35 342 -139 0
+mp_hotel overview 3955 -838 327 151 0
+mp_kowloon overview -616 -288 265 45 0
+mp_mountain overview 1419 1092 242 -51 -16
+mp_nuked overview -48 -759 108 98 3
+mp_outskirts overview -2304 -1332 385 31 4
+mp_radiation overview 60 1084 430 -90 2
+mp_russianbase overview 1164 -428 178 169 -6
+mp_silo overview -448 -832 328 60 0
+mp_stadium overview -880 -144 640 60 10
+mp_villa overview 5140 1640 636 -150 10
+mp_zoo overview -1564 -943 255 62 15

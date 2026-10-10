@@ -190,7 +190,8 @@ The user wants the client well past their 240 Hz display: benchmark uncapped
 1280x720 fullscreen, no AA, r_picmip 2, and since 2026-10-09 22:18 already r_vsync 0,
 com_maxfps 0.
 
-**Method** (scripts were in the session's scratchpad; easy to rebuild):
+**Method** (now `tools/bench_views.py`, `cmp_screens.py`, `sample_report.py`,
+`gpu_trace.py`; CLAUDE.md "Measuring the client"):
 - Fixed views: `+map mp_nuked` (no bots, or the launcher's 3+4 managed bots in TDM),
   `KB_FPS=1`, and `KB_CMDS` joining (`openscriptmenu team_marinesopfor autoassign`,
   `changeclass assault_mp,0`, `god`) then `setviewpos <x y z yaw pitch>` every 8-10 s;
@@ -198,7 +199,9 @@ com_maxfps 0.
   -4 25 0` (spawn, heaviest), B `-667 -263 1 301 0`, C `-1419 -12 -4 217 0`, D `-1704 569
   -4 132 0` (lightest), E `-1668 555 -4 49 0`, F `-1380 104 12 132 0`, sky `-1868 153 -4
   25 -85`. A/B/D/E repeat within ~3%; C and F vary more between runs. Free play with the
-  scripted player is too noisy to compare builds (where it looks dominates).
+  scripted player is too noisy to compare builds (where it looks dominates). The numbers
+  below were taken without `noclip`, which bench_views.py adds (F floats instead of
+  landing); rerun the tool for a baseline before comparing.
 - CPU: `sample <pid> 10` while sitting at one view; sum each thread's self time by
   function and library, and inclusive time of the GL calls (`RB_RenderThread` is the
   thread holding `com.Metal.CommandQueueDispatch`).
@@ -275,7 +278,39 @@ has no such switch, session 2's port wired the dvar up).
    depth-stencil states, constants by setVertexBytes/setFragmentBytes, buffer locks
    writing straight into shared MTLBuffers (rings for DISCARD), D3D9 SM3 bytecode ->
    MSL (gl_shader.cpp's translator is the model). Measure against the GL numbers
-   there with the same fixed views.
+   there with the same fixed views. Rules agreed with the user, to keep it lean and
+   robust:
+   - Spec first: instrument the GL layer to list every D3D9 method, render state and
+     value, format, lock flag, primitive type and shader opcode the game uses (menus
+     and several maps); implement that list, and make anything outside it fail loudly.
+   - No silent fallbacks or self-healing (the GL layer's ignored states, trusted link
+     failures, builtin-shader fallback and skipped draws hid bugs): log once, treat as
+     a bug. Develop with `MTL_DEBUG_LAYER=1` and `MTL_SHADER_VALIDATION=1`; any
+     validation message is a bug.
+   - Use what Metal shares with D3D: 0..1 depth, top-left origins for viewport,
+     scissor and textures (no Y flips; the D3D9 half-pixel offset stays); unified
+     memory (Lock returns a pointer into the MTLBuffer); command buffers keep the
+     resources they use alive (no name-reuse invalidation).
+   - One sync model: Metal only on the render thread (window and layer once on the
+     main thread), 2-3 frames in flight behind one semaphore, per-frame transient
+     data (DISCARD locks, constants) from one ring per frame, CPU waits only there and
+     for readbacks. Automatic hazard tracking until a profile says otherwise.
+   - One shader translator: a shared D3D9 bytecode parser with GLSL and MSL emitters;
+     dump every shader the game loads and translate + compile them all with
+     `xcrun metal` in a test tool.
+   - Plain D3D state structs with dirty bits, translated to Metal in one place per
+     draw; one cache each for pipeline, depth-stencil and sampler states, keyed by
+     hashes. No optimization without a profile.
+   - Same binary, backend chosen at startup by an environment variable; GL stays the
+     macOS fallback until Metal matches it, and Linux's renderer.
+   - Stages that each run the game (clear screen, 2D menus, world, lighting and
+     shadows, post effects and MSAA), each done when tools/bench_views.py screenshots
+     match GL on every map's overview and mp_nuked's views (tools/cmp_screens.py, with
+     each map's GL-vs-GL noise as the tolerance: its header), the validation layer and
+     ASan are quiet and fps is measured. The overviews are heavy (GL: 60-200 fps,
+     2,500-10,300 draws a frame; mp_crisis and mp_berlinwall2 the heaviest), a better
+     stress test than mp_nuked's views. Objective-C++ (.mm)
+     with ARC, no new dependencies; aim for ~3,000-4,000 lines.
 
 Done in session 11 (see Status and Decisions): weapons, footsteps and impacts are
 heard (an xWMA decoder), and script vehicles (the bots' RC-XD) no longer crash or

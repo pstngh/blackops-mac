@@ -116,6 +116,18 @@ src/audio_openal/wma (FFmpeg's WMA decoder, ported). `set snd_solo_alias_substri
 holds one group (`wpn_`, `fly_step`, `prj_`, `vox_`...). The sound console channel is
 hidden: `+con_showchannel sound`.
 
+Measuring the client: `tools/bench_views.py` runs it uncapped at fixed views
+(`tools/views.txt`: mp_nuked's benchmark views a-f and sky, an `overview` on every map;
+`setviewpos` with `god` and `noclip`, scratch profile) and prints fps, frame and swap
+time and draws per view. `--bots` adds the launcher's 7 managed bots, `--map all` runs
+every map, `--shots DIR` saves a screenshot per view, `--sample S` / `--gpu-trace S`
+record a CPU sample / Metal System Trace at each view (sampling lowers that view's fps).
+`tools/cmp_screens.py A B` compares two screenshot sets (two runs of one build differ in
+0.05-5% of pixels by map; its header lists them), `tools/sample_report.py` summarizes `sample` files (threads,
+self, libs, incl, callers, tree; `render`/`main` select those threads) and
+`tools/gpu_trace.py report T --fps F` gives the GPU's busy share and command buffers
+per frame. `KB_FPS=<s>` alone prints fps, draws, blits and buffer uploads per frame.
+
 AddressSanitizer: configure `build_asan` with `-DCMAKE_CXX_FLAGS="-fsanitize=address
 -fno-omit-frame-pointer"` (same for C and the linker). ASan's dlopen interceptor
 makes sdl2-compat look for libSDL3 next to the ASan runtime, so copy
