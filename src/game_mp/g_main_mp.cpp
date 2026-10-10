@@ -118,6 +118,10 @@ const dvar_t *g_logTimeStampInSeconds;
 const dvar_t *g_logSync;
 const dvar_t *g_password;
 const dvar_t *g_banIPs;
+const dvar_t *kb_godMode;
+const dvar_t *kb_noGrenades;
+const dvar_t *kb_noLastStand;
+const dvar_t *kb_noDeathCam;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2055,6 +2059,19 @@ void G_RegisterDvars()
         50.0,
         0x80u,
         "Offset bipod mount position on gun by this distance");
+    // The user's gameplay changes (HANDOFF, Decisions session 16); 0 gives the original game.
+    kb_godMode = _Dvar_RegisterBool("kb_godMode", 1, 1u, "Human players take no damage (bots do)");
+    kb_noGrenades = _Dvar_RegisterBool(
+        "kb_noGrenades",
+        1,
+        1u,
+        "Nobody gets lethal, tactical or equipment offhands, grenade launchers or the explosive crossbow");
+    kb_noLastStand = _Dvar_RegisterBool("kb_noLastStand", 1, 1u, "Nobody goes into last stand (Second Chance)");
+    kb_noDeathCam = _Dvar_RegisterBool(
+        "kb_noDeathCam",
+        1,
+        1u,
+        "No killcam, final killcam or death view: respawn right after dying");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

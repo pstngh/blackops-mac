@@ -315,6 +315,7 @@ extern const dvar_s *player_move_factor_on_torso;
 extern const dvar_s *player_debugHealth;
 extern const dvar_s *player_debugSprint;
 extern const dvar_s *player_sustainAmmo;
+extern const dvar_s *kb_infiniteReserve;
 extern const dvar_s *player_clipSizeMultiplier;
 extern const dvar_s *player_lastStandBleedoutTime;
 extern const dvar_s *player_lastStandBleedoutTimeNoRevive;

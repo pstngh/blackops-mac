@@ -113,6 +113,8 @@ extern const dvar_t *snd_boat_water_slow_max;
 extern const dvar_t *snd_boat_water_pitch_max;
 extern const dvar_t *snd_solo_alias_substring;
 extern const dvar_t *snd_mute_alias_substring;
+extern const dvar_t *kb_noMusic;
+extern const dvar_t *kb_noAnnouncer;
 extern const dvar_t *snd_minigun_loop_start;
 extern const dvar_t *snd_minigun_pitch_start;
 extern const dvar_t *snd_minigun_pitch_end;

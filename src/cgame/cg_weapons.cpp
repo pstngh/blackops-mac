@@ -4394,8 +4394,10 @@ unsigned int __cdecl CG_AltWeaponToggleIndex(int localClientNum, const cg_s *cga
         altWeaponIndex = CG_GetAltWeapon(cgameGlob, cgameGlob->weaponSelect);
     else
         altWeaponIndex = weapVariantDef->altWeaponIndex;
+    // Only an alt weapon the player holds: kb_noGrenades gives the gl_ guns without their launcher
+    // (the game itself always gives both), and the HUD would show it with no rounds.
     if ( altWeaponIndex )
-        return altWeaponIndex;
+        return BG_PlayerHasWeapon(ps, altWeaponIndex) ? altWeaponIndex : 0;
     newPrimaryIdx = NextWeapInCycle(localClientNum, ps, WEAPINVENTORY_PRIMARY, cgameGlob->weaponSelect, 1, 1, 1);
     if ( !newPrimaryIdx )
     {
@@ -4405,7 +4407,8 @@ unsigned int __cdecl CG_AltWeaponToggleIndex(int localClientNum, const cg_s *cga
     }
     if ( primaryWeapon )
         *primaryWeapon = newPrimaryIdx;
-    return BG_GetWeaponVariantDef(newPrimaryIdx)->altWeaponIndex;
+    altWeaponIndex = BG_GetWeaponVariantDef(newPrimaryIdx)->altWeaponIndex;
+    return BG_PlayerHasWeapon(ps, altWeaponIndex) ? altWeaponIndex : 0;
 }
 
 unsigned int __cdecl NextWeapInCycle(

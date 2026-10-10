@@ -9,6 +9,7 @@
 #include "bg_misc.h"
 #include "bg_pmove.h"
 #include <flame/flame_system.h>
+#include <client_mp/sv_client_mp.h>
 
 unsigned int bg_numWeapClips;
 unsigned int bg_numAmmoTypes;
@@ -663,8 +664,18 @@ int __cdecl BG_WeaponAmmo(const playerState_s *ps, unsigned int weapon)
     return AmmoNotInClip + BG_GetAmmoInClip(ps, weapon);
 }
 
+// kb_infiniteReserve: a reload fills the clip and leaves the reserve as it was, for human
+// players. Bots run pmove only on the server; a client predicts only its own player.
+static bool BG_KbInfiniteReserve(const playerState_s *ps)
+{
+    if ( !kb_infiniteReserve->current.enabled )
+        return 0;
+    return !com_sv_running->current.enabled || !SV_IsTestClient(ps->clientNum);
+}
+
 void __cdecl PM_ReloadClip(playerState_s *ps)
 {
+    bool infiniteReserve;
     const WeaponVariantDef *weapVarDef; // [esp+24h] [ebp-20h]
     int ammoReserve; // [esp+28h] [ebp-1Ch]
     int ammoAdd; // [esp+2Ch] [ebp-18h]
@@ -689,7 +700,8 @@ void __cdecl PM_ReloadClip(playerState_s *ps)
         }
         clipSize = BG_GetClipSize(weaponIndex);
         ammoAdd = clipSize - ammoInClip;
-        if ( clipSize - ammoInClip > ammoReserve )
+        infiniteReserve = BG_KbInfiniteReserve(ps);
+        if ( clipSize - ammoInClip > ammoReserve && !infiniteReserve )
             ammoAdd = ammoReserve;
         if ( *weaponState == 12 || *weaponState == 13 )
         {
@@ -702,7 +714,8 @@ void __cdecl PM_ReloadClip(playerState_s *ps)
         }
         if ( ammoAdd )
         {
-            BG_AddAmmoToPool(ps, weaponIndex, -ammoAdd);
+            if ( !infiniteReserve )
+                BG_AddAmmoToPool(ps, weaponIndex, -ammoAdd);
             BG_AddAmmoToClip(ps, weapVarDef->iClipIndex, ammoAdd);
             if ( weapDef->fuelTankWeapon )
                 BG_SetFuelTankTime(ps, ps->weapon, 0);

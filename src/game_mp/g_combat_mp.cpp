@@ -24,6 +24,7 @@
 #include <game/g_weapon.h>
 #include <DynEntity/DynEntity_server.h>
 #include <glass/glass_server.h>
+#include <client_mp/sv_client_mp.h>
 
 unsigned char bulletPriorityMap[20] =
 {
@@ -430,6 +431,13 @@ double __cdecl G_GetWeaponHitLocationMultiplier(hitLocation_t hitLoc, unsigned i
     }
 }
 
+// kb_godMode: human players take no damage at all: like the god cheat, and the script's
+// damage callback (shellshock, flinch, burning) doesn't run for them either. Bots are test clients.
+bool __cdecl G_KbGodMode(const gentity_s *ent)
+{
+    return kb_godMode->current.enabled && ent->client && !SV_IsTestClient(ent->s.number);
+}
+
 void __cdecl G_DamageClient(
                 gentity_s *targ,
                 gentity_s *inflictor,
@@ -449,6 +457,7 @@ void __cdecl G_DamageClient(
     if ( targ->takedamage
         && damage > 0
         && (targ->client->flags & 3) == 0
+        && !G_KbGodMode(targ)
         && targ->client->sess.connected == CON_CONNECTED
         && targ->client->ps.pm_type != 9
         && (targ->client->ps.otherFlags & 1) == 0 )

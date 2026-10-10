@@ -1095,6 +1095,72 @@ SourceBufferInfo *__cdecl Scr_GetNewSourceBuffer(scriptInstance_t inst)
     return &gScrParserPub[inst].sourceBufferLookup[gScrParserPub[inst].sourceBufferLookupLen++];
 }
 
+// The user's gameplay changes that the game's scripts make (HANDOFF, Decisions session 16):
+// each patch replaces one line's text, found exactly once, as the script loads, and the new
+// text checks its dvar when it runs. No patch adds lines, so script errors keep their line
+// numbers. A patch whose text isn't there leaves the script alone and says so.
+struct ScrKbPatch
+{
+    const char *filename;
+    const char *find;
+    const char *replace;
+};
+
+static const ScrKbPatch scrKbPatches[] =
+{
+    // kb_noDeathCam: no killcam or final killcam (read at the map's start)...
+    {
+        "maps/mp/gametypes/_killcam.gsc",
+        "level.finalkillcam = maps\\mp\\gametypes\\_tweakables::getTweakableValue( \"game\", \"allowfinalkillcam\" );",
+        "level.finalkillcam = maps\\mp\\gametypes\\_tweakables::getTweakableValue( \"game\", \"allowfinalkillcam\" ); "
+        "if ( GetDvarInt( \"kb_noDeathCam\" ) ) { level.killcam = false; level.finalkillcam = false; }"
+    },
+    // ...and no 2 s of watching yourself die before the respawn (one server frame stays, so the
+    // spawn never runs inside the engine's player_die)
+    {
+        "maps/mp/gametypes/_globallogic_player.gsc",
+        "wait ( 0.25 );",
+        "if ( GetDvarInt( \"kb_noDeathCam\" ) ) wait ( 0.05 ); else wait ( 0.25 );"
+    },
+    {
+        "maps/mp/gametypes/_globallogic_player.gsc",
+        "maps\\mp\\gametypes\\_globallogic_utils::waitForTimeOrNotifies( 1.75 );",
+        "if ( !GetDvarInt( \"kb_noDeathCam\" ) ) maps\\mp\\gametypes\\_globallogic_utils::waitForTimeOrNotifies( 1.75 );"
+    },
+};
+
+static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)
+{
+    const char *found;
+    char *patched;
+    int findLen;
+    int replaceLen;
+    int offset;
+
+    for ( const ScrKbPatch &patch : scrKbPatches )
+    {
+        if ( I_stricmp(extFilename, patch.filename) )
+            continue;
+        found = strstr(sourceBuf, patch.find);
+        if ( !found || strstr(found + 1, patch.find) )
+        {
+            Com_PrintWarning(23, "Script patch for %s not applied: \"%s\" found %s\n", extFilename, patch.find, found ? "more than once" : "nowhere");
+            continue;
+        }
+        findLen = strlen(patch.find);
+        replaceLen = strlen(patch.replace);
+        offset = found - sourceBuf;
+        patched = (char *)Ptr32_Decode(Hunk_AllocateTempMemoryHigh(*len - findLen + replaceLen + 1, "Scr_ReadFile"));
+        memcpy(patched, sourceBuf, offset);
+        memcpy(&patched[offset], patch.replace, replaceLen);
+        memcpy(&patched[offset + replaceLen], &sourceBuf[offset + findLen], *len - offset - findLen);
+        *len = *len - findLen + replaceLen;
+        patched[*len] = 0;
+        sourceBuf = patched;
+    }
+    return sourceBuf;
+}
+
 char *__cdecl Scr_ReadFile_LoadObj(
     scriptInstance_t inst,
     const char *filename,
@@ -1115,6 +1181,7 @@ char *__cdecl Scr_ReadFile_LoadObj(
         FS_Read((unsigned __int8 *)sourceBuf, len, f);
         sourceBuf[len] = 0;
         FS_FCloseFile(f);
+        sourceBuf = Scr_KbPatchSource(extFilename, sourceBuf, &len);
         Scr_AddSourceBufferInternal(inst, extFilename, codePos, sourceBuf, len, 1, archive);
         return sourceBuf;
     }
@@ -1197,6 +1264,7 @@ char *__cdecl Scr_ReadFile_FastFile(
                 __debugbreak();
             }
         }
+        sourceBuf = Scr_KbPatchSource(extFilename, sourceBuf, &len);
         Scr_AddSourceBufferInternal(inst, extFilename, codePos, sourceBuf, len, 1, archive);
         return sourceBuf;
     }

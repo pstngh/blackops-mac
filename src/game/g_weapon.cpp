@@ -1713,6 +1713,33 @@ void __cdecl FireWeaponMelee(gentity_s *ent, int gametime)
     }
 }
 
+// kb_noGrenades: lethal, tactical and equipment offhands, the grenade launchers (the gl_
+// underbarrel alt weapons and the China Lake) and the crossbow's explosive bolts are never given,
+// to anyone. Killstreak items aren't in those offhand slots.
+bool __cdecl G_KbNoGrenadeWeapon(unsigned int weaponIndex)
+{
+    static unsigned char reported[ARRAY_COUNT(bg_weaponVariantDefs) / 8];
+    const WeaponDef *weapDef;
+
+    if ( !kb_noGrenades->current.enabled || !weaponIndex )
+        return 0;
+    weapDef = BG_GetWeaponDef(weaponIndex);
+    if ( weapDef->offhandSlot != OFFHAND_SLOT_LETHAL_GRENADE
+        && weapDef->offhandSlot != OFFHAND_SLOT_TACTICAL_GRENADE
+        && weapDef->offhandSlot != OFFHAND_SLOT_EQUIPMENT
+        && (weapDef->weapType != WEAPTYPE_PROJECTILE
+            || weapDef->weapClass != WEAPCLASS_GRENADE && weapDef->projExplosion != WEAPPROJEXP_BOLT) )
+    {
+        return 0;
+    }
+    if ( weaponIndex < ARRAY_COUNT(bg_weaponVariantDefs) && (reported[weaponIndex >> 3] & (1 << (weaponIndex & 7))) == 0 )
+    {
+        reported[weaponIndex >> 3] |= 1 << (weaponIndex & 7);
+        Com_DPrintf(17, "kb_noGrenades: not giving %s\n", BG_WeaponName(weaponIndex));
+    }
+    return 1;
+}
+
 int __cdecl G_GivePlayerWeapon(
                 playerState_s *pPS,
                 int iWeaponIndex,
@@ -1738,6 +1765,8 @@ int __cdecl G_GivePlayerWeapon(
     if ( weapDef->weapClass == WEAPCLASS_NON_PLAYER )
         return 0;
     if ( !weapDef->gunXModel[altModelIndex] )
+        return 0;
+    if ( G_KbNoGrenadeWeapon(iWeaponIndex) )
         return 0;
     if ( level.clientIsSpawning )
     {
@@ -1802,7 +1831,7 @@ int __cdecl G_GivePlayerWeapon(
             else
             {
                 for ( iCurrIndex = BG_GetWeaponVariantDef(iWeaponIndex)->altWeaponIndex;
-                            iCurrIndex && !BG_PlayerHasWeapon(pPS, iCurrIndex);
+                            iCurrIndex && !BG_PlayerHasWeapon(pPS, iCurrIndex) && !G_KbNoGrenadeWeapon(iCurrIndex);
                             iCurrIndex = BG_GetWeaponVariantDef(iCurrIndex)->altWeaponIndex )
                 {
                     if ( !BG_HoldWeapon(pPS, iCurrIndex) )

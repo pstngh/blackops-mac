@@ -80,6 +80,12 @@ Item indices are the rows of mp/statsTable.csv (e.g. 43 L96A1, 150/151
 Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary`
 prints a loadout slot.
 
+The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
+session 16): `kb_godMode` (human players take no damage), `kb_noGrenades`, `kb_noLastStand`,
+`kb_noDeathCam` (respawn 0.1 s after dying), `kb_noMusic`, `kb_noAnnouncer`,
+`kb_infiniteReserve`. Tests where the player should die pass `+set kb_godMode 0`; a scratch
+profile keeps whatever a run set (they are written to its config_mp.cfg).
+
 Playing without a keyboard: `KB_CMDS` runs console commands at times (seconds) after
 the client becomes active in a map (again after each map change), `|`-separated;
 entries after `loop@<start>/<period>` repeat. `+set scr_tdm_timelimit 1` ends a

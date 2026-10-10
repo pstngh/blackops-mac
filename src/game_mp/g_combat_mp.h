@@ -31,6 +31,7 @@ void __cdecl G_DamageClient(
                 hitLocation_t hitLoc,
                 int timeOffset);
 unsigned int __cdecl G_GetWeaponIndexForEntity(const gentity_s *ent);
+bool __cdecl G_KbGodMode(const gentity_s *ent);
 void __cdecl G_DamageActor(
                 gentity_s *targ,
                 gentity_s *inflictor,

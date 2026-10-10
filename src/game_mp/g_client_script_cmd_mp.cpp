@@ -3882,7 +3882,7 @@ void __cdecl PlayerCmd_finishPlayerDamage(scr_entref_t entref)
                 Vec3NormalizeTo(dir, localdir);
             else
                 memset(localdir, 0, sizeof(localdir));
-            if ( (pSelf->flags & 1) != 0 )
+            if ( (pSelf->flags & 1) != 0 || G_KbGodMode(pSelf) )
             {
                 ApplyKnockBack(pSelf, damage, localdir, dflags, 1);
                 return;
@@ -4031,7 +4031,10 @@ void __cdecl PlayerCmd_finishPlayerDamage(scr_entref_t entref)
                     pain(pSelf, attacker, damage, point, mod, localdir, hitLoc, iWeapon);
                 goto LABEL_130;
             }
-            if ( !pSelf->client->lastStand && (pSelf->client->ps.perks[1] & 0x20) != 0 && !pSelf->client->ps.waterlevel )
+            if ( !kb_noLastStand->current.enabled
+                && !pSelf->client->lastStand
+                && (pSelf->client->ps.perks[1] & 0x20) != 0
+                && !pSelf->client->ps.waterlevel )
             {
                 PROF_SCOPED("enter last stand");
                 if ( (pSelf->client->ps.pm_flags & 2) != 0 )

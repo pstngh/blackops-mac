@@ -110,6 +110,8 @@ const dvar_t *snd_boat_water_slow_max;
 const dvar_t *snd_boat_water_pitch_max;
 const dvar_t *snd_solo_alias_substring;
 const dvar_t *snd_mute_alias_substring;
+const dvar_t *kb_noMusic;
+const dvar_t *kb_noAnnouncer;
 const dvar_t *snd_minigun_loop_start;
 const dvar_t *snd_minigun_pitch_start;
 const dvar_t *snd_minigun_pitch_end;
@@ -635,6 +637,13 @@ void __cdecl SND_InitDvar()
                                                              (char *)"",
                                                              0x80u,
                                                              "mute alias with not matching substring");
+    // The user's gameplay changes (HANDOFF, Decisions session 16); 0 gives the original game.
+    kb_noMusic = _Dvar_RegisterBool("kb_noMusic", 1, 1u, "Mute all music (menus and matches)");
+    kb_noAnnouncer = _Dvar_RegisterBool(
+        "kb_noAnnouncer",
+        1,
+        1u,
+        "Mute the announcer's radio messages (the voice_announcer group; battle chatter stays)");
     snd_minigun_loop_start = _Dvar_RegisterFloat(
                                                          "snd_minigun_loop_start",
                                                          0.12,

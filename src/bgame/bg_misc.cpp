@@ -418,6 +418,7 @@ const dvar_s *player_move_factor_on_torso;
 const dvar_s *player_debugHealth;
 const dvar_s *player_debugSprint;
 const dvar_s *player_sustainAmmo;
+const dvar_s *kb_infiniteReserve;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1023,6 +1024,12 @@ void __cdecl BG_RegisterDvars()
     player_debugHealth = _Dvar_RegisterBool("player_debugHealth", 0, 0x180u, "Turn on debugging info for player health");
     player_debugSprint = _Dvar_RegisterBool("player_debugSprint", 0, 0x80u, "Turn on debugging info for player sprint");
     player_sustainAmmo = _Dvar_RegisterBool("player_sustainAmmo", 0, 0x80u, "Firing weapon will not decrease clip ammo.");
+    // The user's gameplay changes (HANDOFF, Decisions session 16); 0 gives the original game.
+    kb_infiniteReserve = _Dvar_RegisterBool(
+        "kb_infiniteReserve",
+        1,
+        1u,
+        "Reloading doesn't use up the human players' reserve ammo (the clip still empties)");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,

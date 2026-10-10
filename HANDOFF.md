@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 15)
+## Status (2026-10-10, session 16)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -182,6 +182,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   picks the GL layer), and the game folder's portable copy has it. On the user's 240 Hz
   display, unlocked: 240 frames shown a second with vsync, 330-395 without. A cold
   system shader cache no longer stalls the spawn (Decisions session 15).
+- **The user's gameplay changes, stage A** (session 16; the queue and stages are in Next
+  steps): permanent god mode for the human players, no grenades of any kind (lethal,
+  tactical, equipment, grenade launchers, the explosive crossbow) for anyone, no last stand
+  for anyone, no killcam, final killcam or death view (respawn 0.1 s after dying), no music
+  (menus and matches), no announcer, and an infinite reserve for the human players (the clip
+  still empties and reloads). Each is a dvar that defaults to 1 and is archived (`kb_godMode`,
+  `kb_noGrenades`, `kb_noLastStand`, `kb_noDeathCam`, `kb_noMusic`, `kb_noAnnouncer`,
+  `kb_infiniteReserve`); 0 gives back the original game. Verified in play (Decisions session
+  16); the game folder's copy has it.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -370,9 +379,32 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-Next stage (session 16): the user's own gameplay changes, which they queued for after
-the performance work (the stage's brief lists them). The Metal leftovers in 0 are
-optional: nothing there blocks play.
+The user's own gameplay changes (queued 2026-10-09 for after the performance work) are the
+current work, in three stages. The Metal leftovers in 0 are optional: nothing there blocks play.
+
+- The list: 1 lean exactly as OpenMoHAA's (speed, angle, everything); 2 no grenades of any
+  kind; 3 no death cam; 4 permanent god mode for the player; 5 no music or announcer; 6 no
+  last stand ("coward's way out"); 7 a static, small crosshair (the smallest the game already
+  uses), the same for every weapon; 8 no aiming down the sights; 9 no weapon holstering while
+  sprinting (the player can shoot while running); 10 unlimited ammo, but an empty magazine
+  still needs a reload (infinite reserve, not infinite clip).
+- The user's answers (session 16): grenades means lethal, tactical, equipment and grenade
+  launchers (underbarrel, China Lake, the explosive crossbow); bots lose grenades and last
+  stand too, but god mode, the infinite reserve, no ADS and sprint fire are the human player's
+  only; each change is a dvar that defaults on (`kb_*`, archived); "death cam" means the
+  killcam, the final killcam and the ~2 s death view.
+- **Stage A (done, session 16)**: 2, 3, 4, 5, 6, 10 (Decisions session 16).
+- **Stage B (next)**: 7, 8, 9, engine pmove/cgame work: crosshair (`CG_DrawCrosshair`, the
+  spread it draws), ADS (`PM_UpdateAimDownSightFlag` / the ADS button), sprint
+  (`PM_Weapon` sprint states, `sprintOut`, fire while sprinting). Bots keep ADS and the normal
+  sprint (the user's choice). Ask the user first whether the crosshair is only drawn small
+  and fixed (bullet spread unchanged) or whether the spread is locked to it too. pmove runs
+  on both sides (client prediction and server): a change must read the same dvar on both,
+  as `kb_infiniteReserve` does (BG_KbInfiniteReserve tells bots by `SV_IsTestClient` when
+  the server runs here; a client predicts only its own player).
+- **Stage C**: 1, the lean. Needs OpenMoHAA's source (GitHub, openmoh/openmohaa): ask the
+  user before downloading it. Then match its lean (angle, speed, view offset, how it moves
+  the eye and the body, collision) in BO's pmove lean (`PM_UpdateLean`, `leanf`).
 
 0. **Metal backend leftovers** (Metal backend above; built in session 13, the default
    since session 15). The rules agreed with the user (2026-10-09) still hold for any work
@@ -641,6 +673,83 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 16)
+
+The user's gameplay changes, stage A (items 2, 3, 4, 5, 6, 10 of the list in Next steps).
+Every change is a dvar, default 1, archived (flag 1, so `seta kb_... "0"` in a profile's
+config_mp.cfg keeps it off; a test profile keeps what a run `+set`); 0 is the original game.
+Test runs that need the player to die pass `+set kb_godMode 0`.
+
+- **Where each lives**: the game's scripts are in the fastfiles, so script behaviour is
+  changed from the engine: by engine paths the scripts call (giving weapons, damage, last
+  stand), by sound groups, and for the death view by patching the script text as it loads.
+  The scripts were read from the zones (decompress the .ff's zlib stream after the 12-byte
+  header, find RawFile assets: name pointer -1, length, buffer -1, the name, then for
+  .gsc/.csc an 8-byte header and a zlib stream; patch_mp's copies override common_mp's).
+- **kb_godMode** (human players only: not `SV_IsTestClient`): `G_KbGodMode` (g_combat_mp.cpp)
+  ends `G_DamageClient` before the script's damage callback, so no shellshock, flinch, burn
+  or hit marker either, and `finishPlayerDamage` treats it like the `god` cheat. Falls and
+  kill triggers can't kill you; `kill` (cheats are on in map games) still does, and a team
+  switch suicides as before.
+- **kb_noGrenades** (everyone): `G_KbNoGrenadeWeapon` (g_weapon.cpp) makes
+  `G_GivePlayerWeapon` refuse the offhand slots lethal (frag, semtex, tomahawk), tactical
+  (flash, concussion, Willy Pete, Nova gas, decoy) and equipment (claymore, C4, jammer,
+  motion sensor, camera spike, tactical insertion), projectile weapons of class grenade (the
+  `gl_*` underbarrels, China Lake) and the explosive-bolt crossbow; the gun of a `_gl_`
+  variant is still given, without its launcher (`G_GivePlayerWeapon`'s alt loop stops at a
+  refused alt). Every path gives through that function (class loadouts, bots, `give`,
+  pickups, scavenger), and the script commands that follow (`switchToOffhand`, ammo) return
+  false for a weapon not held. From the weapon table (1656 variants dumped at load): the
+  slots are exactly the user's three categories, killstreak items (care package marker) are
+  in none of them, and the crossbow is the only `WEAPPROJEXP_BOLT` weapon (the ballistic
+  knife is `NONE`). `CG_AltWeaponToggleIndex` now returns only an alt weapon the player
+  holds, so the d-pad no longer shows a launcher with 0 rounds (the game itself always gives
+  both). The developer console prints "kb_noGrenades: not giving X" once per weapon. The
+  bots' engine AI throws only what it holds: no grenade sounds in a 160 s match with 7 bots
+  apart from the care package's smoke marker.
+- **kb_noLastStand** (everyone): `finishPlayerDamage` skips the Second Chance entry
+  (`perks[1] & 0x20`, specialty_pistoldeath); the player dies instead. Checked with the
+  bots' dev hook `set devgui_bot laststand` (developer_script 1): off, the bots went down;
+  on, they died.
+- **kb_noDeathCam**: `Scr_KbPatchSource` (cscr_parser.cpp) replaces one exact line in a
+  script as it loads (found exactly once, else a warning and the script unchanged; no line is
+  added, so script errors keep their line numbers; both the fastfile and the loose-file
+  path). `_killcam.gsc` init turns `level.killcam` and `level.finalkillcam` off (read at the
+  map's start); `_globallogic_player.gsc` Callback_PlayerKilled skips its 0.25 s and 1.75 s
+  death-view waits (one 0.05 s frame stays so the spawn never runs inside player_die). The
+  replacements test `GetDvarInt( "kb_noDeathCam" )` when they run. Measured (god mode off):
+  death to respawn 6.55 s with it off (death view and killcam), 0.1 s on; the final killcam's
+  match flag set at the match end only with it off. (`setArchive`, which the killcam init
+  calls, is a nullsub in this engine.)
+- **kb_noMusic, kb_noAnnouncer** (client sound): `SND_GetBaseLevel` returns 0 for voices of
+  the music category (the options' music slider's category: `mus_*`, the menu's
+  `mus_mp_frontend`) and of the group `voice_announcer` (`vox_<faction>_<line>`: match start,
+  time, killstreaks, the leader dialog); battle chatter is the group `voice_player`
+  (`vox_<faction>_<n>_...`) and stays. Muting, not skipping, keeps voices, streams and the
+  scripts that wait for them as before. Wave writer: menu music -14..-25 dBFS -> -120;
+  `mus_` soloed in a match -7 dBFS -> -120; `_tdm_start` soloed -7.5 -> -120; `_inform_`
+  (chatter) with the announcer off still -12.
+- **kb_infiniteReserve** (human players only): `PM_ReloadClip` fills the clip without taking
+  from the reserve (and isn't capped by it). pmove runs on the server and in the client's
+  prediction: `BG_KbInfiniteReserve` excludes bots by `SV_IsTestClient` when a server runs in
+  this process, and a client predicts only its own player, so both sides agree. A weapon
+  whose reserve is 0 still can't reload (One in the Chamber keeps working). Checked: the
+  player's MP5K reloaded 10 times from a reserve that stayed 90; bots' reserves drained.
+- **Checks**: release client matches (mp_nuked, 7 managed bots, scripted player); ASan
+  client, `kb_godMode 0`, fu bots, 1-minute TDM over mp_nuked, mp_array, mp_cracked (two
+  match ends and rotations): no report, no assert; a dedicated server with 4 test clients;
+  every changed file through check_file.py natively and `--i386`.
+- **fps**: unchanged. bench_views.py --bots, the reference (HEAD) against this build:
+  ref A-F, sky, overview 532/676/710/733/656/689/771/415 and 527/659/725/721/666/692/709/412;
+  new 509/673/700/720/664/661/705/406 and 506/666/655/694/646/674/702/416; without bots the
+  two match. Two earlier runs of the new build were 15-25% lower at every view, and in both
+  the window was being composited from the player's spawn on (`KB_FPS`: exactly 240
+  presented and shown a second, against ~480 presented/~400 shown otherwise): session 15's
+  unexplained compositor state, intermittent (0 of the other 13 runs, both builds); not
+  the code (the same build ran normally twice after). If it recurs, look at what is on
+  screen above the fullscreen window. With bots, instant respawn means more live bots and
+  more fighting (19-28 kills a run against 12-16), which can cost a few percent at view A.
 
 ## Decisions (session 15)
 

@@ -2425,6 +2425,12 @@ double __cdecl SND_GetBaseLevel(const snd_voice_t *voice)
                 return 0.0;
         }
     }
+    // kb_noMusic, kb_noAnnouncer: silent like a muted alias, so voices, streams and the
+    // scripts waiting on them carry on as before
+    if (kb_noMusic->current.enabled && SND_GroupCategory(voice->group) == SND_CATEGORY_MUSIC)
+        return 0.0;
+    if (kb_noAnnouncer->current.enabled && !strcmp(SND_GetGroupByIndex(voice->group)->name, "voice_announcer"))
+        return 0.0;
     attenuation = (float)((float)((float)(1.0 - voice->volModSeed) * (float)((float)alias->volMin / 65535.0))
         + (float)((float)((float)alias->volMax / 65535.0) * voice->volModSeed))
         * 1.0;
