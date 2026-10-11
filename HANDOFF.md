@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 20)
+## Status (2026-10-11, session 21)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -234,6 +234,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   engine every frame) is locked in place and uploaded through a reused per-frame staging buffer:
   10% -> 2.4% of the render thread, +6% fps at mp_nuked's view A and overview with bots
   (Decisions session 20). The game folder's copy has it.
+- **Physics crash on arm64** (session 21): the physics workers used environment objects that
+  another worker had just published without memory ordering (x86 keeps stores in order, arm64
+  does not), which crashed session 20's client when an object's box spanned the map. Fixed with
+  release/acquire fences; `KB_PHYS_STRESS=2500` (CLAUDE.md) crashes the old code within about a
+  minute and ran 5 x 4 minutes clean on the new (Decisions session 21). The game folder's copy
+  has it.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -621,12 +627,19 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
-- **Physics crash, seen once (session 20)**: SIGSEGV on a physics worker thread in
-  `bp_env_jq_batch_function2` (phys_broad_phase.cpp:2446) after `collide_bpg_environment`, just
-  after `colgeom_visitor_t::intersect_box: leafList overflow (max 2048)` (an object with a huge
-  query box), ~53 s into an mp_nuked TDM with 7 managed bots and the scripted player (Decisions
-  session 20). The decompiled loop also re-reads the shared `g_bpb_list_cur` twice per iteration.
-  A task card with the details was left for it.
+Seen in session 21 (the physics crash, Decisions session 21):
+- Only the broad phase's environment queries were checked for objects published under a lock
+  and read without it on the job-queue workers; the GJK cache, the auto rigid bodies and the
+  bpei database's own map take read locks (full barriers). Other worker code is unaudited.
+- A body that wakes a dynent (auto-activation) creates its physics object on the worker
+  (`DynEntCl_CreatePhysObj`, which calls `CScr_NotifyNum`): safe only because the main thread
+  waits in the physics flush meanwhile, as in the original.
+- `phys_memory_heap::fast_allocate` (the contact manifold's 16 KB stack buffer) is bounds-checked
+  only by `iassert`, which RelWithDebInfo compiles out, like every `iassert`.
+- The natural trigger, an object whose box spans the map (session 20's bench run: a 12-body
+  ragdoll flung across 15,000 units, "about to freakout"), still happens; it no longer crashes.
+- The crash handler's backtrace starts at the interrupted link register, not the faulting pc
+  (CLAUDE.md); printing the ucontext's pc, lr and fault address would place such crashes directly.
 
 Seen in session 14 (the split-locals scan, Decisions session 14):
 - `CG_SP_trigger_multiple`/`_radius` (cg_spawn.cpp) pass a `char` parameter as `int *`
@@ -764,6 +777,60 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 21)
+
+The physics crash seen once in session 20 (Decisions session 20, "Found, not fixed").
+
+- **Reading the crash**: the crash handler's `backtrace()` starts after `_sigtramp` with the
+  interrupted link register, not the faulting pc: a fault inside a frameless leaf shows its caller
+  (lldb on a later crash: pc in `set_local_query_info`, the handler's first frame its caller).
+  Session 20's two frames at `bp_env_jq_batch_function2+516` were that link register and the frame
+  record x29 pointed at, `collide_bpg_environment`'s own: the fault was inside
+  `collide_bpg_environment` before its first call, walking the query's environment list, not a
+  register corrupted across its return.
+- **The cause**: double-checked locking without memory ordering. In the broad phase's environment
+  pass each thread's `standard_query::query` looks brushes, terrain partitions, user bodies,
+  entities, dynents and glass up in the bpei database; the first thread to need one builds it
+  under that entry's mutex in the transient collision memory (reset every step, so it holds last
+  step's objects) and stores the pointer in `m_data`; the others test `m_data` without the lock
+  and use the object. x86 makes stores visible in order; arm64 may show `m_data` before the
+  object's fields, so the reader got last step's contents: a garbage environment object in
+  `collide_bpg_environment` (session 20), an `entity_bpi_header::m_mat` of -1 (the stress below).
+  A query box covering the map makes all three threads (two workers and the flushing main thread)
+  build the same hundreds of objects in the same step, hence the leaf-list overflow just before.
+- **The fix** (phys_collision.cpp): `std::atomic_thread_fence` release before each `m_data` store
+  and acquire after an unlocked read that found it set, at the five sites (brushes, partitions and
+  user bodies in `standard_query::query`, `create_entity_bpi`, `query_create_prolog` and
+  `query_create_epilog`); no code on x86, like session 19's fences. `bp_env_jq_batch_function2`'s
+  loop reads the shared `g_bpb_list_cur` once per pop (its condition re-read it; the compiled code
+  happened to read it once).
+- **Reproducing it**: the ASan client with forced map-wide queries (three 180 s runs: queries only,
+  queries and group boxes, and every dynent woken) never failed; ASan's slowdown hides the race.
+  The release client did: `KB_PHYS_STRESS=<units>` (phys_broad_phase.cpp, CLAUDE.md) grows the
+  query and own box of every cluster holding a group (ragdoll, vehicle, compound dynent) by
+  <units> (a quarter of that vertically) and wakes every dynent such a group reaches without the
+  per-body test. With 2500 on mp_nuked (7 managed bots, the scripted player; ~1,200 environment
+  objects per query) the old code crashed in 3 runs of 3, at 35, 54 and 65 s
+  (`create_entity_bpi` -> `set_local_query_info` each time, twice on the main thread helping the
+  flush); the fixed
+  build ran 5 x 240 s (about 1.3 million map-wide queries) without a crash, and the fixed ASan
+  client 180 s of it without a report.
+- **`dynent_hits`** (phys_main.cpp): `dynamic_ent_aa::auto_activate` appended to the 10-entry list
+  with no bound (`destructible_ent_aa` has one). On arm64 entry 10 is the low half of
+  `num_dynent_hits`: the 11th hit in a step replaced the count with a dynent id, the next ones wrote
+  2-byte ids across the physics globals after it (the task manager's batch, `g_physics_system`...),
+  and `process_dynent_hits` then damaged that many garbage dynents. Bounded like the
+  destructibles; a dynent past the tenth is woken by the next step's fresh callback.
+- **ASan's `detect_stack_use_after_return=1`** (frames on a heap with their own redzones) found two
+  stack bugs at map load that the normal layout hides: `R_InterpretSunLightParseParamsIntoLights`
+  took the sun colour's green and blue from `sunParse[1].sunSettings[0].skyColor`, 136 bytes past
+  the struct (now `sunDiffuseColor[1..2]` times the intensity, as the diffuse colour below it;
+  `sunLight->color` and `sunColorFromBsp` feed no shader, so nothing renders differently), and
+  `CG_InitExposure` wrote a terminator 255 bytes into `CG_Init`'s 64-byte `mapname` (`r[255] = 0`
+  before copying; now `I_strncpyz` into its own buffer). With both fixed, the ASan client with that
+  option over 330 s of 1-minute TDM (mp_nuked, mp_array, mp_cracked, mp_crisis): no report.
+- check_file.py natively and `--i386`: the five files clean; audit_splitlocals.py: 0.
 
 ## Decisions (session 20)
 
@@ -955,7 +1022,7 @@ the Metal Toolchain download, which needs the user's final yes).
   `bp_env_jq_batch_function2` (phys_broad_phase.cpp:2446, the loop node's callee-saved register
   bad after `collide_bpg_environment`), right after the only `colgeom_visitor_t::intersect_box:
   leafList overflow (max 2048)` of the night: an object with a huge query box. Not reproduced;
-  a task card was left for it (Open items).
+  a task card was left for it. Fixed in session 21 (Decisions session 21).
 
 Stage 2 (the shader file), work in progress: all but the compile (the Metal Toolchain download
 waits for the user's yes).

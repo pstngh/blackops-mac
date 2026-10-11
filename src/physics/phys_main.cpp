@@ -3175,7 +3175,7 @@ void dynamic_ent_aa::auto_activate(broad_phase_info *bpi_impactor)
     {
         if (DynEnt_GetEntityProps(dynEntDef->type)->usePhysics)
             DynEntCl_CreatePhysObj(dynEntDef, dynEntClient, &dynEntPose->pose);
-        else
+        else if (num_dynent_hits < 10)
             dynent_hits[num_dynent_hits++].absId = DynEnt_GetClientAbsId(dynEntId, drawType);
     }
 }

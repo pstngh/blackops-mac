@@ -37,7 +37,8 @@ be moved; rerun it after rebuilding. The user's game folder has such a copy
 macOS has no `timeout`; use `perl -e 'alarm shift; exec @ARGV' 60 <cmd>`, or
 `perl tools/run_sampled.pl <seconds> <log> <cmd...>` to run, capture every
 thread's stack (macOS `sample`) into `<log>.sample`, and kill it. Crash
-backtraces print from the signal handler; `atos -o build_macos/blackops <addr>`
+backtraces print from the signal handler, starting at the interrupted link register, not the
+faulting pc (a crash inside a frameless leaf shows only its caller); `atos -o build_macos/blackops <addr>`
 symbolizes after subtracting the slide (compare `nm` of CrashHandler with its
 printed address). `lldb --batch -o run -k "bt" -k "frame variable" -- <cmd>`
 works; if a launch under lldb hangs in dyld `open`, kill leftover blackops
@@ -48,7 +49,11 @@ A map with bots: add `+set developer_script 1 +set scr_testclients 4 +map mp_nuk
 (the bots come from the `/# #/` blocks of maps/mp/gametypes/_dev.gsc). Drop
 `+set dedicated 1` for the client (a listen server; the player may stay on the team
 menu, there is no input). `KB_ASSERT_BT=1` prints a backtrace the first time each
-assert fires.
+assert fires (`iassert` compiles to nothing in RelWithDebInfo; only the decompiled explicit
+`Assert_MyHandler`/`_tlAssert` checks run). `KB_PHYS_STRESS=2500` grows every ragdoll's and
+vehicle's physics query to cover the map and wakes every dynent it reaches, so all the physics
+threads build the same environment objects at once (HANDOFF, Decisions session 21): a race there
+crashed the old code within a minute on mp_nuked with bots.
 
 The game folder's `Black Ops Launcher.app` (tools/launcher, built by
 make_portable.sh or `tools/launcher/build.sh <game dir>`) starts matches with the
@@ -187,6 +192,9 @@ makes sdl2-compat look for libSDL3 next to the ASan runtime, so copy
 `DYLD_LIBRARY_PATH=build_asan/asanrt`. SIP strips `DYLD_*` when it runs
 /usr/bin/perl or /bin/bash, so don't launch through those wrappers (Homebrew's
 `/opt/homebrew/bin/python3` keeps them: `subprocess` with a timeout works).
+`ASAN_OPTIONS=detect_stack_use_after_return=1` gives every frame its own redzones and finds
+reads and writes past stack objects that the normal layout hides (two at map load in session 21).
+ASan's slowdown hides races between threads: try those on the release build.
 perl's `exec @ARGV` with a single argument splits it at spaces (`Black Ops
 Launcher.app`): use `exec { $ARGV[0] } @ARGV`. The launcher writes its window frame
 into its defaults domain whenever it runs; test it from a copy with another

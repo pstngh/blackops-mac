@@ -22,6 +22,7 @@
 #include <cgame_mp/cg_vehicles_mp.h>
 #include <glass/glass_client.h>
 #include <algorithm>
+#include <atomic>
 
 phys_assert_info pai_create_cpi = { 0, 2, true };
 phys_simple_allocator<generic_avl_map_node_t> g_generic_avl_map_node_allocator;
@@ -1269,11 +1270,16 @@ void create_entity_bpi(gjk_physics_collision_visitor *collision_visitor, int mas
             ebpih->m_aac = create_ent_aac(collision_visitor);
 
             iassert(ebpih);
+            // The broad-phase workers read m_data without the lock: on arm64 another worker could
+            // see the pointer before the object's contents (last step's transient memory). x86
+            // keeps stores in order; the fences are no code there.
+            std::atomic_thread_fence(std::memory_order_release);
             bpei->m_data = ebpih;
         }
         //minspec_mutex::Unlock(&bpei->m_mutex);
         bpei->m_mutex.Unlock();
     }
+    std::atomic_thread_fence(std::memory_order_acquire);
 
     iassert(bpei->m_data);
     ebpih = (entity_bpi_header *)bpei->m_data;
@@ -1723,6 +1729,7 @@ void standard_query::query(
                     {
                         iassert(bpi_env->is_bpi_env());
                         bpi_env->get_bpi_env()->collision_prolog();
+                        std::atomic_thread_fence(std::memory_order_release);  // as in create_entity_bpi
                         bpei_mt->m_data = bpi_env;
                     }
                 }
@@ -1730,7 +1737,10 @@ void standard_query::query(
             }
 
             if (bpei_mt->m_data)
+            {
+                std::atomic_thread_fence(std::memory_order_acquire);
                 bpeqr->add((broad_phase_base *)bpei_mt->m_data);
+            }
         }
 
         // Process terrain partitions (CollisionAabbTrees)
@@ -1788,6 +1798,7 @@ void standard_query::query(
                     {
                         iassert(bpi_env->is_bpi_env());
                         bpi_env->get_bpi_env()->collision_prolog();
+                        std::atomic_thread_fence(std::memory_order_release);  // as in create_entity_bpi
                         bpei_mt->m_data = bpi_env;
                     }
                 }
@@ -1795,7 +1806,10 @@ void standard_query::query(
             }
 
             if (bpei_mt->m_data)
+            {
+                std::atomic_thread_fence(std::memory_order_acquire);
                 bpeqr->add((broad_phase_base *)bpei_mt->m_data);
+            }
         }
     }
 
@@ -1949,6 +1963,7 @@ void standard_query::query(
                         {
                             iassert(bpi_env->is_bpi_env());
                             bpi_env->get_bpi_env()->collision_prolog();
+                            std::atomic_thread_fence(std::memory_order_release);  // as in create_entity_bpi
                             bpei_mt->m_data = bpi_env;
                         }
                     }
@@ -1956,7 +1971,10 @@ void standard_query::query(
                 }
 
                 if (bpei_mt->m_data)
+                {
+                    std::atomic_thread_fence(std::memory_order_acquire);
                     bpeqr->add((broad_phase_base *)bpei_mt->m_data);
+                }
             }
         }
     }
@@ -2075,6 +2093,7 @@ bool gjk_physics_collision_visitor::query_create_prolog(const void *geom)
         //minspec_mutex::Unlock(&this->m_local_bpei->m_mutex);
         this->m_local_bpei->m_mutex.Unlock();
     }
+    std::atomic_thread_fence(std::memory_order_acquire);  // as in create_entity_bpi
 
     if (!this->m_local_bpei->m_data
         && !Assert_MyHandler(
@@ -2187,6 +2206,7 @@ void gjk_physics_collision_visitor::query_create_epilog(gjk_base_t *gjk_geom)
     bpi_env->set_bpi_env(this->auto_activate_callback);
     //broad_phase_info::collision_prolog(bpi_env);
     bpi_env->collision_prolog();
+    std::atomic_thread_fence(std::memory_order_release);  // as in create_entity_bpi
     this->m_local_bpei->m_data = bpi_env;
     //minspec_mutex::Unlock(&this->m_local_bpei->m_mutex);
     this->m_local_bpei->m_mutex.Unlock();

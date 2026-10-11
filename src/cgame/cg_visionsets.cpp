@@ -1568,9 +1568,6 @@ void __cdecl CG_InitExposure(int localClientNum, char *mapname)
 {
     char *v2; // eax
     char *v3; // eax
-    char v4; // [esp+23h] [ebp-121h]
-    char *v5; // [esp+28h] [ebp-11Ch]
-    char *v6; // [esp+2Ch] [ebp-118h]
     const char *basename; // [esp+30h] [ebp-114h]
     char *r; // [esp+34h] [ebp-110h]
     char *fileBuf; // [esp+38h] [ebp-10Ch]
@@ -1581,15 +1578,8 @@ void __cdecl CG_InitExposure(int localClientNum, char *mapname)
         r = v2 + 1;
     else
         r = mapname;
-    r[255] = 0;
-    v6 = r;
-    v5 = temp;
-    do
-    {
-        v4 = *v6;
-        *v5++ = *v6++;
-    }
-    while ( v4 );
+    // the decompile terminated the caller's 64-byte mapname at r[255] (a stack write past it), then copied
+    I_strncpyz(temp, r, 256);
     v3 = strstr(temp, "_geo");
     if ( v3 )
         *v3 = 0;

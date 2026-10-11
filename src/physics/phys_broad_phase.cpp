@@ -43,6 +43,45 @@ jqModule bp_env_jq_module2Module =
   &bp_env_jq_batch_function2,
 };
 
+// KB_PHYS_STRESS=<units> (testing only): a cluster holding a group (ragdoll, vehicle, compound
+// dynent) queries the environment with its box grown by <units> (a quarter of that vertically), the
+// groups' own boxes grow as much, and every dynent such a group reaches is woken without the
+// per-body test. All the workers then build the same environment objects at once, as an object
+// spread across the map makes them do (HANDOFF, Decisions session 21).
+static int KB_PhysStress()
+{
+    static const int units = getenv("KB_PHYS_STRESS") ? atoi(getenv("KB_PHYS_STRESS")) : 0;
+    return units;
+}
+
+static void KB_PhysStressCluster(broad_phase_environment_query_input *bpeqi, broad_phase_base *bpb)
+{
+    const float grow = (float)KB_PhysStress();
+    bool hasGroup = false;
+
+    for (broad_phase_base *i = bpb->m_list_bpb_cluster_next; i; i = i->m_list_bpb_cluster_next)
+    {
+        if (!i->is_bpg())
+            continue;
+        hasGroup = true;
+        i->m_trace_aabb_min_whace.x -= grow;
+        i->m_trace_aabb_min_whace.y -= grow;
+        i->m_trace_aabb_min_whace.z -= grow * 0.25f;
+        i->m_trace_aabb_max_whace.x += grow;
+        i->m_trace_aabb_max_whace.y += grow;
+        i->m_trace_aabb_max_whace.z += grow * 0.25f;
+    }
+    if (hasGroup)
+    {
+        bpeqi->trace_aabb_min_wace.x -= grow;
+        bpeqi->trace_aabb_min_wace.y -= grow;
+        bpeqi->trace_aabb_min_wace.z -= grow * 0.25f;
+        bpeqi->trace_aabb_max_wace.x += grow;
+        bpeqi->trace_aabb_max_wace.y += grow;
+        bpeqi->trace_aabb_max_wace.z += grow * 0.25f;
+    }
+}
+
 
 
 void __thiscall broad_phase_base_list::add(broad_phase_base *bpb)
@@ -2329,6 +2368,15 @@ void collide_bpg_environment(broad_phase_group *bpg, const broad_phase_environem
         {
             phys_auto_activate_callback *aac = (phys_auto_activate_callback *)bpi_env->m_sap_node;
 
+            if (KB_PhysStress() && bpg->m_list_bpi_head) // test hook: wake it without the per-body test
+            {
+                G_BPM->g_bp_auto_activate_mutex.Lock();
+                if (!aac->has_auto_activated())
+                    aac->auto_activate(bpg->m_list_bpi_head);
+                G_BPM->g_bp_auto_activate_mutex.Unlock();
+                continue;
+            }
+
             // Iterate BPG's broad_phase_info list via m_list_bpb_next
             for (broad_phase_info *bpi = bpg->m_list_bpi_head;
                 bpi != nullptr;
@@ -2430,7 +2478,7 @@ int    bp_env_jq_batch_function2(jqBatch *pBatch)
     bpb = g_bpb_list_cur;
     bpeqr.m_list_bpi_env.m_list = 0;
     bpeqr.m_list_bpi_env.m_list_cur = (broad_phase_base_list::node **)&bpeqr;
-    for (bpeqr.m_thread_id = v1; g_bpb_list_cur; bpb = g_bpb_list_cur)
+    for (bpeqr.m_thread_id = v1; bpb; bpb = g_bpb_list_cur) // one read of the shared head per pop
     {
         if ((broad_phase_base *)InterlockedCompareExchangePointer(
             (PVOID volatile *)&g_bpb_list_cur,
@@ -2442,6 +2490,8 @@ int    bp_env_jq_batch_function2(jqBatch *pBatch)
             bpeqr.m_list_bpi_env_count = 0;
             bpeqr.m_env_collision_flags = 0;
             init_bpeqi(&bpeqi, bpb);
+            if (KB_PhysStress())
+                KB_PhysStressCluster(&bpeqi, bpb);
             G_BPM->g_broad_phase_terrain_query_callback->query(&bpeqi, &bpeqr);
             process_cluster_environment_collision(bpb, bpeqr);
         }
