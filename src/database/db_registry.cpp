@@ -5,7 +5,9 @@
 #include <gfx_d3d/rb_resource.h>
 #include <qcommon/cm_load.h>
 #include <gfx_d3d/r_stream.h>
+#include <gfx_d3d/r_model.h>
 #include "db_assetnames.h"
+#include "db_save.h"
 #include <universal/com_memory.h>
 #include <universal/com_files.h>
 #include <qcommon/threads.h>
@@ -651,7 +653,9 @@ void __cdecl DB_RemoveImage(XAssetHeader header)
 void __cdecl Load_SndBankAsset(XAssetHeader *sound)
 {
     sound->xmodelPieces = DB_AddXAsset(ASSET_TYPE_SOUND, (XAssetHeader)sound->xmodelPieces).xmodelPieces;
-    SND_AddBank(sound->sound);
+    // The zone writer's tool mode keeps the bank out of the sound system (db_save_tool.cpp).
+    if ( !g_dbSaveToolMode )
+        SND_AddBank(sound->sound);
 }
 
 void __cdecl Mark_SndBankAsset(SndBank *sound)
@@ -662,7 +666,8 @@ void __cdecl Mark_SndBankAsset(SndBank *sound)
 void __cdecl Load_SndPatchAsset(XAssetHeader *soundPatch)
 {
     soundPatch->xmodelPieces = DB_AddXAsset(ASSET_TYPE_SOUND_PATCH, (XAssetHeader)soundPatch->xmodelPieces).xmodelPieces;
-    SND_AddPatch(soundPatch->soundPatch);
+    if ( !g_dbSaveToolMode )
+        SND_AddPatch(soundPatch->soundPatch);
 }
 
 void __cdecl Mark_SndPatchAsset(SndPatch *soundPatch)
@@ -898,6 +903,9 @@ void __cdecl Mark_FxEffectDefAsset(FxEffectDef *fx)
 
 void __cdecl Load_FxEffectDefFromName(Ptr32<const char> *name)
 {
+    // Tool mode keeps the name for the zone writer (db_save_tool.cpp).
+    if ( g_dbSaveToolMode )
+        return;
     if ( *name )
         *(XAssetHeader *)name = DB_FindXAssetHeader(ASSET_TYPE_FX, (char *)*name, 1, -1);
 }
@@ -2212,6 +2220,9 @@ XAssetHeader __cdecl DB_AddXAsset(XAssetType type, XAssetHeader header)
     XAssetEntryPoolEntry *existingEntry; // [esp+0h] [ebp-14h]
     XAssetEntry newEntry; // [esp+4h] [ebp-10h] BYREF
 
+    // The zone writer's tool mode loads a zone without linking its assets.
+    if ( g_dbSaveToolMode )
+        return DB_SaveTool_AddXAsset(type, header);
     newEntry.asset.type = type;
     newEntry.asset.header = header;
     Sys_EnterCriticalSection(CRITSECT_DBHASH);
@@ -2947,6 +2958,10 @@ void __cdecl DB_UpdateDebugZone()
         zoneInfo[1].allocFlags = 0x400000;
         zoneInfo[1].freeFlags = 0;
         DB_LoadXAssets(zoneInfo, 2u, 1);
+        // The client builds model index and vertex buffers when a map starts
+        // (CL_FinishLoadingModels): a zone loaded during a match needs them now.
+        if ( !IsDedicatedServer() )
+            R_OptimizeAllModels();
         CG_VisionSetMyChanges();
         if ( !CL_AllLocalClientsDisconnected() )
             CG_WeaponMyChanges();
@@ -3038,6 +3053,7 @@ void __cdecl DB_LoadXAssets(XZoneInfo *zoneInfo, unsigned int zoneCount, int syn
         Cmd_AddCommandInternal("listdefaultassets", DB_ListDefaultEntries_f, &DB_ListDefaultEntries_f_VAR);
         Cmd_AddCommandInternal("listassetpool", DB_ListAssetPool_f, &DB_ListAssetPool_f_VAR);
         Cmd_AddCommandInternal("dumpmateriallist", DB_DumpMaterialList_f, &DB_DumpMaterialList_f_VAR);
+        DB_SaveTool_RegisterCommands();
     }
 
     if ( sync )

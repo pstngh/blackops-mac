@@ -156,6 +156,14 @@ bench_views.py times its commands by the game's clock (`KB_CMDS_GAMETIME=1`), bu
 match clock, script movers and `autoassign`'s team still vary between runs: compare a
 candidate with the closer of two reference runs.
 
+Writing zones (HANDOFF, Decisions session 25): a dedicated server's `+writezone <out.ff>
+<zone>[,<zone>,<zone>] weapon <name> [<type> <name> ...]` (or `all`) loads the source zones without
+linking their assets and writes the named assets with everything they reach (stubs for what
+multiplayer has, a cut sound bank, localized names); write to a scratch dir. Try a zone from a scratch
+game folder (links to `main`, `zone/English` and every `zone/Common` file, plus the new zone) with
+`loadzone <name>` in a match, then `give`. `src/database/db_save.cpp` is generated: rerun
+`tools/gen_db_save.py` after changing db_load.cpp. `tools/ff_info.py <zone.ff>` prints a zone's header.
+
 Metal: the macOS client renders through src/gfx_mtl (a D3D9 device on Metal);
 `KB_RENDERER=gl` picks the GL layer instead, the macOS fallback and Linux's renderer
 (HANDOFF, "Metal backend").

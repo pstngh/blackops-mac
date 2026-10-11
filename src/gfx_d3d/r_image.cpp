@@ -8,6 +8,7 @@
 #include "r_image_load_common.h"
 #include "r_image_load_obj.h"
 #include <database/db_file_load.h>
+#include <database/db_save.h>
 #include <qcommon/com_profilemapload.h>
 #include "r_texturemem.h"
 #include "r_init.h"
@@ -736,6 +737,12 @@ void __cdecl Load_Texture(GfxTexture *remoteLoadDef, GfxImage *image)
         __debugbreak();
     }
     image->texture.basemap = 0;
+    // The zone writer's tool mode keeps the pixel data (db_save_tool.cpp).
+    if ( g_dbSaveToolMode )
+    {
+        DB_SaveTool_KeepTexture(image, loadDef);
+        return;
+    }
     if ( r_loadForRenderer && r_loadForRenderer->current.enabled )
     {
         imageFormat = (_D3DFORMAT)loadDef->format;
