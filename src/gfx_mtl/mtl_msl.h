@@ -7,20 +7,19 @@
 //   * vPos is the integer pixel position, vFace +1/-1 (front face clockwise);
 //   * rsq, log and pow take |x|, as the D3D9 instructions do;
 //   * the alpha test (fixed-function in D3D9) is a function constant;
-//   * a 2D pixel sampler whose bit is set in the per-draw mask (a depth texture is
-//     bound) reads it as D3D9's hardware shadow maps do: texldl and texldp lookups
-//     compare the coordinate's z (texldp: z/w) with the stored depths, filtered
-//     bilinearly (percentage closer, kb_pcf in the prelude); compareMask lists the
-//     samplers read only that way;
+//   * a pixel sampler the shader's constant table names shadowmapSampler* reads a
+//     shadow map (a depth2d) as D3D9's hardware shadow maps do: its texldl and texldp
+//     lookups compare the coordinate's z (texldp: z/w) with the stored depths,
+//     filtered by the sampler (sample_compare); `rawShadows` reads the depth instead,
+//     as the GL layer does (KB_MTL_GLCOMPAT);
 //   * relative constant reads see the shader's def'd constants;
 //   * `perSample` makes a pixel shader run per sample (it reads [[sample_id]], and
 //     its inputs are interpolated at the sample): the transparency supersampling of
 //     alpha-tested draws (r_aaAlpha).
 // Bindings (shared with mtl_device.mm):
 //   vertex buffers 0..3 = D3D streams, buffer 20 = constants c#, buffer 21 = the
-//   per-draw values (vertex: half-pixel offset; pixel: x the alpha reference, y the
-//   bits of the samplers holding a depth texture), texture and sampler N = sampler sN
-//   (D3DVERTEXTEXTURESAMPLERn = vertex sampler n).
+//   per-draw values (vertex: half-pixel offset; pixel: x the alpha reference),
+//   texture and sampler N = sampler sN (D3DVERTEXTEXTURESAMPLERn = vertex sampler n).
 // Anything outside what is implemented makes the translation fail with a reason.
 #ifndef KISAK_MTL_MSL_H
 #define KISAK_MTL_MSL_H
@@ -45,7 +44,7 @@ struct MSLShader {
     std::string entry;
     unsigned attribMask = 0;      // vertex: attribute indices read
     unsigned samplerMask = 0;     // samplers sampled
-    unsigned compareMask = 0;     // pixel: samplers whose lookups all can read a shadow map
+    unsigned shadowMask = 0;      // pixel: the shadow map samplers it samples
     unsigned char samplerDim[16] = {};   // sm3::DIM_* per sampler
     int constCount = 0;           // float4 constants read (from c0)
     unsigned long long varyingsOut = 0;  // vertex: varying slots written (see MSL_Varying)
@@ -61,6 +60,6 @@ const char *MSL_Prelude();
 // Translate. `prefix` names the entry kb_<prefix> and its structs (empty: kb_main);
 // the source does not include MSL_Prelude().
 bool MSL_Translate(const sm3::Shader &sh, MSLShader &out, const std::string &prefix = std::string(),
-                   bool perSample = false);
+                   bool perSample = false, bool rawShadows = false);
 
 #endif // KISAK_MTL_MSL_H

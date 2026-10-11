@@ -4,6 +4,7 @@
 #include "mtl_msl.h"
 #include "../gfx_shader/sm3.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -464,9 +465,31 @@ HRESULT WINAPI MetalDecl::GetDeclaration(D3DVERTEXELEMENT9 *e, UINT *n) {
 // ---- Shaders ------------------------------------------------------------------
 static double Seconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
+// KB_MTL_SHADERLOG=<file>: a line per event, seconds since the first: "c <entry> <batch>" a
+// shader created (the batch it compiles in), "s <batch> <shaders>" a batch given to Metal,
+// "d <batch>" compiled, "w <batch> <ms>" a draw waited for it, "u <entry>" a shader's
+// first use, "p <ms>" a frame over 15 ms (Present).
+void MTL_ShaderLog(const char *fmt, ...) {
+    static FILE *f = [] { const char *e = getenv("KB_MTL_SHADERLOG"); return e ? fopen(e, "w") : (FILE *)nullptr; }();
+    if (!f) return;
+    static const double t0 = Seconds();
+    static std::mutex mu;
+    std::lock_guard<std::mutex> g(mu);
+    fprintf(f, "%.4f ", Seconds() - t0);
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
+    fputc('\n', f);
+    fflush(f);
+}
+
 MetalShaderCompiler::MetalShaderCompiler(id<MTLDevice> dev) : dev_(dev) {
     const char *e = getenv("KB_MTL_BATCH");
     size_ = e && atoi(e) > 0 ? atoi(e) : 64;
+    const char *c = getenv("KB_MTL_COMPILES");
+    const int cores = (int)[NSProcessInfo processInfo].activeProcessorCount;
+    cap_ = c && atoi(c) > 0 ? atoi(c) : cores > 3 ? cores - 2 : 1;
 }
 
 std::shared_ptr<MetalShaderBatch> MetalShaderCompiler::add(const std::string &entry, const std::string &source) {
@@ -479,16 +502,41 @@ std::shared_ptr<MetalShaderBatch> MetalShaderCompiler::add(const std::string &en
         if (!open_) {
             open_ = std::make_shared<MetalShaderBatch>();
             open_->source = MSL_Prelude();
+            open_->seq = ++batches_;
         }
         b = open_;
+        MTL_ShaderLog("c %s %d", entry.c_str(), b->seq);
         entries_[entry] = b;
         lastAdd_ = Seconds();
         std::lock_guard<std::mutex> bg(b->mu);
         b->source += source;
         if (++b->count == size_) { full = b; open_.reset(); }
     }
-    if (full) submit(full);
+    if (full) enqueue(full);
     return b;
+}
+
+void MetalShaderCompiler::enqueue(const std::shared_ptr<MetalShaderBatch> &b) {
+    {
+        std::lock_guard<std::mutex> g(mu_);
+        if (inflight_ >= cap_) { queue_.push_back(b); return; }
+        ++inflight_;
+    }
+    submit(b);
+}
+
+// A batch compiled: Metal gets the next.
+void MetalShaderCompiler::finished() {
+    std::shared_ptr<MetalShaderBatch> next;
+    {
+        std::lock_guard<std::mutex> g(mu_);
+        --inflight_;
+        if (queue_.empty() || inflight_ >= cap_) return;
+        next = std::move(queue_.front());
+        queue_.pop_front();
+        ++inflight_;
+    }
+    submit(next);
 }
 
 void MetalShaderCompiler::submitIdle() {
@@ -500,7 +548,7 @@ void MetalShaderCompiler::submitIdle() {
         if (!open_ || Seconds() - lastAdd_ < 0.5) return;
         b = std::move(open_);
     }
-    submit(b);
+    enqueue(b);
 }
 
 void MetalShaderCompiler::submit(const std::shared_ptr<MetalShaderBatch> &b) {
@@ -514,27 +562,43 @@ void MetalShaderCompiler::submit(const std::shared_ptr<MetalShaderBatch> &b) {
     MTLCompileOptions *opts = [MTLCompileOptions new];
     opts.preserveInvariance = YES;
     std::shared_ptr<MetalShaderBatch> keep = b;
+    MTL_ShaderLog("s %d %d", b->seq, b->count);
     [dev_ newLibraryWithSource:src options:opts completionHandler:^(id<MTLLibrary> lib, NSError *e) {
+        MTL_ShaderLog("d %d", keep->seq);
         if (!lib) MTL_Bug("shader batch does not compile: %s", e.localizedDescription.UTF8String);
-        std::lock_guard<std::mutex> g(keep->mu);
-        keep->lib = lib;
-        keep->done = true;
-        keep->source.clear();
-        keep->cv.notify_all();
+        {
+            std::lock_guard<std::mutex> g(keep->mu);
+            keep->lib = lib;
+            keep->done = true;
+            keep->source.clear();
+            keep->cv.notify_all();
+        }
+        finished();
     }];
 }
 
 id<MTLLibrary> MetalShaderCompiler::library(const std::shared_ptr<MetalShaderBatch> &b) {
+    bool take = false;
     {
+        // A draw needs it: the open batch compiles what it has, a queued one goes
+        // ahead of the others, past the cap.
         std::lock_guard<std::mutex> g(mu_);
-        if (open_ == b) open_.reset();   // a draw needs it: compile what it has
+        if (open_ == b) {
+            open_.reset();
+            take = true;
+        } else {
+            auto it = std::find(queue_.begin(), queue_.end(), b);
+            if (it != queue_.end()) { queue_.erase(it); take = true; }
+        }
+        if (take) ++inflight_;
     }
-    submit(b);
+    if (take) submit(b);
     std::unique_lock<std::mutex> g(b->mu);
     if (!b->done) {
         const double t0 = Seconds();
         b->cv.wait(g, [&] { return b->done; });
         waited += Seconds() - t0;
+        MTL_ShaderLog("w %d %.1f", b->seq, (Seconds() - t0) * 1000.0);
     }
     return b->lib;
 }
@@ -549,7 +613,7 @@ MetalShader::MetalShader(MetalDevice *dev, const DWORD *tokens, bool pixel) : de
     if (!translate(0, &m)) return;
     attribMask = m.attribMask;
     samplerMask = m.samplerMask;
-    compareMask = m.compareMask;
+    shadowMask = m.shadowMask;
     memcpy(samplerDim, m.samplerDim, sizeof(samplerDim));
     constCount = m.constCount;
     varyingsOut = m.varyingsOut;
@@ -566,7 +630,8 @@ bool MetalShader::translate(unsigned variant, MSLShader *m) {
     if (sh.pixel != pixel_) { MTL_Bug("shader %08x: wrong stage", hash); return false; }
     char prefix[32];
     snprintf(prefix, sizeof(prefix), "%08x%s", hash, pixel_ ? "p" : "v");
-    if (!MSL_Translate(sh, *m, variant ? std::string() : std::string(prefix), (variant & VARIANT_PER_SAMPLE) != 0)) {
+    if (!MSL_Translate(sh, *m, variant ? std::string() : std::string(prefix), (variant & VARIANT_PER_SAMPLE) != 0,
+                       GLCompat())) {
         MTL_Bug("shader %08x: %s", hash, m->error.c_str());
         return false;
     }
@@ -586,6 +651,7 @@ id<MTLFunction> MetalShader::function(int alphaFunc, unsigned variant) {
     Variant &v = variants_[variant];
     if (!v.lib) {
         if (!variant) {
+            MTL_ShaderLog("u %s", entry_.c_str());
             v.lib = dev_->compiler()->library(batch_);
         } else {
             // A variant: rare, compiled on its own when first drawn.

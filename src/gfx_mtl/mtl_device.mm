@@ -46,14 +46,6 @@ vertex ClearOut kb_clear_vs(uint vid [[vertex_id]]) {
 fragment float4 kb_clear_ps(constant float4 &c [[buffer(0)]]) { return c; }
 )";
 
-// KB_MTL_GLCOMPAT=1: sample as the GL layer does, for pixel comparisons with it: no
-// mipmaps (it binds every texture with a non-mipmapped filter) and shadow maps read as
-// raw depth, unfiltered (no hardware comparison), and no separate alpha blending.
-bool GLCompat() {
-    static const bool on = getenv("KB_MTL_GLCOMPAT") && *getenv("KB_MTL_GLCOMPAT") == '1';
-    return on;
-}
-
 double Now() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 MTLBlendFactor BlendFactor(DWORD d) {
@@ -140,6 +132,14 @@ bool KnownRenderState(unsigned s) {
 }
 
 } // namespace
+
+// KB_MTL_GLCOMPAT=1: sample as the GL layer does, for pixel comparisons with it: no
+// mipmaps (it binds every texture with a non-mipmapped filter) and shadow maps read as
+// raw depth, unfiltered (no hardware comparison), and no separate alpha blending.
+bool GLCompat() {
+    static const bool on = getenv("KB_MTL_GLCOMPAT") && *getenv("KB_MTL_GLCOMPAT") == '1';
+    return on;
+}
 
 // The device holds a reference to what is bound, as D3D9's does.
 template <class T> static void Rebind(T *&slot, T *obj) {
@@ -830,16 +830,17 @@ id<MTLDepthStencilState> MetalDevice::depthStencil() {
 id<MTLSamplerState> MetalDevice::sampler(int st) {
     const DWORD *s = samp_[st];
     const bool depth = texm_[st] && texm_[st]->isDepth();
-    // A shadow map is compared in the shader (kb_pcf, which gathers); in GL
-    // compatibility it reads raw depth, unfiltered.
+    // A shadow map is compared by the sampler (sample_compare: lit where z <= depth);
+    // in GL compatibility it reads raw depth, unfiltered.
     const bool raw = depth && GLCompat();
     const DWORD minF = raw ? 1 : s[D3DSAMP_MINFILTER], magF = raw ? 1 : s[D3DSAMP_MAGFILTER];
     const DWORD mipF = depth || GLCompat() ? 0 : s[D3DSAMP_MIPFILTER];
     const DWORD aniso = minF == 3 ? s[D3DSAMP_MAXANISOTROPY] : 1;
+    const bool compare = depth && !raw;
     unsigned long long key = (unsigned long long)(minF & 0xF) | (unsigned long long)(magF & 0xF) << 4 |
                              (unsigned long long)(mipF & 0xF) << 8 | (unsigned long long)(s[D3DSAMP_ADDRESSU] & 0xF) << 12 |
                              (unsigned long long)(s[D3DSAMP_ADDRESSV] & 0xF) << 16 | (unsigned long long)(s[D3DSAMP_ADDRESSW] & 0xF) << 20 |
-                             (unsigned long long)(aniso & 0xFF) << 24;
+                             (unsigned long long)(aniso & 0xFF) << 24 | (unsigned long long)compare << 32;
     auto it = samplers_.find(key);
     if (it != samplers_.end()) return it->second;
     MTLSamplerDescriptor *d = [MTLSamplerDescriptor new];
@@ -855,6 +856,7 @@ id<MTLSamplerState> MetalDevice::sampler(int st) {
     d.sAddressMode = AddressMode(s[D3DSAMP_ADDRESSU]);
     d.tAddressMode = AddressMode(s[D3DSAMP_ADDRESSV]);
     d.rAddressMode = AddressMode(s[D3DSAMP_ADDRESSW]);
+    if (compare) d.compareFunction = MTLCompareFunctionLessEqual;
     id<MTLSamplerState> ss = [mtl newSamplerStateWithDescriptor:d];
     samplers_[key] = ss;
     return ss;
@@ -878,20 +880,23 @@ id<MTLTexture> MetalDevice::dummyTexture(int dim) {
 }
 
 // ---- Draws --------------------------------------------------------------------------
-// The pixel samplers that read a shadow map (D3D9 hardware shadow-map semantics),
-// filtered bilinearly as the engine's shadow map sampler asks (kb_pcf always is).
-unsigned MetalDevice::depthSamplers() {
-    if (GLCompat()) return 0;
-    unsigned m = 0;
+// The shadow maps (D3D9 hardware shadow-map semantics): the engine binds a depth texture
+// to each sampler a pixel shader names shadowmapSampler* (a depth2d, compared), and
+// nowhere else (the spec), filtered bilinearly as its shadow map sampler asks.
+bool MetalDevice::shadowMapsBound() {
+    bool ok = true;
     for (unsigned s = ps_->s.samplerMask & 0xFFFFu; s; s &= s - 1) {
         const int st = __builtin_ctz(s);
-        if (!texm_[st] || !texm_[st]->isDepth()) continue;
-        if (!(ps_->s.compareMask & (1u << st))) MTL_Bug("shadow map read by a lookup that can't compare (ps %08x s%d)", ps_->s.hash, st);
-        if (samp_[st][D3DSAMP_MINFILTER] != D3DTEXF_LINEAR || samp_[st][D3DSAMP_MAGFILTER] != D3DTEXF_LINEAR)
+        const bool depth = texm_[st] && texm_[st]->isDepth(), shadow = (ps_->s.shadowMask >> st) & 1;
+        if (depth != shadow) {
+            MTL_Bug("ps %08x s%d: %s bound to a %s sampler", ps_->s.hash, st, depth ? "a depth texture" : texm_[st] ? "a texture" : "no texture",
+                    shadow ? "shadow map" : "colour");
+            if (shadow && !GLCompat()) ok = false;   // a depth2d can't take it
+        }
+        if (depth && (samp_[st][D3DSAMP_MINFILTER] != D3DTEXF_LINEAR || samp_[st][D3DSAMP_MAGFILTER] != D3DTEXF_LINEAR))
             MTL_Bug("shadow map filter %u/%u", (unsigned)samp_[st][D3DSAMP_MINFILTER], (unsigned)samp_[st][D3DSAMP_MAGFILTER]);
-        m |= 1u << st;
     }
-    return m;
+    return ok;
 }
 
 // The one place D3D9 state becomes Metal commands.
@@ -899,9 +904,8 @@ bool MetalDevice::prepareDraw(D3DPRIMITIVETYPE type) {
     if (!vs_ || !ps_) { MTL_Bug("draw without a vertex and a pixel shader"); return false; }
     if (!vs_->s.ok() || !ps_->s.ok() || !decl_) return false;   // reported when created
     if (type == D3DPT_TRIANGLEFAN) { MTL_Bug("triangle fan"); return false; }
+    if (!shadowMapsBound()) return false;
     id<MTLRenderCommandEncoder> enc = renderEncoder();
-    const unsigned dm = depthSamplers();
-    if (dm != depthMask_) { texDirty_ |= dm ^ depthMask_; depthMask_ = dm; dirty_ |= D_DRAWVALUES; }
     if (dirty_ & D_PIPELINE) {
         id<MTLRenderPipelineState> p = pipeline();
         if (!p) return false;
@@ -927,8 +931,7 @@ bool MetalDevice::prepareDraw(D3DPRIMITIVETYPE type) {
         [enc setVertexBytes:fixup length:sizeof(fixup) atIndex:MSL_BUF_DRAW];
     }
     if (dirty_ & D_DRAWVALUES) {
-        float vals[4] = { (rs_[D3DRS_ALPHAREF] & 0xFF) / 255.0f, 0, 0, 0 };
-        memcpy(&vals[1], &depthMask_, 4);   // the shader reads the bits (as_type<uint>)
+        const float vals[4] = { (rs_[D3DRS_ALPHAREF] & 0xFF) / 255.0f, 0, 0, 0 };
         [enc setFragmentBytes:vals length:sizeof(vals) atIndex:MSL_BUF_DRAW];
     }
     if (dirty_ & D_SCISSOR) {
@@ -1374,6 +1377,12 @@ HRESULT WINAPI MetalDevice::Present(const RECT *, const RECT *, HWND, const RGND
         commit(true);
     }
     ++g_kbPresentEnter;
+    {
+        static double last;
+        const double now = Now();
+        if (last && now - last > 0.015) MTL_ShaderLog("p %.1f", (now - last) * 1000.0);
+        last = now;
+    }
     stats();
     return D3D_OK;
 }

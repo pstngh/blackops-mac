@@ -154,7 +154,7 @@ private:
                     UINT dstLevel, const RECT &dstRect, bool linear, bool clearOutside);
     void stats();
     void clearRect(const RECT &r, DWORD flags, D3DCOLOR color);
-    unsigned depthSamplers();
+    bool shadowMapsBound();
 
     MetalWindow *win_;
     id<MTLCommandQueue> queue_;
@@ -244,7 +244,6 @@ private:
     id<MTLRenderPipelineState> blitPipes_[8] = {};   // fullscreen pass per target format
     MTLPixelFormat blitFormats_[8] = {};
     std::unordered_map<unsigned long long, id<MTLRenderPipelineState>> clearPipes_;
-    unsigned depthMask_ = 0;                  // pixel samplers reading a shadow map
     id<MTLLibrary> utilLib_;
     id<MTLSamplerState> pointClamp_, linearClamp_;
 

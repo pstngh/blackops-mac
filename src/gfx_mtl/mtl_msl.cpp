@@ -81,7 +81,8 @@ struct Emitter {
     std::vector<int> blocks;      // open control flow: 0 if/rep, 1 loop (two braces)
     std::vector<std::string> aL;  // loop counter names, innermost last
     bool perSample = false;
-    unsigned compareless = 0;     // samplers with a lookup that can't compare
+    bool rawShadows = false;      // shadow maps read as raw depth (the GL layer's way)
+    unsigned shadow = 0;          // pixel samplers the constant table names shadowmapSampler*
     bool relDefs = false;         // a relative read may land on a def'd constant
 
     Emitter(const Shader &s, MSLShader &o) : sh(s), out(o) {}
@@ -221,17 +222,18 @@ struct Emitter {
             e = t + coords(dim, c, false) + ", " + g + "(" + src(in.src[2]) + sel + ", " + src(in.src[3]) + sel + "))";
         }
         if (in.src[1].mod) fail("sampler modifier");
-        // The game reads its shadow maps with texldl and texldp only (the spec), so
-        // those lookups on 2D samplers can compare: the device sets the sampler's bit
-        // when a depth texture is bound, z (texldp: z/w) is the reference depth.
-        const bool project = !strcmp(kind, "tex") && in.ctrl == TEX_PROJECT;
-        if (!sh.pixel || dim != DIM_2D || (!project && strcmp(kind, "lod"))) {
-            compareless |= 1u << s;
-        } else {
-            snprintf(t, sizeof(t), "kb_pcf(t%d, s%d, ", s, s);
-            const std::string z = project ? c + ".z / " + c + ".w" : c + ".z";
-            e = "((as_type<uint>(kbDraw.y) >> " + std::to_string(s) + " & 1u) != 0u ? float4(" + t + coords(dim, c, project) +
-                ", " + z + ")) : " + e + ")";
+        // A shadow map (the device binds a depth texture there, nothing else) is read
+        // with texldl and texldp only (the spec): D3D9's hardware shadow-map lookup
+        // compares z (texldp: z/w) with the stored depths, filtered (the sampler's
+        // compare function, set by the device).
+        if (sh.pixel && (shadow >> s & 1)) {
+            const bool project = !strcmp(kind, "tex") && in.ctrl == TEX_PROJECT;
+            if (dim != DIM_2D || (!project && strcmp(kind, "lod"))) { fail("shadow map lookup that can't compare"); return "float4(0.0)"; }
+            if (!rawShadows) {
+                const std::string z = project ? c + ".z / " + c + ".w" : c + ".z";
+                snprintf(t, sizeof(t), "t%d.sample_compare(s%d, ", s, s);
+                e = std::string("float4(") + t + coords(dim, c, project) + ", " + z + "))";
+            }
         }
         return e + swizStr(in.src[1].swizzle);
     }
@@ -340,9 +342,13 @@ struct Emitter {
 
     bool run(const std::string &pfx) {
         prefix = pfx;
+        if (sh.pixel)
+            for (const auto &n : sh.samplerNames)
+                if (n.first < 16 && !n.second.compare(0, 16, "shadowmapSampler")) shadow |= 1u << n.first;
         const std::string sfx = pfx.empty() ? "" : "_" + pfx;
         out.entry = pfx.empty() ? "kb_main" : "kb_" + pfx;
         for (const Instr &in : sh.code) instr(in);
+        out.shadowMask = shadow & out.samplerMask;
         if (!blocks.empty()) fail("unclosed control flow");
         if (failed) return false;
 
@@ -416,7 +422,8 @@ struct Emitter {
         params.push_back("constant float4 &kbDraw [[buffer(" + std::to_string(MSL_BUF_DRAW) + ")]]");
         for (int s = 0; s < 16; ++s) {
             if (!(out.samplerMask & (1u << s))) continue;
-            const char *ty = out.samplerDim[s] == DIM_2D ? "texture2d<float>"
+            const char *ty = (out.shadowMask >> s & 1) && !rawShadows ? "depth2d<float>"
+                           : out.samplerDim[s] == DIM_2D ? "texture2d<float>"
                            : out.samplerDim[s] == DIM_CUBE ? "texturecube<float>" : "texture3d<float>";
             params.push_back(std::string(ty) + " t" + std::to_string(s) + " [[texture(" + std::to_string(s) + ")]]");
             params.push_back("sampler s" + std::to_string(s) + " [[sampler(" + std::to_string(s) + ")]]");
@@ -472,7 +479,6 @@ struct Emitter {
         }
         o << "  return out;\n}\n";
         out.source = o.str();
-        out.compareMask = out.samplerMask & ~compareless;
         return !failed;
     }
 };
@@ -480,16 +486,9 @@ struct Emitter {
 } // namespace
 
 const char *MSL_Prelude() {
-    // kbAlphaFunc: the pixel shaders' alpha test (MSL_FC_ALPHAFUNC). kb_pcf: a D3D9
-    // hardware shadow map lookup, z compared with the four nearest depths (lit where
-    // z <= depth) and the results filtered bilinearly, as sample_compare does.
+    // kbAlphaFunc: the pixel shaders' alpha test (MSL_FC_ALPHAFUNC).
     return "#include <metal_stdlib>\nusing namespace metal;\n\n"
            "static inline float4 kb_nrm(float4 v) { return v * rsqrt(dot(v.xyz, v.xyz)); }\n"
-           "static inline float kb_pcf(texture2d<float> t, sampler s, float2 uv, float z) {\n"
-           "  const float2 f = fract(uv * float2(t.get_width(), t.get_height()) - 0.5);\n"
-           "  const float4 lit = select(float4(0.0), float4(1.0), float4(z) <= t.gather(s, uv));\n"
-           "  return mix(mix(lit.w, lit.z, f.x), mix(lit.x, lit.y, f.x), f.y);\n"
-           "}\n"
            "constant int kbAlphaFunc [[function_constant(0)]];\n\n";
 }
 
@@ -508,10 +507,11 @@ int MSL_AttribIndex(int usage, int usageIndex) {
     }
 }
 
-bool MSL_Translate(const Shader &sh, MSLShader &out, const std::string &prefix, bool perSample) {
+bool MSL_Translate(const Shader &sh, MSLShader &out, const std::string &prefix, bool perSample, bool rawShadows) {
     out = MSLShader();
     if (sh.major != 3) { out.error = "shader model " + std::to_string(sh.major) + "." + std::to_string(sh.minor); return false; }
     Emitter e(sh, out);
     e.perSample = perSample && sh.pixel;
+    e.rawShadows = rawShadows;
     return e.run(prefix);
 }

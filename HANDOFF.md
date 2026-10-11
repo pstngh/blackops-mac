@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 18)
+## Status (2026-10-10, session 19)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -205,6 +205,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   AA's, and leaning no longer slows the player or ends a sprint. Dvar `kb_aaLean` (default 1,
   archived); verified in play against AA's formulas (Decisions session 18); the game folder's
   copy has it. With it the user's list of 10 changes is done.
+- **Metal leftovers, cold shader cache** (session 19, work in progress: committed, not yet
+  verified on every map, Decisions session 19): with the system shader cache cold, mp_nuked's
+  first frame (7 bots) waited 2.6-3.2 s, now 1.0-1.2 s, and the startup 0.33-0.41 s, now
+  0.18-0.24 s. The draws' function specializations had queued behind Metal's own compile
+  queue; the backend now hands Metal at most cores - 2 shader batches. Shadow maps compare
+  in hardware (`sample_compare` on a `depth2d`, the samplers found by name in the shaders'
+  constant tables): 21% less compile work, same images on mp_nuked. The game folder's copy
+  doesn't have it yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -397,7 +405,9 @@ The user's own gameplay changes (queued 2026-10-09 for after the performance wor
 stages A, B and C (sessions 16-18) cover all 10. **Next: the Metal leftovers in 0** (the user's
 choice at the end of session 18, from the optional work: those, and the items 1-9 below: graphics
 leftovers, the FX freeze seen once, sound leftovers, the match-end crash seen once, the main
-menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wishes).
+menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wishes). Session 19
+did the first part of leftover 1 and left its verification open; the user's answers for the rest
+are in 0's list.
 
 - The list: 1 lean exactly as OpenMoHAA's (speed, angle, everything); 2 no grenades of any
   kind; 3 no death cam; 4 permanent god mode for the player; 5 no music or announcer; 6 no
@@ -456,25 +466,42 @@ menu's PLAY, menus by hand, soaks, rendering fidelity against Windows, later wis
      OK), create a task card with a self-contained brief for the next stage that
      repeats these points, the rules, the harness (bench_views.py, cmp_screens.py,
      sample_report.py, gpu_trace.py) and the user's constraints, then stop.
-   Leftovers (session 15 did the default, the display rate and the spawn stall:
-   Decisions session 15):
-   - Load time with a cold system shader cache, which is common (it keeps about one
-     map's batches): the map's first frame waits 0.6-1.6 s, and the startup ~0.45 s,
-     for batches still compiling. The compiler keeps every core busy (~17 ms of CPU a
-     shader, ~3,300 a map), so only less work helps: ~85% of a map's shaders never draw
-     in a match (~600 pipelines); the cost per shader (the `kb_pcf` branch ~20%,
-     `preserveInvariance`, the optimization level: measure first); or an offline
-     metallib of all 8,864 shaders (`xcrun metal`, the Metal Toolchain download: ask
-     first). MTLBinaryArchive keeps only backend binaries, not the MSL front end that
-     costs here. `KB_MTL_BATCH=<n>` gives a cold cache to measure with.
-   - Warm, one or two frames a match of 25-50 ms where a pipeline first used
-     specializes its function (a backend compile, 6-28 ms). GL's worst: 39 ms.
-   - Without vsync ~35% of the frames rendered are not shown (no free drawable: three,
-     and the presenter thread waits in `nextDrawable`); presented/s stays above the
-     display's 240. Only if the latency matters.
-   - CPU at view A, if a profile at the user's settings asks for it: occlusion-query
-     polling (7%), the model lighting volume's staging buffer and relock copy each
-     frame (~5%). The engine's frame pacing caps lighter views at ~730 fps.
+   Leftovers (session 15 did the default, the display rate and the spawn stall: Decisions
+   session 15; session 19 the compile queue and hardware shadow compares: Decisions session 19).
+   The user's answers at the end of session 19 (to plain questions; their numbers there):
+   - **First: finish verifying session 19's commit** (its Decisions list what's checked and
+     what isn't: every map's overview against HEAD~1 in default mode and against GL in
+     `KB_MTL_GLCOMPAT=1`, the validation layer on other maps, the ASan client, fps pairs), then
+     rerun make_portable.sh.
+   - Load time with a cold system shader cache (common: it keeps about one map's batches):
+     the map's first frame waits 1.0-1.2 s on mp_nuked with bots (was 2.6-3.2 s), the startup
+     ~0.2 s, for batches still compiling (~165 M instructions, 10-17 ms of a P core, a shader;
+     ~3,200 a map, ~12% of them drawn). Two ways on, **the user's choice is pending**: they
+     asked (session 19) for the "by the book" way of both to be explained before deciding:
+     (q1) a list of the shaders each map draws, compiled first (a prototype gave 0.36 s; a
+     fixed list committed to the repo, or one the game learns into the game folder), or (q4)
+     Apple's way, shaders compiled ahead of time into a .metallib (`xcrun metal`/`metallib`,
+     the Metal Toolchain download: ask before downloading; built from the game's own shaders on
+     the user's Mac, e.g. by make_portable.sh), which removes the front-end compile entirely
+     and makes the list unneeded. MTLBinaryArchive keeps only backend binaries, not the MSL
+     front end. `KB_MTL_BATCH=<n>` gives a cold cache to measure with, `KB_MTL_SHADERLOG` the
+     timeline. Also every load waits 0.2-0.4 s for a missing asset, `python_speed_snub_mp`
+     (`Error: Waited ... msec for missing asset`), in every build: not looked at.
+   - **Warm-cache hitches: the user said yes to a cache file** (session 19): a Metal binary
+     archive (MTLBinaryArchive, Apple's documented way: harvest the pipelines a game uses) in
+     the game folder (`players/`, under fs_h? decide and say), saved after a map, so later
+     runs reuse specialized functions (`MTLFunctionDescriptor.binaryArchives`) and pipelines.
+     Today a few frames a match take 25-65 ms when 20-54 pipelines are first used at once:
+     ~1.2 ms of specialization each (a request to the compiler service) plus 3-20 ms of backend
+     compile when the shared system cache has dropped it, which varies run to run. Measure that
+     the archive removes it before keeping it (does a lookup still go to the compiler service?).
+     GL's worst frame: 39 ms.
+   - **Without vsync ~35% of the frames rendered are not shown: the user wants it looked at**
+     (session 19; it is input latency): three drawables, the presenter thread waits in
+     `nextDrawable`; presented/s stays above the display's 240.
+   - **CPU at view A: the user wants it looked at** (session 19): occlusion-query polling (7%),
+     the model lighting volume's staging buffer and relock copy each frame (~5%), profiled at
+     the user's settings first. The engine's frame pacing caps lighter views at ~730 fps.
    - The GL layer's deviations from D3D9 (Decisions session 13) stay for Linux: no
      mipmaps, raw-depth shadow maps, no stencil or separate alpha, dropped worker-thread
      vertex uploads (particle clouds), relative reads that miss `def`'d constants.
@@ -684,6 +711,87 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 19)
+
+Metal leftover 1, the load with a cold system shader cache. Committed as work in progress: the
+checks at the end of this section are not all done.
+
+- **Measuring the compiler**: wall and CPU time of a compile vary 2x on this machine (another
+  session's CS:GO port benchmarked and compiled shaders at the same time; P or E cores), so the
+  measure is the instructions the MTLCompilerService process retired (`proc_pid_rusage`,
+  `ri_instructions`; the instance serving a process is the one that appears at its first
+  compile), stable to ~2%. The tool and the dumped MSL (`KB_DUMP_MSL`) were in the session's
+  scratchpad, gone with it. A shader costs ~165 M instructions in a batch of 64 (10-17 ms of a
+  P core); a library with functions has a fixed ~2.1 G (the stdlib templates it instantiates):
+  25% of the cost at 64 a batch, 8% at 256 (an empty library: 38 ms). 76% of the time is LLVM's
+  optimization (InstCombine 22%), 24% the front end.
+- **Tried and dropped**: `preserveInvariance` off and `MTLLibraryOptimizationLevelSize`: no
+  change. `#pragma clang optimize off` in the prelude: the front end -27%, but the backend
+  compile at pipeline creation (synchronous, at the draw) got much slower: the first frame
+  1.6-2.1 s and 5 s of pipeline builds in the match with 1.6-1.9 s frames. Batches of
+  52/100/128 instead of 64: the first frame 1.06/1.01/1.19 s, the startup 0.18/0.54/0.46 s:
+  64 stays. No two shaders translate to the same MSL (3,176 bodies of 3,181).
+- **The queue** (the main cost): Metal compiles ~10 libraries at once (two MTLCompilerService
+  processes of ~5 threads on the M4) and queues the rest first in, first out, and the
+  synchronous requests of a draw wait behind them: the function specialization
+  (`newFunctionWithName:constantValues:`, the alpha test) and the pipeline build. With 56
+  batches pending one specialization took 1.36 s and one pipeline 2.96 s; with 8 or fewer,
+  1-15 ms. A map's ~50 batches are all submitted during the load, so its first frame spent
+  2.3-2.6 s specializing (4-9 s while the other app compiled too). MetalShaderCompiler now
+  gives Metal cores - 2 batches at a time (`KB_MTL_COMPILES=<n>`) and keeps the rest in its
+  own queue; a batch a draw needs goes ahead of the queue. A function with function
+  constants can't skip specialization (Metal refuses the unspecialized function even when
+  every constant is optional).
+- **Shadow maps by name**: the `kb_pcf` branch (session 13) cost 16% of the compile. The
+  game's shaders keep their constant tables (the CTAB comment); sm3::Parse reads the sampler
+  names. The shadow maps are `shadowmapSamplerSun` and `shadowmapSamplerSpot` (registers s0-s3,
+  per shader), and 12,576 of the 12,582 compare branches were on them. Such a sampler is now a
+  `depth2d` read with `sample_compare` (texldp: z/w, texldl: z), and the device's sampler for
+  a depth texture compares LessEqual (lit where z <= depth, as kb_pcf; session 13 matched the
+  two to 0.0001): -21% of the compile, one cheaper lookup on the GPU. On mp_nuked (7 bots, all
+  views, shadows on, and with `sm_enable 0`) the engine bound depth textures to exactly those
+  samplers; a mismatch is a `[mtl] BUG` line and the draw is skipped (a depth2d can't take a
+  colour texture). `KB_MTL_GLCOMPAT=1` reads raw depth through a texture2d as before. The
+  per-draw shadow bit (buffer 21's y) is gone.
+- **Numbers** (cold front end, the backend's cache warm, mp_nuked with 7 bots, nothing else
+  compiling; bench_views.py --views a): HEAD's first frame 2.62 and 3.16 s (specializing 2.57
+  and 2.30), the startup 0.41/0.33 s; now 1.05 and 1.20 s (waiting for batches 0.70/0.84,
+  specializing 0.29/0.30), the startup 0.24/0.20 s. The 1.06 s frame at the end of every run is
+  the `quit`.
+- **What a map draws**: mp_nuked creates 3,181 shaders (220 vertex, 2,961 pixel); a 2-minute
+  scripted match draws 462 (372 pixel), bench_views.py's views 368. The technique types don't
+  predict it: only 183 pixel shaders belong to types that never drew (the deferred `light spot`
+  and `light omni`, NVIDIA-only `nvintz`, debug); the rest spread over the lit variants, picked
+  per surface by its lights.
+- **Prototypes, not committed**: compiling the shaders on a list first (417 from two scripted
+  matches; a second queue Metal gets first) made the cold first frame 0.36 s, with 6 of the
+  330 drawn shaders not on the list. Compiling the unlisted ones only when drawn: each miss
+  pulled in a 64-shader batch, frames up to 2.4 s: no.
+- **Warm cache**: the first frame built 173 pipelines in 26 ms in one run and 222 ms in the
+  next (specializing ~1.2 ms each when the shared system cache has dropped them); in a match a
+  few frames take 25-65 ms when 20-54 pipelines are first used at once (specialization plus
+  3-20 ms backend compiles).
+- **The user's answers** (to plain questions at the end of the session): a cache file in the
+  game folder for the warm hitches, yes (a binary archive); leftovers 3 and 4, both; for the
+  load (a shader list) and the offline metallib (the toolchain download) they asked for the
+  "by the book" way of each to be explained first: Apple's way is the offline .metallib (and a
+  binary archive for pipelines); the list is a workaround that only reorders runtime compiles.
+- **Diagnostic**: `KB_MTL_SHADERLOG=<file>` (CLAUDE.md) logs each shader's creation and batch,
+  batch submits and completions, a draw's waits, first uses and frames over 15 ms.
+- **Checked**: the validation layer (API and shader) on mp_nuked, 7 bots, every view, cold:
+  no message, no BUG (twice, the second on the final code). Screenshots of mp_nuked's views
+  against HEAD in default mode: mean |d| 0.05-0.20 (HEAD against itself 0.26-0.84). fps level
+  within this machine's noise (7 bots, alternating, last pair HEAD 473/597/643/681/563/563/623/
+  402, new 482/597/645/654/599/618/631/416). check_file.py natively for the changed files,
+  `--i386` for sm3.cpp and mtl_msl.cpp (the .mm files are macOS-only); audit_splitlocals.py 0.
+- **Not checked yet** (next session): every map's overview against HEAD~1 (default) and
+  against GL (compat; GL's own noise as the tolerance), the validation layer on a few other
+  maps, the ASan client (`MTL_DEBUG_LAYER=1`, bots, the scripted player, map rotations), fps
+  pairs in the normal display state; then make_portable.sh. A run of all 26 maps was started
+  and stopped: the user was at the computer, and the fullscreen test window takes the keyboard
+  (one run ended with "Host ended game": an Esc and End Game). Run the long checks when the
+  user is away, or ask first.
 
 ## Decisions (session 18)
 
@@ -1023,7 +1131,8 @@ Test runs that need the player to die pass `+set kb_godMode 0`.
   value), hardware shadow maps (below), relative constant reads that land on `def`'d
   constants (four vertex shaders; the GL layer reads the uniform array there),
   `[[position, invariant]]` with `preserveInvariance` (the depth prepass's EQUAL test).
-- **Shadow maps compare in the shader**: D3D9 drivers return a filtered comparison
+- **Shadow maps compare in the shader** (session 19: by the sampler, `sample_compare`; Decisions
+  session 19): D3D9 drivers return a filtered comparison
   when a depth-format texture is sampled (lit where the coordinate's z <= the stored
   depth, bilinear over the 4 texels). The game reads its shadow maps only with
   `texldl` and `texldp` (the spec: 398 and 202 sampler bindings). So those lookups on

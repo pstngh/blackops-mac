@@ -63,6 +63,24 @@ size_t TokenCount(const unsigned *t) {
     return n + 1;
 }
 
+// The constant table fxc leaves in a comment (D3DXSHADER_CONSTANTTABLE, offsets from
+// its start): the samplers' names, which say what a sampler reads (the shadow maps).
+static void readSamplerNames(const unsigned *table, size_t bytes, Shader &out) {
+    const unsigned char *base = (const unsigned char *)table;
+    auto word = [&](size_t off) { unsigned v; memcpy(&v, base + off, 4); return v; };
+    if (bytes < 28) return;
+    const unsigned count = word(12), info = word(16);
+    for (unsigned i = 0; i < count; ++i) {
+        const size_t c = (size_t)info + i * 20;
+        if (c + 20 > bytes) return;
+        const unsigned name = word(c), regs = word(c + 4);
+        if ((regs & 0xFFFF) != 3 || name >= bytes) continue;   // D3DXRS_SAMPLER
+        const unsigned char *end = (const unsigned char *)memchr(base + name, 0, bytes - name);
+        if (!end) continue;
+        out.samplerNames[(int)(regs >> 16)] = std::string((const char *)base + name, (const char *)end);
+    }
+}
+
 bool Parse(const unsigned *tok, Shader &out, std::string &error) {
     out = Shader();
     const unsigned ver = *tok++;
@@ -76,7 +94,12 @@ bool Parse(const unsigned *tok, Shader &out, std::string &error) {
         const unsigned t = *tok++;
         const int op = (int)(t & 0xFFFF);
         if (op == OP_END) break;
-        if (op == OP_COMMENT) { tok += (t >> 16) & 0x7FFF; continue; }
+        if (op == OP_COMMENT) {
+            const unsigned words = (t >> 16) & 0x7FFF;
+            if (words >= 8 && tok[0] == 0x42415443u) readSamplerNames(tok + 1, (words - 1) * 4, out);   // 'CTAB'
+            tok += words;
+            continue;
+        }
         const int len = (int)((t >> 24) & 0xF);
         if (op == OP_DCL) {
             Decl d;

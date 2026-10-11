@@ -158,6 +158,9 @@ composited) and the pipelines built at first draw with their time (stalls), spli
 waiting for shader batches still compiling, function lookups and the longest build. The
 system's shader cache keeps about one map's batches; `KB_MTL_BATCH=<n>` (shaders per
 batch, default 64; a size not used before) gives a cold one to measure with.
+`KB_MTL_SHADERLOG=<file>` logs each shader's creation and batch, batch submits and
+completions, a draw's waits, first uses and frames over 15 ms (timestamps);
+`KB_MTL_COMPILES=<n>` sets the batches Metal compiles at once (default cores - 2).
 `KB_DUMP_MSL=<dir>` writes each translated shader. On the GL
 backend (`KB_RENDERER=gl`), `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
 lock flag and shader pairing the game uses (the list Metal implements), and

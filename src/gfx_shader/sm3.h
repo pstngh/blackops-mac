@@ -88,6 +88,7 @@ struct Shader {
     std::map<int, std::array<int, 4>>   idefs;  // defi i#
     std::map<int, bool>                 bdefs;  // defb b#
     std::vector<Instr> code;                    // everything but dcl, def and comments
+    std::map<int, std::string> samplerNames;    // s# -> its name in the constant table (CTAB comment)
 
     // The sampler dcl for s<reg>, or nullptr.
     const Decl *sampler(int reg) const;

@@ -25,6 +25,7 @@
 #undef BOOL
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <thread>
 #include <memory>
 #include <mutex>
@@ -41,6 +42,10 @@ struct MSLShader;
 
 // "[mtl] BUG: <message>" the first time a message is seen (KB_MTL_STRICT=1: abort).
 void MTL_Bug(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+// A line in the KB_MTL_SHADERLOG file, if set (mtl_resources.mm).
+void MTL_ShaderLog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+// KB_MTL_GLCOMPAT=1: draw as the GL layer does, for screenshot comparisons (mtl_device.mm).
+bool GLCompat();
 
 template <class IFACE>
 class MetalObject : public IFACE {
@@ -337,6 +342,7 @@ private:
 struct MetalShaderBatch {
     std::string source;
     int count = 0;
+    int seq = 0;          // its number (KB_MTL_SHADERLOG)
     bool submitted = false, done = false;
     id<MTLLibrary> lib;
     std::mutex mu;
@@ -356,12 +362,22 @@ public:
     void submitIdle();
     double waited = 0;   // seconds library() waited for batches still compiling (render thread; KB_FPS)
 private:
+    void enqueue(const std::shared_ptr<MetalShaderBatch> &b);
     void submit(const std::shared_ptr<MetalShaderBatch> &b);
+    void finished();
     id<MTLDevice> dev_;
     int size_;           // shaders a batch: 64; KB_MTL_BATCH=<n> for tests (new batches: a cold cache)
+    // Metal compiles as many libraries at once as there are cores and queues the rest,
+    // first in, first out, with the function specializations and pipeline builds of the
+    // draws behind them (a map's first frame waited seconds): it gets cores - 2
+    // batches at a time (KB_MTL_COMPILES=<n>), the rest wait here.
+    int cap_;
+    int inflight_ = 0;
+    std::deque<std::shared_ptr<MetalShaderBatch>> queue_;
     std::mutex mu_;
     std::shared_ptr<MetalShaderBatch> open_;
     double lastAdd_ = 0;
+    int batches_ = 0;
     std::unordered_map<std::string, std::shared_ptr<MetalShaderBatch>> entries_;
 };
 
@@ -376,7 +392,7 @@ public:
     enum { VARIANT_PER_SAMPLE = 1 };
     id<MTLFunction> function(int alphaFunc, unsigned variant);
     unsigned hash = 0, uid = 0;
-    unsigned attribMask = 0, samplerMask = 0, compareMask = 0;
+    unsigned attribMask = 0, samplerMask = 0, shadowMask = 0;
     unsigned char samplerDim[16] = {};
     int constCount = 0;
     unsigned long long varyingsOut = 0, varyingsIn = 0;
