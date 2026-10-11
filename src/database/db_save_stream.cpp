@@ -76,7 +76,16 @@ static std::vector<std::string> s_strings;
 static std::map<std::string, unsigned int> s_stringIndex;
 static bool s_stringsFixed;
 
+struct SaveNameRef
+{
+    int root;
+    int type;
+    std::string name;
+};
+
 static std::set<std::pair<int, std::string>> s_named;
+static std::vector<SaveNameRef> s_nameRefs;
+static int s_root;
 static std::set<std::string> s_seen;
 static DBSaveResolveFn s_resolve;
 
@@ -110,6 +119,8 @@ static void DB_SaveResetPass()
     s_written.clear();
     s_assetsInProgress.clear();
     s_named.clear();
+    s_nameRefs.clear();
+    s_root = -1;
     s_seen.clear();
     s_failed = false;
 }
@@ -388,8 +399,16 @@ void Save_ScriptStringCustom(unsigned __int16 *var)
 // Tool mode keeps effect names (Load_FxEffectDefFromName looks them up at load).
 void DB_SaveFxEffectDefFromName(Ptr32<const char> *name)
 {
+    SaveNameRef ref;
+
     if (*name)
+    {
         s_named.insert(std::make_pair((int)ASSET_TYPE_FX, std::string((const char *)*name)));
+        ref.root = s_root;
+        ref.type = ASSET_TYPE_FX;
+        ref.name = (const char *)*name;
+        s_nameRefs.push_back(ref);
+    }
 }
 
 // Load_XAssetListCustom and Load_XAssetArrayCustom (db_file_load.cpp).
@@ -430,6 +449,7 @@ static void DB_SaveXAssetList(XAssetList *list, XAsset *roots, int rootCount)
         for (assetIndex = 0; assetIndex < rootCount && !s_failed; ++assetIndex)
         {
             varXAsset = &roots[assetIndex];
+            s_root = assetIndex;
             Save_XAsset(0);
         }
     }
@@ -522,6 +542,18 @@ const char *DB_SaveNamedAsset(int index, XAssetType *type)
     std::advance(it, index);
     *type = (XAssetType)it->first;
     return it->second.c_str();
+}
+
+int DB_SaveNameRefCount()
+{
+    return (int)s_nameRefs.size();
+}
+
+const char *DB_SaveNameRef(int index, XAssetType *type, int *root)
+{
+    *type = (XAssetType)s_nameRefs[index].type;
+    *root = s_nameRefs[index].root;
+    return s_nameRefs[index].name.c_str();
 }
 
 void DB_SaveStringsSeen(void (*fn)(const char *s, void *context), void *context)

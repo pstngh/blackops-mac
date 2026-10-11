@@ -76,7 +76,9 @@
 #define POOLSIZE_WEAPONVARIANT     0
 #define POOLSIZE_SNDDRIVERGLOBALS  1
 //#define POOLSIZE_FX                450
-#define POOLSIZE_FX                500
+// 500 in the original; a map with multiplayer's effects takes up to ~460 on the client
+// and the DLC weapons' zone (kb_dlc_weapons, HANDOFF Decisions session 26) 26 more.
+#define POOLSIZE_FX                1024
 #define POOLSIZE_IMPACTFX          4
 #define POOLSIZE_AITYPE            0
 #define POOLSIZE_MPTYPE            0

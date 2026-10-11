@@ -3,6 +3,7 @@
 #include "db_assetnames.h"
 
 #include <bgame/bg_weapons.h>
+#include <clientscript/cscr_stringlist.h>
 #include <gfx_d3d/r_material.h>
 #include <qcommon/cmd.h>
 #include <qcommon/common.h>
@@ -10,7 +11,9 @@
 #include <sound/snd_bank.h>
 #include <sound/snd_utils.h>
 #include <universal/com_memory.h>
+#include <universal/com_stringtable.h>
 #include <universal/q_shared.h>
+#include <zlib/zlib.h>
 
 #include <algorithm>
 #include <map>
@@ -67,6 +70,10 @@ static std::set<std::string> s_wantedAliases;
 static std::set<std::string> s_unresolved;
 static std::set<std::string> s_wantedLocalize;
 static std::set<std::string> s_multiplayerAliases;
+static std::map<std::string, std::string> s_weaponRenames;
+static std::map<std::string, std::string> s_weaponParents;
+
+extern const char *g_defaultAssetName[43];
 
 static void *DB_SaveTool_Alloc(int size)
 {
@@ -98,6 +105,8 @@ static void DB_SaveTool_FreeAll()
     s_unresolved.clear();
     s_multiplayerAliases.clear();
     s_wantedLocalize.clear();
+    s_weaponRenames.clear();
+    s_weaponParents.clear();
 }
 
 static bool DB_SaveTool_IsWorldType(XAssetType type)
@@ -295,8 +304,9 @@ static const void *DB_SaveTool_Resolve(XAssetType type, const void *header)
     name = DB_SaveTool_AssetName(type, header);
     if (*name == ',')
     {
+        // One stub per name, whichever source zone it came from.
         if (DB_SaveTool_MultiplayerHas(type, name + 1))
-            return header;
+            return DB_SaveTool_MakeStub(type, name + 1);
         real = DB_SaveTool_Find(type, name + 1);
         if (!real)
         {
@@ -307,6 +317,11 @@ static const void *DB_SaveTool_Resolve(XAssetType type, const void *header)
     }
     if (DB_SaveTool_MultiplayerHas(type, name))
         return DB_SaveTool_MakeStub(type, name);
+    // A name in several source zones (the maps share assets, merged zones
+    // share what their weapons share): the first zone's, written once.
+    real = DB_SaveTool_Find(type, name);
+    if (real)
+        return (const void *)real->header.data;
     return header;
 }
 
@@ -361,6 +376,134 @@ static void DB_SaveTool_AddWeaponRoots(WeaponVariantDef *weapon, XAsset *roots, 
     }
 }
 
+// The other weapons a weapon names: its alt weapon (the masterkey, the Wave
+// Gun of the Zap Guns), the left hand of a dual wield, the grenade a
+// projectile spawns (the Scavenger's bolt).
+static Ptr32<const char> *DB_SaveTool_WeaponLink(WeaponVariantDef *weapon, int link)
+{
+    switch (link)
+    {
+    case 0:
+        return &weapon->szAltWeaponName;
+    case 1:
+        return &weapon->weapDef->szDualWieldWeaponName;
+    default:
+        return &weapon->weapDef->szSpawnedGrenadeWeaponName;
+    }
+}
+
+// Linked weapons the sources hold come along (multiplayer's stay names).
+static bool DB_SaveTool_AddLinkedWeapons(XAsset *roots, int *rootCount)
+{
+    DBSaveToolAsset *asset;
+    const char *name;
+    int i;
+    int link;
+
+    for (i = 0; i < *rootCount; ++i)
+    {
+        if (roots[i].type != ASSET_TYPE_WEAPON)
+            continue;
+        for (link = 0; link < 3; ++link)
+        {
+            name = *DB_SaveTool_WeaponLink(roots[i].header.weapon, link);
+            if (!name || !*name || DB_SaveTool_MultiplayerHas(ASSET_TYPE_WEAPON, name))
+                continue;
+            asset = DB_SaveTool_Find(ASSET_TYPE_WEAPON, name);
+            if (!asset)
+            {
+                Com_PrintError(16, "writezone: weapon '%s' names weapon '%s', which is in no source zone\n",
+                               (const char *)roots[i].header.weapon->szInternalName, name);
+                return false;
+            }
+            if (DB_SaveTool_AddRoot(ASSET_TYPE_WEAPON, asset->header, roots, rootCount, DB_SAVE_MAX_ROOTS))
+                DB_SaveTool_AddWeaponRoots(asset->header.weapon, roots, rootCount);
+        }
+    }
+    return true;
+}
+
+static char *DB_SaveTool_CopyString(const char *s)
+{
+    char *copy;
+
+    copy = (char *)DB_SaveTool_Alloc((int)strlen(s) + 1);
+    strcpy(copy, s);
+    return copy;
+}
+
+// weapon <old>=<new>[:<parent>]: every weapon of the zone gets its new name,
+// the names it holds of other weapons follow, and parentWeaponName becomes
+// the statsTable reference the client looks its item up by
+// (CG_SetBaseWeaponForStats, a Com_Error if the table lacks it): <parent>
+// (none for "<old>=<new>:"), or the new name without "_mp".
+static bool DB_SaveTool_RenameWeapons(XAsset *roots, int rootCount)
+{
+    std::map<std::string, std::string>::const_iterator it;
+    std::map<std::string, std::string>::const_iterator parentIt;
+    std::set<std::string> newNames;
+    std::set<const WeaponDef *> renamedDefs;
+    std::string parent;
+    WeaponVariantDef *weapon;
+    Ptr32<const char> *field;
+    const char *name;
+    bool hasParent;
+    int i;
+    int link;
+
+    if (s_weaponRenames.empty())
+        return true;
+    for (it = s_weaponRenames.begin(); it != s_weaponRenames.end(); ++it)
+        newNames.insert(DB_SaveTool_Key(it->second.c_str()));
+    for (i = 0; i < rootCount; ++i)
+    {
+        if (roots[i].type != ASSET_TYPE_WEAPON)
+            continue;
+        weapon = roots[i].header.weapon;
+        it = s_weaponRenames.find(DB_SaveTool_Key(weapon->szInternalName));
+        if (it == s_weaponRenames.end())
+        {
+            Com_PrintError(16, "writezone: weapon '%s' is in the zone but has no new name\n",
+                           (const char *)weapon->szInternalName);
+            return false;
+        }
+        parentIt = s_weaponParents.find(it->first);
+        hasParent = parentIt != s_weaponParents.end();
+        parent = hasParent ? parentIt->second : std::string();
+        weapon->szInternalName = DB_SaveTool_CopyString(it->second.c_str());
+        // Variants can share a WeaponDef: its names change once.
+        if (renamedDefs.count(weapon->weapDef))
+            continue;
+        renamedDefs.insert(weapon->weapDef);
+        for (link = 0; link < 3; ++link)
+        {
+            field = DB_SaveTool_WeaponLink(weapon, link);
+            name = *field;
+            if (!name || !*name || newNames.count(DB_SaveTool_Key(name))
+                || DB_SaveTool_MultiplayerHas(ASSET_TYPE_WEAPON, name))
+            {
+                continue;
+            }
+            it = s_weaponRenames.find(DB_SaveTool_Key(name));
+            if (it == s_weaponRenames.end())
+            {
+                Com_PrintError(16, "writezone: weapon '%s' names weapon '%s', which has no new name\n",
+                               (const char *)weapon->szInternalName, name);
+                return false;
+            }
+            *field = DB_SaveTool_CopyString(it->second.c_str());
+        }
+        if (!hasParent)
+        {
+            parent = weapon->szInternalName;
+            if (parent.size() > 3 && !I_stricmp(parent.c_str() + parent.size() - 3, "_mp"))
+                parent.resize(parent.size() - 3);
+        }
+        weapon->weapDef->parentWeaponName = DB_SaveTool_CopyString(parent.c_str());
+    }
+    return true;
+}
+
 static bool DB_SaveTool_RootBefore(const XAsset &a, const XAsset &b)
 {
     if (a.type != b.type)
@@ -400,6 +543,12 @@ static void DB_SaveTool_WantString(const char *s, void *context)
         && !DB_SaveTool_MultiplayerHas(ASSET_TYPE_LOCALIZE_ENTRY, s))
     {
         s_wantedLocalize.insert(key);
+    }
+    // An animation's sound notetrack "sndnt#<alias>" (CG_PlayClientSoundNoteTracks).
+    if (!I_strnicmp(s, "sndnt#", 6))
+    {
+        s += 6;
+        key = DB_SaveTool_Key(s);
     }
     if (!s_toolAliases.count(key))
         return;
@@ -461,6 +610,69 @@ static SndBank *DB_SaveTool_BuildBank(const std::set<std::string> &aliases)
     return bank;
 }
 
+static void DB_SaveTool_OrderRoot(int root, const std::set<std::pair<int, int>> &deps, const std::vector<XAsset> &sorted,
+                                  std::vector<bool> &visited, std::vector<XAsset> &order)
+{
+    std::set<std::pair<int, int>>::const_iterator it;
+
+    if (visited[root])
+        return;
+    visited[root] = true;
+    for (it = deps.lower_bound(std::make_pair(root, -1)); it != deps.end() && it->first == root; ++it)
+        DB_SaveTool_OrderRoot(it->second, deps, sorted, visited, order);
+    order.push_back(sorted[root]);
+}
+
+// Each root after the roots it names (an effect's emitted, impact and death
+// effects): the loader looks a name up as it loads the asset holding it, and a
+// name not loaded yet gets a default that the real asset later overwrites
+// ("Redundant asset"). The order depends only on the roots and their names
+// (sorted, then each one's named roots first), so it settles, cycles or not.
+// Returns true if the order changed.
+static bool DB_SaveTool_OrderRoots(XAsset *roots, int rootCount)
+{
+    std::map<std::pair<int, std::string>, int> sortedIndex;
+    std::map<std::pair<int, std::string>, int>::const_iterator found;
+    std::set<std::pair<int, int>> deps;
+    std::vector<XAsset> sorted;
+    std::vector<bool> visited;
+    std::vector<XAsset> order;
+    XAssetType type;
+    const char *name;
+    int ref;
+    int root;
+    int i;
+    bool changed;
+
+    sorted.assign(roots, roots + rootCount);
+    std::sort(sorted.begin(), sorted.end(), DB_SaveTool_RootBefore);
+    for (i = 0; i < rootCount; ++i)
+        sortedIndex[std::make_pair((int)sorted[i].type, DB_SaveTool_Key(DB_GetXAssetName(&sorted[i])))] = i;
+    for (ref = 0; ref < DB_SaveNameRefCount(); ++ref)
+    {
+        name = DB_SaveNameRef(ref, &type, &root);
+        if (root < 0 || root >= rootCount)
+            continue;
+        found = sortedIndex.find(std::make_pair((int)type, DB_SaveTool_Key(name)));
+        if (found == sortedIndex.end())
+            continue;
+        i = sortedIndex[std::make_pair((int)roots[root].type, DB_SaveTool_Key(DB_GetXAssetName(&roots[root])))];
+        if (found->second != i)
+            deps.insert(std::make_pair(i, found->second));
+    }
+    visited.assign(rootCount, false);
+    for (i = 0; i < rootCount; ++i)
+        DB_SaveTool_OrderRoot(i, deps, sorted, visited, order);
+    changed = false;
+    for (i = 0; i < rootCount; ++i)
+    {
+        if (roots[i].header.data != order[i].header.data)
+            changed = true;
+        roots[i] = order[i];
+    }
+    return changed;
+}
+
 static bool DB_SaveTool_DryRun(XAsset *roots, int *rootCount, int maxRoots)
 {
     XAssetType type;
@@ -500,6 +712,10 @@ static bool DB_SaveTool_DryRun(XAsset *roots, int *rootCount, int maxRoots)
             DB_SaveTool_AddRoot(ASSET_TYPE_SOUND, XAssetHeader(s_bank), roots, rootCount, maxRoots);
         changed = true;
     }
+    // Roots added in this pass have no name references recorded yet: order
+    // once the set is settled.
+    if (!changed && DB_SaveTool_OrderRoots(roots, *rootCount))
+        changed = true;
     return changed;
 }
 
@@ -605,6 +821,17 @@ static void DB_SaveTool_PrintZone(const char *path, const DBSaveStats *stats, in
     }
     for (std::set<std::string>::const_iterator it = s_multiplayerAliases.begin(); it != s_multiplayerAliases.end(); ++it)
         Com_Printf(16, "writezone: sound alias %s: multiplayer's\n", it->c_str());
+    // A type without a default asset can't be overridden: a map zone loaded
+    // after this one holding the name stops with "Attempting to override asset".
+    for (i = 0; i < writtenCount; ++i)
+    {
+        if (!*g_defaultAssetName[written[i].type] && written[i].type != ASSET_TYPE_SOUND
+            && *DB_GetXAssetName(&written[i]) != ',')
+        {
+            Com_PrintWarning(16, "writezone: %s %s has no default asset: a zone holding the name after this one fails\n",
+                             g_assetNames[written[i].type], DB_GetXAssetName(&written[i]));
+        }
+    }
     for (std::set<std::string>::const_iterator it = s_unresolved.begin(); it != s_unresolved.end(); ++it)
         Com_PrintWarning(16, "writezone: stub %s is in no source zone and not in multiplayer (a default asset)\n",
                          it->c_str());
@@ -614,14 +841,20 @@ static void DB_SaveTool_PrintZone(const char *path, const DBSaveStats *stats, in
 // Loads the source zones (up to 3, with their localized zones) in tool mode,
 // writes the named assets with everything they reach into a new zone file,
 // and unloads them. Types are the asset type names (weapon, xmodel, xanim,
-// material, fx, ...); a weapon brings its animations. "all" in place of the
-// assets writes every asset of the source zones (the writer's coverage test).
+// material, fx, ...); a weapon brings its animations and the weapons it names
+// (alt, dual wield, spawned grenade). A weapon given as <old>=<new>[:<parent>]
+// is renamed (DB_SaveTool_RenameWeapons); then every weapon of the zone needs
+// a new name. "all" in place of the assets writes every asset of the source
+// zones (the writer's coverage test, and merging written zones).
 static void DB_SaveTool_WriteZone_f()
 {
     DBSaveStats stats;
     DBSaveToolAsset *asset;
     char zones[256];
     char path[256];
+    char name[256];
+    char *newName;
+    char *parent;
     const char *base;
     int rootCount;
     int argIndex;
@@ -672,10 +905,22 @@ static void DB_SaveTool_WriteZone_f()
             ok = false;
             break;
         }
-        asset = DB_SaveTool_Find((XAssetType)type, Cmd_Argv(argIndex + 1));
+        I_strncpyz(name, Cmd_Argv(argIndex + 1), sizeof(name));
+        if (type == ASSET_TYPE_WEAPON && strchr(name, '='))
+        {
+            newName = strchr(name, '=');
+            *newName++ = 0;
+            parent = strchr(newName, ':');
+            if (parent)
+                *parent++ = 0;
+            s_weaponRenames[DB_SaveTool_Key(name)] = newName;
+            if (parent)
+                s_weaponParents[DB_SaveTool_Key(name)] = parent;
+        }
+        asset = DB_SaveTool_Find((XAssetType)type, name);
         if (!asset)
         {
-            Com_PrintError(16, "writezone: no %s '%s' in '%s'\n", g_assetNames[type], Cmd_Argv(argIndex + 1), zones);
+            Com_PrintError(16, "writezone: no %s '%s' in '%s'\n", g_assetNames[type], name, zones);
             ok = false;
             break;
         }
@@ -684,6 +929,8 @@ static void DB_SaveTool_WriteZone_f()
             DB_SaveTool_AddWeaponRoots(asset->header.weapon, s_roots, &rootCount);
     }
 
+    if (ok)
+        ok = DB_SaveTool_AddLinkedWeapons(s_roots, &rootCount) && DB_SaveTool_RenameWeapons(s_roots, rootCount);
     if (ok)
     {
         memset(&stats, 0, sizeof(stats));
@@ -696,9 +943,215 @@ static void DB_SaveTool_WriteZone_f()
     DB_SaveTool_FreeAll();
 }
 
+static const char *DB_SaveTool_HeaderName(XAssetType type, const void *header)
+{
+    return header ? DB_SaveTool_AssetName(type, header) : "-";
+}
+
+static const char *DB_SaveTool_String(const char *s)
+{
+    return s && *s ? s : "-";
+}
+
+static void DB_SaveTool_PrintWeapon(const WeaponVariantDef *weapon)
+{
+    const WeaponDef *def;
+    char notes[1024];
+    int i;
+
+    def = weapon->weapDef;
+    Com_Printf(0, "listzone: weapon %s \"%s\" variants %i def %s type %i class %i inventory %i clip %i max %i alt %s dual %s parent %s\n",
+               (const char *)weapon->szInternalName, DB_SaveTool_String(weapon->szDisplayName), weapon->iVariantCount,
+               DB_SaveTool_String(def->szOverlayName), def->weapType, def->weapClass, def->inventoryType,
+               weapon->iClipSize, def->iMaxAmmo, DB_SaveTool_String(weapon->szAltWeaponName),
+               DB_SaveTool_String(def->szDualWieldWeaponName), DB_SaveTool_String(def->parentWeaponName));
+    Com_Printf(0, "listzone:   ammo %s clip %s sharedcap %s spawned %s gun %s world %s projectile %s\n",
+               DB_SaveTool_String(weapon->szAmmoName), DB_SaveTool_String(weapon->szClipName),
+               DB_SaveTool_String(def->szSharedAmmoCapName), DB_SaveTool_String(def->szSpawnedGrenadeWeaponName),
+               DB_SaveTool_HeaderName(ASSET_TYPE_XMODEL, def->gunXModel ? (const void *)def->gunXModel[0] : NULL),
+               DB_SaveTool_HeaderName(ASSET_TYPE_XMODEL, def->worldModel ? (const void *)def->worldModel[0] : NULL),
+               DB_SaveTool_HeaderName(ASSET_TYPE_XMODEL, (const void *)def->projectileModel));
+    Com_Printf(0, "listzone:   hud %s kill %s dpad %s fire %s %s reload %s explosion %s trail %s\n",
+               DB_SaveTool_HeaderName(ASSET_TYPE_MATERIAL, (const void *)def->hudIcon),
+               DB_SaveTool_HeaderName(ASSET_TYPE_MATERIAL, (const void *)def->killIcon),
+               DB_SaveTool_HeaderName(ASSET_TYPE_MATERIAL, (const void *)weapon->dpadIcon),
+               DB_SaveTool_String(def->fireSound), DB_SaveTool_String(def->fireSoundPlayer),
+               DB_SaveTool_String(def->reloadSoundPlayer),
+               DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->projExplosionEffect),
+               DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->projTrailEffect));
+    // The notetrack sound map: script strings, of the loaded zone.
+    notes[0] = 0;
+    for (i = 0; def->notetrackSoundMapKeys && i < 20 && def->notetrackSoundMapKeys[i]; ++i)
+    {
+        I_strncat(notes, sizeof(notes), va(" %s=%s", SL_ConvertToString(def->notetrackSoundMapKeys[i], SCRIPTINSTANCE_SERVER),
+                                         def->notetrackSoundMapValues[i]
+                                             ? SL_ConvertToString(def->notetrackSoundMapValues[i], SCRIPTINSTANCE_SERVER)
+                                             : "-"));
+    }
+    if (notes[0])
+        Com_Printf(0, "listzone:   notes%s\n", notes);
+}
+
+static void DB_SaveTool_PrintStringTable(const StringTable *table)
+{
+    char line[4096];
+    int row;
+    int column;
+
+    for (row = 0; row < table->rowCount; ++row)
+    {
+        line[0] = 0;
+        for (column = 0; column < table->columnCount; ++column)
+        {
+            if (column)
+                I_strncat(line, sizeof(line), ",");
+            I_strncat(line, sizeof(line), table->values[row * table->columnCount + column].string);
+        }
+        Com_Printf(0, "listzone: %s %i: %s\n", (const char *)table->name, row, line);
+    }
+}
+
+static void DB_SaveTool_PrintMultiplayerWeapon(XAssetHeader header, void *data)
+{
+    DB_SaveTool_PrintWeapon(header.weapon);
+}
+
+// Scripts are packed: the length, the packed length and zlib data
+// (Scr_ReadFile_FastFile).
+static void DB_SaveTool_PrintRawFile(const RawFile *rawFile)
+{
+    std::vector<char> text;
+    const char *extension;
+    const char *line;
+    const char *end;
+    uLongf textLen;
+
+    extension = strrchr(rawFile->name, '.');
+    if (extension && (!I_stricmp(extension, ".gsc") || !I_stricmp(extension, ".csc")) && rawFile->len >= 8)
+    {
+        text.assign(*(const unsigned int *)(const char *)rawFile->buffer + 1, 0);
+        textLen = (uLongf)text.size() - 1;
+        if (uncompress((Bytef *)text.data(), &textLen, (const Bytef *)(const char *)rawFile->buffer + 8,
+                       *((const unsigned int *)(const char *)rawFile->buffer + 1)) != Z_OK)
+        {
+            Com_PrintError(16, "listzone: can't unpack '%s'\n", (const char *)rawFile->name);
+            return;
+        }
+        line = text.data();
+    }
+    else
+    {
+        line = rawFile->buffer;
+    }
+    for (; line && *line; line = *end ? end + 1 : end)
+    {
+        end = strchr(line, '\n');
+        if (!end)
+            end = line + strlen(line);
+        Com_Printf(0, "listzone: %.*s\n", (int)(end - line), line);
+    }
+}
+
+// listzone <source zone>[,<zone>...] [<type> [<name>]]
+// Loads the source zones in tool mode and lists their assets of a type (with
+// the fields that name other assets for weapons), or the count of each type.
+// A string table's name prints its cells (multiplayer's if no source has it);
+// "listzone - weapon" lists multiplayer's weapons, "listzone - rawfile <name>"
+// prints one of its raw files (scripts).
+static void DB_SaveTool_ListZone_f()
+{
+    char zones[256];
+    unsigned int counts[ASSET_TYPE_COUNT];
+    unsigned int i;
+    int type;
+    const char *name;
+    DBSaveToolAsset *asset;
+
+    if (Cmd_Argc() < 2 || Cmd_Argc() > 4)
+    {
+        Com_Printf(0, "usage: listzone <source zone>[,<zone>...] [<type> [<name>]]\n");
+        return;
+    }
+    if (!IsDedicatedServer())
+    {
+        Com_Printf(0, "listzone runs on a dedicated server (+set dedicated 1)\n");
+        return;
+    }
+    if (g_dbSaveToolMode)
+        return;
+    type = -1;
+    if (Cmd_Argc() >= 3)
+    {
+        type = DB_SaveTool_TypeForName(Cmd_Argv(2));
+        if (type < 0)
+        {
+            Com_PrintError(16, "listzone: unknown asset type '%s'\n", Cmd_Argv(2));
+            return;
+        }
+    }
+    I_strncpyz(zones, Cmd_Argv(1), sizeof(zones));
+
+    DB_SaveTool_LoadCommon();
+    DB_SaveTool_FreeAll();
+    // "-": no source zones, multiplayer's weapons, string tables or raw files.
+    if (!strcmp(zones, "-"))
+    {
+        if (type == ASSET_TYPE_WEAPON)
+            DB_EnumXAssets(ASSET_TYPE_WEAPON, DB_SaveTool_PrintMultiplayerWeapon, NULL, 0);
+        else if (Cmd_Argc() == 4 && (type == ASSET_TYPE_STRINGTABLE || type == ASSET_TYPE_RAWFILE)
+                 && DB_SaveTool_MultiplayerHas((XAssetType)type, Cmd_Argv(3)))
+        {
+            if (type == ASSET_TYPE_STRINGTABLE)
+                DB_SaveTool_PrintStringTable(DB_FindXAssetHeader(ASSET_TYPE_STRINGTABLE, (char *)Cmd_Argv(3), 1, -1).stringTable);
+            else
+                DB_SaveTool_PrintRawFile(DB_FindXAssetHeader(ASSET_TYPE_RAWFILE, (char *)Cmd_Argv(3), 1, -1).rawfile);
+        }
+        return;
+    }
+    g_dbSaveToolMode = 1;
+    DB_SaveTool_LoadZones(zones);
+    g_dbSaveToolMode = 0;
+    if (Cmd_Argc() == 4 && type == ASSET_TYPE_STRINGTABLE)
+    {
+        DB_SaveTool_IndexAssets();
+        asset = DB_SaveTool_Find(ASSET_TYPE_STRINGTABLE, Cmd_Argv(3));
+        if (asset)
+            DB_SaveTool_PrintStringTable(asset->header.stringTable);
+        else if (DB_SaveTool_MultiplayerHas(ASSET_TYPE_STRINGTABLE, Cmd_Argv(3)))
+            DB_SaveTool_PrintStringTable(DB_FindXAssetHeader(ASSET_TYPE_STRINGTABLE, (char *)Cmd_Argv(3), 1, -1).stringTable);
+        else
+            Com_PrintError(16, "listzone: no string table '%s'\n", Cmd_Argv(3));
+        type = -1;
+    }
+    memset(counts, 0, sizeof(counts));
+    for (i = 0; i < s_toolAssets.size(); ++i)
+    {
+        ++counts[s_toolAssets[i].type];
+        if (s_toolAssets[i].type != type)
+            continue;
+        if (type == ASSET_TYPE_WEAPON)
+        {
+            DB_SaveTool_PrintWeapon(s_toolAssets[i].header.weapon);
+            continue;
+        }
+        name = DB_SaveTool_AssetName(s_toolAssets[i].type, (const void *)s_toolAssets[i].header.data);
+        Com_Printf(0, "listzone: %s %s%s\n", g_assetNames[type], name,
+                   *name != ',' && DB_SaveTool_MultiplayerHas((XAssetType)type, name) ? " (multiplayer has it)" : "");
+    }
+    for (type = 0; type < ASSET_TYPE_COUNT; ++type)
+    {
+        if (counts[type])
+            Com_Printf(0, "listzone: '%s': %u %s\n", zones, counts[type], g_assetNames[type]);
+    }
+    DB_SaveTool_UnloadZones();
+    DB_SaveTool_FreeAll();
+}
+
 static cmd_function_s DB_SaveTool_WriteZone_f_VAR;
+static cmd_function_s DB_SaveTool_ListZone_f_VAR;
 
 void DB_SaveTool_RegisterCommands()
 {
     Cmd_AddCommandInternal("writezone", DB_SaveTool_WriteZone_f, &DB_SaveTool_WriteZone_f_VAR);
+    Cmd_AddCommandInternal("listzone", DB_SaveTool_ListZone_f, &DB_SaveTool_ListZone_f_VAR);
 }

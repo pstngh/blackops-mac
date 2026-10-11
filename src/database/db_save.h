@@ -57,6 +57,11 @@ bool DB_SaveZone(const char *path, XAsset *roots, int *rootCount, int maxRoots, 
 // After a dry run: the assets the zone names (effects named by effects).
 int DB_SaveNamedAssetCount();
 const char *DB_SaveNamedAsset(int index, XAssetType *type);
+// After a dry run: each name reference with the root it was written under (a
+// zone should hold a named asset before the root that names it: the loader
+// looks the name up as it loads the referring asset).
+int DB_SaveNameRefCount();
+const char *DB_SaveNameRef(int index, XAssetType *type, int *root);
 // After a dry run: every string the zone holds (XStrings and script strings).
 void DB_SaveStringsSeen(void (*fn)(const char *s, void *context), void *context);
 
