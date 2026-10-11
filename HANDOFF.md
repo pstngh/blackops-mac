@@ -267,10 +267,11 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   (Decisions session 24): the M16's carry handle is satin metal instead of chrome, ground at shallow
   angles slightly sharper, fps unchanged. The weapon's overall brightness is the data's (the map's
   vision file scales the viewmodel's sun light x3, specular x1.5). The GL layer keeps its
-  deviations (no mipmaps: still mirror-sharp). Not yet in the game folder's copy.
-- **DLC weapons** (session 24, asked, waiting for the user's choice): the Thompson and the other
-  WWII guns are Rezurrection's zombie-map weapons, absent from every MP zone; the MP loader reads
-  those zones in step (Decisions session 24).
+  deviations (no mipmaps: still mirror-sharp). The game folder's copy has it (700fffb7).
+- **DLC weapons** (session 24, designed, not built; the user's request, Next steps first item): the
+  Thompson and the other WWII guns are Rezurrection's zombie-map weapons, absent from every MP zone;
+  the MP loader reads those zones in step but they can't simply be loaded (memory, pools, their world
+  data), so the plan is a fastfile writer that extracts just the weapons (Decisions session 24).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -458,6 +459,48 @@ the engine's frame pacing (~730 fps: the main loop's `NET_Sleep(1)` until the ne
 millisecond), so CPU and GPU are close to balanced at A and the engine caps the rest.
 
 ## Next steps (in order)
+
+**First: DLC weapons in Create a Class** (the user's request, session 24; facts and the reasons for the
+design in Decisions session 24). The user's answers: all of them: the 12 WWII guns (Thompson, Type
+100, STG-44, FG42, BAR, M1 Garand, Gewehr 43, M1 Carbine, Kar98k, Type 99, M1897 Trench Gun,
+double-barrel) plus the scoped Kar98k, sawed-off and bipod BAR, their Pack-a-Punch versions, the MP40
+and the wonder weapons (Ray Gun, Wunderwaffe DG-2, Thundergun, Winter's Howl, V-R11, Scavenger, 31-79
+JGb215, Zap Guns); the DLC throwables (Gersh device, Matryoshka dolls, QED, monkey bomb, spikemore) stay
+blocked by `kb_noGrenades`. Damage matched to the closest MP gun. Bots get them too. A `kb_*` dvar,
+archived, default 1 (`kb_dlcWeapons`), like the other changes. Stages, each handed off per the protocol
+in 0 (update HANDOFF, commit, task card):
+- **Stage 1, the fastfile writer and the extraction tool**. Generate `src/database/db_save.cpp`, Save_*
+  mirrors of db_load.cpp's 404 Load_* functions, with a kept script (`tools/gen_db_save.py`, rerun when
+  db_load.cpp changes). The writer replays the loader's sequence on the loaded source objects: Save_Stream
+  copies a struct into an output block at the position the loader would use (the AllocLoad_* alignments:
+  DB_AllocStreamPos(3/1/0/127/2047/15/7); DB_PushStreamPos/PopStreamPos's blocks; block 1 (runtime) is
+  never in the stream (zeroed), blocks 2-3 are written at the end as Load_DelayStream reads them, block 0
+  (temp) rewinds at each pop), then patches each pointer field in the copy: 0; -1 with the data inline
+  after it; an alias ((block << 29 | offset) + 1, db_stream_load.cpp) to data already written (a map of
+  source ranges to output offsets); for asset pointers (Load_*Ptr) -2 plus a simulated DB_InsertPointer
+  slot (4 bytes in block 4) on first use and an alias to that slot after (DB_ConvertOffsetToAlias reads
+  through it). Script strings get the new zone's string list (Load_TempStringArray/ScriptString), XStrings
+  go inline or aliased. Hand-written parts: images (Load_Texture, r_image.cpp:709, zeroes
+  `texture.basemap` first: keep the GfxImageLoadDef in tool mode and write its pixel data; images that
+  stream keep only their record, their .iwi files are in the shared iwds, e.g. ray gun, tesla, stg44; the
+  WaW guns' textures are not there, so they must be in-zone), shader programs and vertex declarations
+  (keep the loadDef bytes), the XAssetList header (XFile block sizes, string list, asset array), the
+  zlib stream behind "IWffu100" + version 473. Tool mode: a dedicated run with a console command that
+  loads each source zone (DB_LoadXAssets) with the world types not linked (a hook in DB_AddXAsset: CLIPMAP,
+  CLIPMAP_PVS, COMWORLD, GAMEWORLD_SP/MP, MAP_ENTS, GFXWORLD, LIGHT_DEF; their globals would be
+  overwritten, game_map_sp has no pool), writes the chosen weapons with everything they reach, unloads it,
+  takes the next. Done when a written zone with zombie_thompson loads in the MP client (`loadzone`), and on
+  a listen server `give` (it registers late: g_cmds_mp.cpp:209) shows the viewmodel, its anims, fire, FX
+  and sound.
+- **Stage 2, every weapon**: the source zones per weapon (Decisions), shared assets deduplicated by name
+  across source zones, the variants renamed `<ref>_mp` with references that are no prefix of another
+  (BG_UnlockablesGetItemIndexforWeapon matches with I_strnicmp, first item wins: not `kar98k` +
+  `kar98kscoped`; Pack-a-Punch e.g. `up<ref>`), the sound aliases the weapons name cut from the zombie
+  banks into one bank with their audio, localize entries for the display names, HUD and menu icons.
+- **Stage 3, Create a Class**: statsTable rows (the zone can carry a replacement `mp/statsTable.csv`, or
+  patch it at load), loading the zone at startup, damage, bots, `kb_dlcWeapons`, make_portable.sh running
+  the extraction (as it runs make_shaderlib.sh), checks: cac_main/cac_weapon screenshots, a custom class
+  spawned with KB_CMDS, bots using them, every map loading, ASan.
 
 The user's own gameplay changes (queued 2026-10-09 for after the performance work) are done:
 stages A, B and C (sessions 16-18) cover all 10. **Next: the Metal leftovers in 0** (the user's
@@ -881,7 +924,7 @@ Nuketown's backyard holding the M16, dark gunmetal where ours was chrome).
   compat vs GL within the noise; all 26 maps' overviews drawn (234-773 fps), no `[mtl] BUG` or error.
 
 **DLC weapons** (the user: "make the DLC weapons available in classes/custom"; "I know Thompson is one
-of the DLC weapons"). Asked which ones, the damage (zombie values or MP-like) and bots; nothing built.
+of the DLC weapons"). Investigated and designed; nothing built yet (Next steps, first item).
 - **What they are**: the map packs added MP maps only. The Thompson and the other WWII guns are
   Rezurrection's remade World at War zombie maps' (zombie_cod5_prototype/asylum/sumpf/factory.ff):
   `zombie_thompson`, `zombie_type100_smg`, `zombie_stg44`, `zombie_fg42`, `zombie_bar` (+`_bipod`),
@@ -901,6 +944,39 @@ of the DLC weapons"). Asked which ones, the damage (zombie values or MP-like) an
   prototype ~62 MB, asylum ~76, factory ~102, sumpf ~105; factory alone has 9 of the 12 guns. A build
   would load the chosen zombie zones at map start keeping only the weapons (world types not linked),
   give them MP names, add statsTable rows, and retune damage if the user wants.
+- **The user's answers**: all of them (Next steps, first item), damage like MP, bots too.
+- **Why not load the zombie zones themselves**: zone blocks come from one 328 MiB pool
+  (physicalmemory.cpp:26, 0x14800000; `DB_AllocXBlocks` -> `_PMem_AllocNamed`), of which a match uses
+  ~195 MB (code_post_gfx_mp 3.4, patch_mp 10.3, common_mp 101.6, a map ~80); one zombie zone fits, the
+  ~7 needed (prototype, asylum, sumpf, factory, coast, temple, moon, + common_zombie) don't, and the pool
+  sits in the 1536 MiB in-image Ptr32 region. Their world types map to the live globals (`cm`,
+  `comWorld`, `gameWorldMp`, `s_world`: a second world memcpy's over the live one; game_map_sp has no
+  pool) and can't be unloaded while a world is in use (Sys_Error); a skipped GfxWorld still creates its
+  vertex buffers (db_load.cpp:7982). Pools (db_registry.cpp:45-145): xanim 5100, xmodel 1000, material
+  4096, techset 2048, image 4608 (the streamer's arrays match it), sound 32, weapon 2048, localize 10240,
+  fx 500, stringtable 576. Images, materials and models must be in the pools (streaming indexes the pools,
+  model buffers are made for pooled models), anims are found by name (`szXAnims` -> BG_CreateXAnim ->
+  DB_FindXAssetHeader), sounds by alias hash (SND_BankAliasLookup, newest bank first, 32 banks), display
+  names through localize entries.
+- **Weapon table** (bg_weapons_def.cpp): built at map init from statsTable, not from the asset pool:
+  BG_LoadWeaponTable("_mp") (:458) loads `<reference>_mp` and every attachment combination of column 8
+  for the groups smg, assault, cqb, lmg, sniper, pistol, launcher, special, shotgun, explosive, grenade,
+  specialgrenade, inventory; a missing base weapon is a hard error (:567). Other weapons register only
+  while `level.initializing` (precacheItem; the cheat `give` sets it, g_cmds_mp.cpp:209). The client
+  rebuilds the same table and checks every weapon config string (2836+, 256 of them, "index name
+  [variants]") by name and index (cg_weapons.cpp:7118-7180). 2048 variants, 11-bit network indices.
+  statsTable columns (bg_unlockable_items.cpp:808-852): 0 index, 1 passive, 2 group, 3 name, 4 reference,
+  5 count, 6 image, 7 desc, 8 attachments, 9 sortKey, 10 unlock level, 11 default classes, 12 cost, 13
+  loadout slot, 14 unlock prestige, 15 unclassify-at; 256 items (uint8 in the class stats). The CAC menus
+  list a group by column 2 with cost >= 0 and the slot (buildItemListForGroupName /
+  buildItemListForSlotNameAndGroup), sorted by column 9; a cost < 0 ends the group's list
+  (bg_unlockable_items.cpp:3031-3058). `_class.gsc`: a custom class's weapon is `reference` + `_` +
+  attachments + `mp` (getFullWeaponName); weapon types (primary/side arm) only for indices < 99
+  (`max_weapon_num = 99`); bots (`_bot.gsc`) pick any weapon row with the slot and a cost other than -1.
+- **Zone flags** (db_registry.cpp:2094, 3054-3232): bare ints, a localized `<lang>name` zone with each;
+  zones persisting across maps have a low flag below 0x4000 (code 1, dev 4, patch 16, common_mp 64 on
+  the client / 256 dedicated, 1024 unused); loading low flag F unloads the low zones >= F; zones must
+  unload in reverse load order (physicalmemory.cpp:214); max 4 zones a call, 32 in all.
 
 ## Decisions (session 23)
 
