@@ -540,6 +540,15 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
+**The user's bug report (end of session 29), next**: "when i kill bots, they disapear INSTANTLY, AND/OR
+they teleport like a meter away (looks glitchy/buggy) hard to describe". Not looked at yet. Leads to check
+first: whether the original game does it too (all `kb_*` dvars 0), `kb_noDeathCam` (respawn 0.1 s after dying:
+does it reach the bots, and does their corpse, `clonePlayer` in the death callback, still get made and keep
+its place?), the corpse's death animation/ragdoll start (Decisions session 21 has the physics work), and the
+corpse entity's interpolation on the client. Session 29's kill test (KB_CMDS with `scr_playerwarp
+enemies_host`, Decisions session 29) shows bodies on the ground in screenshots taken 3 times a second; a
+faster sequence around one kill is needed to see a jump.
+
 **The user's list for later** (session 28: offered as the menu of what to do next, the user answered
 "remember these we'll come back to them. i wanna fix a few more things first"; ask before each, in plain
 words): 1 the shader library's Metal Toolchain download (~700 MB; Xcode shows the size only once the
