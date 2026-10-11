@@ -81,3 +81,9 @@ echo "installed $game/blackops and ${#copied[@]} libraries in $lib: ${copied[*]}
 if command -v swiftc >/dev/null; then
     "$(dirname "$0")/launcher/build.sh" "$game"
 fi
+
+# The shader library (tools/make_shaderlib.sh): kb_shaders.metallib, rebuilt only when the
+# shader translation changed. The first time it collects the game's shaders (the game runs in
+# a window for ~10 minutes); without Xcode's Metal Toolchain it says how to get it, and the
+# game compiles its shaders at run time until then.
+"$(dirname "$0")/make_shaderlib.sh" "$game" "$build" || echo "(no shader library: see above)"

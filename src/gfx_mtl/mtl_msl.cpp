@@ -515,3 +515,18 @@ bool MSL_Translate(const Shader &sh, MSLShader &out, const std::string &prefix, 
     e.rawShadows = rawShadows;
     return e.run(prefix);
 }
+
+bool MSL_TranslateNamed(const Shader &sh, MSLShader &out, bool perSample, bool rawShadows) {
+    // Translated with a placeholder name, hashed (FNV-1a 64), then named after the hash.
+    static const std::string placeholder = "KBNAMEKB";
+    if (!MSL_Translate(sh, out, placeholder, perSample, rawShadows)) return false;
+    unsigned long long h = 1469598103934665603ull;
+    for (const char *p : { MSL_Prelude(), out.source.c_str() })
+        for (; *p; ++p) { h ^= (unsigned char)*p; h *= 1099511628211ull; }
+    char name[17];
+    snprintf(name, sizeof(name), "%016llx", h);
+    for (size_t i = out.source.find(placeholder); i != std::string::npos; i = out.source.find(placeholder, i + 16))
+        out.source.replace(i, placeholder.size(), name);
+    out.entry = std::string("kb_") + name;
+    return true;
+}

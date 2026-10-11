@@ -169,7 +169,11 @@ pipeline cache (HANDOFF, Decisions session 20): `players/metal_pipelines/<map>.b
 the pipelines each map drew the last time, written at the map's end; a scratch profile starts
 without it, `bench_views.py --home <dir>` keeps one between runs; off under
 `MTL_SHADER_VALIDATION` (Metal's GPU validation crashes reading binary archives).
-`KB_DUMP_MSL=<dir>` writes each translated shader. On the GL
+`KB_DUMP_MSL=<dir>` writes each translated shader. The shader library (HANDOFF, Decisions
+session 20): `<game>/kb_shaders.metallib`, made by `tools/make_shaderlib.sh <game dir>` (run by
+make_portable.sh; it collects the shaders once into `<game>/kb_shaders/bytecode`, ~10 minutes
+in a window, and needs Xcode's Metal Toolchain to compile); shaders are named `kb_<hash of their
+MSL>`, and what isn't in the library compiles at run time with a log line. On the GL
 backend (`KB_RENDERER=gl`), `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
 lock flag and shader pairing the game uses (the list Metal implements), and
 `KB_DUMP_SHADERS=<dir>` writes each shader's bytecode; `tools/shader_test.sh <dump> <out>`

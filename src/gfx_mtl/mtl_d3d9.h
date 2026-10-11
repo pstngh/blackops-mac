@@ -31,6 +31,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #import <Metal/Metal.h>
@@ -356,9 +357,16 @@ struct MetalShaderBatch {
     std::condition_variable cv;
 };
 
+// The shader library, kb_shaders.metallib in the game folder (tools/make_shaderlib.sh, run by
+// make_portable.sh): every shader the game has, compiled ahead of time with Apple's compiler.
+// A shader whose function (named after its translation, MSL_TranslateNamed) is in it skips the
+// batches; one that isn't is compiled at run time, with a log line.
 class MetalShaderCompiler {
 public:
     explicit MetalShaderCompiler(id<MTLDevice> dev);
+    bool inLibrary(const std::string &entry) const { return names_.count(entry) != 0; }
+    id<MTLLibrary> shaderLibrary() const { return library_; }
+    void missing(const std::string &entry);  // log: compiled at run time
     // The batch compiling `entry` (whose MSL is `source`); the same shader again
     // (same bytecode) shares its first batch.
     std::shared_ptr<MetalShaderBatch> add(const std::string &entry, const std::string &source);
@@ -386,6 +394,10 @@ private:
     double lastAdd_ = 0;
     int batches_ = 0;
     std::unordered_map<std::string, std::shared_ptr<MetalShaderBatch>> entries_;
+    id<MTLLibrary> library_;
+    std::unordered_set<std::string> names_;
+    std::shared_ptr<MetalShaderBatch> libraryBatch_;   // done: the library
+    std::atomic<unsigned> missing_{0};
 };
 
 // The pipeline cache, players/metal_pipelines/<map>.bin under the home path (fs_h): binary
@@ -442,7 +454,7 @@ public:
     int constCount = 0;
     unsigned long long varyingsOut = 0, varyingsIn = 0;
 private:
-    struct Variant { id<MTLLibrary> lib; id<MTLFunction> fn[9]; MTLFunctionDescriptor *fd[9]; };
+    struct Variant { id<MTLLibrary> lib; std::string entry; id<MTLFunction> fn[9]; MTLFunctionDescriptor *fd[9]; };
     MetalDevice *dev_;
     bool pixel_, ok_ = false;
     std::vector<DWORD> tokens_;

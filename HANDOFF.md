@@ -226,6 +226,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   frames per 2-minute match that stalled 20-390 ms building 10-100 pipelines at once are gone (one
   22 ms frame left in one run: a pipeline not seen before). It fills and refreshes itself (Decisions
   session 20), ~15 MB a map. The game folder's copy has it.
+- **Metal leftovers, the shader file** (session 20, work in progress): the shaders' names, the
+  loader, the collection and `tools/make_shaderlib.sh` (run by make_portable.sh) are done and
+  checked; compiling the file waits for Xcode's Metal Toolchain download (the user's yes). Until
+  then the game compiles its shaders at run time, as before (Next steps 0).
 - **Metal leftovers, CPU at view A** (session 20): the model lighting volume (1 MB, patched by the
   engine every frame) is locked in place and uploaded through a reused per-frame staging buffer:
   10% -> 2.4% of the render thread, +6% fps at mp_nuked's view A and overview with bots
@@ -501,11 +505,21 @@ are in 0's list.
      missing (it is per Xcode version). The game loads it at startup; a function is keyed so
      a stale file can't be used for a changed translation, and a shader missing from it
      compiles at run time with a log line. AIR is chip-independent; the user needs only M4
-     (no pre-M4 support). **Next (stage 2 of the plan, not started)**: it needs the Metal
-     Toolchain download (`xcodebuild -downloadComponent metalToolchain`; `-showComponent`
-     says "uninstalled", Xcode 27.0 27A266a; its size shows only once the download starts:
-     ~700 MB for Xcode 26's): the user's one final yes before downloading. Session 20 ran
-     unattended (the user asleep) and didn't download. Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
+     (no pre-M4 support). **Stage 2, in progress (session 20, work in progress)**: everything
+     but the compile is built and checked (Decisions session 20): the shaders' names from a
+     hash of their translation, the game's loader (`kb_shaders.metallib` in the game folder;
+     what isn't in it compiles at run time with a log line), the collection (16,140 shaders,
+     31,915 functions with the per-sample variants) and `tools/make_shaderlib.sh`, which
+     make_portable.sh now runs. **Left**: the Metal Toolchain download (`xcodebuild
+     -downloadComponent MetalToolchain`; `-showComponent` says "uninstalled", Xcode 27.0
+     27A266a; its size shows only once the download starts, ~700 MB for Xcode 26's): the
+     user's one final yes first (session 20 ran unattended, the user asleep, and didn't
+     download). Then rerun make_portable.sh on the game folder (the collection runs once,
+     ~10 minutes in a window, then the compile), measure the cold map loads and the startup
+     (cold runs as in Decisions session 19; the stage-3 pipeline cache files refill once, the
+     functions' identity changes), screenshots, validation and ASan with the library, the
+     library's size, and commit; the game folder's copy is still the leftover-4 build
+     (61cfe958) until then. Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
      front end. `KB_MTL_BATCH=<n>` gives a cold cache to measure with, `KB_MTL_SHADERLOG` the
      timeline. Also every load waits 0.2-0.4 s for a missing asset, `python_speed_snub_mp`
      (`Error: Waited ... msec for missing asset`), in every build: not looked at.
@@ -942,6 +956,41 @@ the Metal Toolchain download, which needs the user's final yes).
   bad after `collide_bpg_environment`), right after the only `colgeom_visitor_t::intersect_box:
   leafList overflow (max 2048)` of the night: an object with a huge query box. Not reproduced;
   a task card was left for it (Open items).
+
+Stage 2 (the shader file), work in progress: all but the compile (the Metal Toolchain download
+waits for the user's yes).
+
+- **Names**: `MSL_TranslateNamed` (mtl_msl.cpp) translates with a placeholder name, hashes the
+  prelude and the source (FNV-1a 64), and names the entry and its structs `kb_<16 hex>`; the
+  backend names every shader so (runtime batches included) and the per-sample variant too, so
+  one library holds them all and a function of a shader's name is exactly its code: a changed
+  translation (or `KB_MTL_GLCOMPAT`'s raw shadows) looks up a name the library doesn't have.
+- **The game**: `MetalShaderCompiler` opens `<fs_b>/kb_shaders.metallib` (the game folder) at
+  device creation and keeps its function names; a shader in it gets an already compiled "batch"
+  holding the library (no front-end compile; its function is specialised and built as before),
+  one that isn't goes to the batches as before with a log line (`[mtl] shader kb_... isn't in
+  kb_shaders.metallib: compiled at run time`, the first 10 and every 1000th); the per-sample
+  variant likewise. Without the file one line says so and everything compiles at run time, as
+  before (checked: mp_nuked's views within the reference noise, the ASan client over three maps
+  quiet).
+- **The collection** (`tools/make_shaderlib.sh`, step 1, once per game folder): the game with the
+  GL layer's `KB_DUMP_SHADERS` in a folder of its own (links to `main/` and `zone/`, a scratch
+  profile: the game folder's settings and profile untouched), `map` to each of the 26 maps 20 s
+  apart from the menu (`KB_MENU_CMDS`), 9 minutes: 16,140 shaders (session 13's 8,864 were the
+  menus and fewer maps) into `<game>/kb_shaders/bytecode` (101 MB).
+- **The generator** (src/gfx_mtl/tools/shaderlib.cpp, built by the script with the backend's
+  sm3.cpp and mtl_msl.cpp): every shader and every pixel shader's per-sample variant (the user's
+  requirement: no graphics setting compiles at run time), 31,915 functions after merging equal
+  translations, in 125 files of up to 256 (289 MB of MSL), `names.txt` and a stamp (a hash of the
+  names). Checked against the game: KB_DUMP_MSL on mp_nuked with 4x MSAA (transparency AA): all
+  3,204 functions the game made, the 28 per-sample variants among them, are in names.txt.
+- **The compile** (step 3, untested: no toolchain): skipped when `kb_shaders.stamp` holds the
+  stamp and the compiler's version; else `xcrun metal -c -fpreserve-invariance` per file (as the
+  runtime's `preserveInvariance`), in parallel, and `xcrun metallib` into the game folder.
+  Without the toolchain `xcrun metal` says "missing Metal Toolchain": the script prints the
+  download command and stops (exit 1); make_portable.sh, which runs it last, says the game
+  compiles at run time until then. Expected: ~5 T compiler instructions (~2-3 minutes on 10
+  cores), a file of a few hundred MB.
 
 ## Decisions (session 19)
 

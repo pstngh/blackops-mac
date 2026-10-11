@@ -62,4 +62,10 @@ const char *MSL_Prelude();
 bool MSL_Translate(const sm3::Shader &sh, MSLShader &out, const std::string &prefix = std::string(),
                    bool perSample = false, bool rawShadows = false);
 
+// Translate, the entry named after the translation: kb_<16 hex digits>, a hash of the
+// prelude and the source (with the name left out), so a function of that name in the
+// shader library (kb_shaders.metallib, made offline from the same translator) is this
+// exact code, and a changed translation can't pick up a stale one.
+bool MSL_TranslateNamed(const sm3::Shader &sh, MSLShader &out, bool perSample = false, bool rawShadows = false);
+
 #endif // KISAK_MTL_MSL_H

@@ -485,7 +485,7 @@ HRESULT WINAPI MetalDecl::GetDeclaration(D3DVERTEXELEMENT9 *e, UINT *n) {
 static double Seconds() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 // KB_MTL_SHADERLOG=<file>: a line per event, seconds since the first: "c <entry> <batch>" a
-// shader created (the batch it compiles in), "s <batch> <shaders>" a batch given to Metal,
+// shader created (the batch it compiles in; 0: the shader library), "s <batch> <shaders>" a batch given to Metal,
 // "d <batch>" compiled, "w <batch> <ms>" a draw waited for it, "u <entry>" a shader's
 // first use, "p <ms>" a frame over 15 ms (Present).
 void MTL_ShaderLog(const char *fmt, ...) {
@@ -503,15 +503,49 @@ void MTL_ShaderLog(const char *fmt, ...) {
     fflush(f);
 }
 
+const char *Dvar_GetString(const char *dvarName);   // the engine's (universal/dvar.h)
+
 MetalShaderCompiler::MetalShaderCompiler(id<MTLDevice> dev) : dev_(dev) {
     const char *e = getenv("KB_MTL_BATCH");
     size_ = e && atoi(e) > 0 ? atoi(e) : 64;
     const char *c = getenv("KB_MTL_COMPILES");
     const int cores = (int)[NSProcessInfo processInfo].activeProcessorCount;
     cap_ = c && atoi(c) > 0 ? atoi(c) : cores > 3 ? cores - 2 : 1;
+    const char *base = Dvar_GetString("fs_b");
+    const std::string path = std::string(base ? base : ".") + "/kb_shaders.metallib";
+    if (access(path.c_str(), F_OK) != 0) {
+        fprintf(stderr, "[mtl] shader library: no %s (tools/make_shaderlib.sh): every shader compiles at run time\n",
+                path.c_str());
+        return;
+    }
+    NSError *err = nil;
+    library_ = [dev newLibraryWithURL:[NSURL fileURLWithPath:@(path.c_str())] error:&err];
+    if (!library_) {
+        MTL_Bug("shader library %s: %s", path.c_str(), err.localizedDescription.UTF8String);
+        return;
+    }
+    for (NSString *n in library_.functionNames) names_.insert(n.UTF8String);
+    libraryBatch_ = std::make_shared<MetalShaderBatch>();
+    libraryBatch_->lib = library_;
+    libraryBatch_->submitted = libraryBatch_->done = true;
+    fprintf(stderr, "[mtl] shader library: %s, %zu functions\n", path.c_str(), names_.size());
+}
+
+void MetalShaderCompiler::missing(const std::string &entry) {
+    const unsigned n = ++missing_;
+    if (n <= 10 || n % 1000 == 0)
+        fprintf(stderr, "[mtl] shader %s isn't in kb_shaders.metallib: compiled at run time (%u so far)\n", entry.c_str(),
+                n);
 }
 
 std::shared_ptr<MetalShaderBatch> MetalShaderCompiler::add(const std::string &entry, const std::string &source) {
+    if (library_) {
+        if (inLibrary(entry)) {
+            MTL_ShaderLog("c %s 0", entry.c_str());
+            return libraryBatch_;
+        }
+        missing(entry);
+    }
     std::shared_ptr<MetalShaderBatch> full;
     std::shared_ptr<MetalShaderBatch> b;
     {
@@ -623,7 +657,6 @@ id<MTLLibrary> MetalShaderCompiler::library(const std::shared_ptr<MetalShaderBat
 }
 
 // ---- The pipeline cache ---------------------------------------------------------------
-const char *Dvar_GetString(const char *dvarName);   // the engine's (universal/dvar.h)
 
 void MetalPipelineCache::open(id<MTLDevice> dev) {
     dev_ = dev;
@@ -790,10 +823,7 @@ bool MetalShader::translate(unsigned variant, MSLShader *m) {
     std::string err;
     if (!sm3::Parse(tokens_.data(), sh, err)) { MTL_Bug("shader %08x: %s", hash, err.c_str()); return false; }
     if (sh.pixel != pixel_) { MTL_Bug("shader %08x: wrong stage", hash); return false; }
-    char prefix[32];
-    snprintf(prefix, sizeof(prefix), "%08x%s", hash, pixel_ ? "p" : "v");
-    if (!MSL_Translate(sh, *m, variant ? std::string() : std::string(prefix), (variant & VARIANT_PER_SAMPLE) != 0,
-                       GLCompat())) {
+    if (!MSL_TranslateNamed(sh, *m, (variant & VARIANT_PER_SAMPLE) != 0, GLCompat())) {
         MTL_Bug("shader %08x: %s", hash, m->error.c_str());
         return false;
     }
@@ -814,22 +844,30 @@ id<MTLFunction> MetalShader::function(int alphaFunc, unsigned variant) {
     if (!v.lib) {
         if (!variant) {
             MTL_ShaderLog("u %s", entry_.c_str());
+            v.entry = entry_;
             v.lib = dev_->compiler()->library(batch_);
         } else {
-            // A variant: rare, compiled on its own when first drawn.
+            // A variant: rare, from the shader library, or compiled on its own when first drawn.
             MSLShader m;
             if (!translate(variant, &m)) return nil;
-            MTLCompileOptions *opts = [MTLCompileOptions new];
-            opts.preserveInvariance = YES;
-            NSError *e = nil;
-            const std::string src = std::string(MSL_Prelude()) + m.source;
-            v.lib = [dev_->mtl newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()] options:opts error:&e];
-            if (!v.lib) MTL_Bug("shader %08x (variant %x) does not compile: %s", hash, variant, e.localizedDescription.UTF8String);
+            v.entry = m.entry;
+            if (dev_->compiler()->inLibrary(m.entry)) {
+                v.lib = dev_->compiler()->shaderLibrary();
+            } else {
+                if (dev_->compiler()->shaderLibrary()) dev_->compiler()->missing(m.entry);
+                MTLCompileOptions *opts = [MTLCompileOptions new];
+                opts.preserveInvariance = YES;
+                NSError *e = nil;
+                const std::string src = std::string(MSL_Prelude()) + m.source;
+                v.lib = [dev_->mtl newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()] options:opts error:&e];
+                if (!v.lib)
+                    MTL_Bug("shader %08x (variant %x) does not compile: %s", hash, variant, e.localizedDescription.UTF8String);
+            }
         }
         if (!v.lib) return nil;
     }
     if (!v.fn[alphaFunc]) {
-        NSString *name = variant ? @"kb_main" : [NSString stringWithUTF8String:entry_.c_str()];
+        NSString *name = [NSString stringWithUTF8String:v.entry.c_str()];
         NSError *e = nil;
         if (!pixel_) {
             v.fn[0] = [v.lib newFunctionWithName:name];
