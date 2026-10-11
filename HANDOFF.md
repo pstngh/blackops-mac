@@ -305,8 +305,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   its other attachments, bots never roll one, any other dual-wield give comes as the single gun, and
   Create a Class reports no Dual Wield option (Decisions session 26). Session 27 saw the menu: the
   attachment lists still offered Dual Wield; fixed (Decisions session 27). The game folder's copy has
-  session 26's part (make_portable.sh at 7358f629, the user's request); session 27's isn't in the game
-  folder yet (make_portable.sh not run).
+  it (make_portable.sh at 3fcbb7f4, the user's request).
 - **DLC weapons, stage 3: Create a Class** (session 27): the 16 guns are in Create a Class, in custom
   classes and with the bots, behind `kb_dlcWeapons` (archived, default 1, read at startup: a change takes
   effect at the next start). kb_dlc_weapons.ff now also carries copies of mp/statsTable.csv (the guns' rows in
@@ -320,8 +319,9 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   Shotgun, Sawed-Off Shotgun) with their HUD icons, names and bars; a custom class with one spawns with
   it; bots take them (16 of ~44 primaries in a 2-minute match) and kill with them at multiplayer
   damage. The Dual Wield option is now gone from the attachment lists (session 26's change missed
-  them). make_portable.sh writes the zone into the game folder (not run: the user's call). Checks in
-  Decisions session 27.
+  them). make_portable.sh writes the zone into the game folder: the game folder has it (make_portable.sh
+  at 3fcbb7f4, the user's request; its kb_dlc_weapons.ff is the tested one, same bytes; the shader
+  library step still stops at the missing Metal Toolchain). Checks in Decisions session 27.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -544,9 +544,8 @@ Stages, each handed off per the protocol in 0 (update HANDOFF, commit, task card
   common_mp (flag 1024, `kb_dlcWeapons`, read at startup); Create a Class, custom classes, the weapon table
   and the bots have the guns; the Dual Wield option is gone from the attachment lists;
   make_portable.sh writes the zone into the game folder.
-- **Left, optional** (ask the user before any of it): run make_portable.sh on the game folder (the
-  user's call: it puts the build and the zone in /Users/pstn/Documents/Games/codbo; until then the
-  game folder's copy has no DLC weapons); Create a Class shows the WWII guns with their white HUD
+- **Left, optional** (ask the user before any of it; the game folder has stage 3, make_portable.sh at
+  3fcbb7f4): Create a Class shows the WWII guns with their white HUD
   silhouettes where multiplayer's guns have colour pictures (`menu_mp_weapons_*`, none exist for the
   WWII guns: rendering new ones would be a project of its own); camo leaves the WWII guns as they are
   (their models have none of multiplayer's camo textures); they have no attachments.
