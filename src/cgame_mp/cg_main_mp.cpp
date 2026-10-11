@@ -169,6 +169,7 @@ const dvar_s *cg_debugInfoCornerOffset;
 const dvar_s *cg_drawVersion;
 const dvar_s *cg_drawVersionX;
 const dvar_s *cg_drawVersionY;
+const dvar_s *kb_noVersion;
 const dvar_s *cg_readTitleStorageLocally;
 const dvar_s *snd_drawInfo;
 const dvar_s *snd_drawSort;
@@ -233,6 +234,14 @@ const dvar_s *cg_crosshairAlpha;
 const dvar_s *cg_crosshairAlphaMin;
 const dvar_s *cg_crosshairDynamic;
 const dvar_s *cg_crosshairEnemyColor;
+const dvar_s *kb_crosshairSize;
+const dvar_s *kb_crosshairGap;
+const dvar_s *kb_crosshairThickness;
+const dvar_s *kb_crosshairColor;
+const dvar_s *kb_crosshairUseAlpha;
+const dvar_s *kb_crosshairDot;
+const dvar_s *kb_crosshairOutline;
+const dvar_s *kb_crosshairOutlineThickness;
 const dvar_s *cg_brass;
 const dvar_s *cg_gun_fovcomp_x;
 const dvar_s *cg_gun_fovcomp_y;
@@ -594,6 +603,12 @@ void __cdecl CG_RegisterDvars()
     cg_drawVersion = _Dvar_RegisterBool("cg_drawVersion", 1, 0, "Draw the game version");
     cg_drawVersionX = _Dvar_RegisterFloat("cg_drawVersionX", 50.0, 0.0, 512.0, 0, "X offset for the version string");
     cg_drawVersionY = _Dvar_RegisterFloat("cg_drawVersionY", 18.0, 0.0, 512.0, 0, "Y offset for the version string");
+    // The user's change (HANDOFF, Decisions session 20); 0 gives the original game.
+    kb_noVersion = _Dvar_RegisterBool(
+        "kb_noVersion",
+        1,
+        1u,
+        "Hide the version text at the bottom right of the screen");
     cg_readTitleStorageLocally = _Dvar_RegisterBool(
                                                                  "cg_readTitleStorageLocally",
                                                                  0,
@@ -951,6 +966,56 @@ void __cdecl CG_RegisterDvars()
                                                          1,
                                                          0x81u,
                                                          "The crosshair color when over an enemy");
+    // kb_staticCrosshair's look: Counter-Strike's cl_crosshair* settings for its classic static
+    // crosshair (cl_crosshairstyle 4), the defaults the user's own CS config (HANDOFF, Decisions
+    // session 20). Sizes are CS's units: 1 = 1/480 of the screen height; the gap is in pixels.
+    kb_crosshairSize = _Dvar_RegisterFloat(
+        "kb_crosshairSize",
+        2.5,
+        0.0,
+        100.0,
+        1u,
+        "Length of the crosshair lines (cl_crosshairsize)");
+    kb_crosshairGap = _Dvar_RegisterFloat(
+        "kb_crosshairGap",
+        -1.0,
+        -100.0,
+        100.0,
+        1u,
+        "Gap of the crosshair (cl_crosshairgap)");
+    kb_crosshairThickness = _Dvar_RegisterFloat(
+        "kb_crosshairThickness",
+        1.0,
+        0.0,
+        100.0,
+        1u,
+        "Thickness of the crosshair lines (cl_crosshairthickness)");
+    kb_crosshairColor = _Dvar_RegisterColor(
+        "kb_crosshairColor",
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1u,
+        "Colour and alpha of the crosshair (cl_crosshaircolor_r/g/b, cl_crosshairalpha)");
+    kb_crosshairUseAlpha = _Dvar_RegisterBool(
+        "kb_crosshairUseAlpha",
+        0,
+        1u,
+        "Blend the crosshair with its alpha; 0 adds it to the picture at alpha 200 (cl_crosshairusealpha)");
+    kb_crosshairDot = _Dvar_RegisterBool("kb_crosshairDot", 0, 1u, "A dot in the crosshair's centre (cl_crosshairdot)");
+    kb_crosshairOutline = _Dvar_RegisterBool(
+        "kb_crosshairOutline",
+        0,
+        1u,
+        "A black outline around the crosshair (cl_crosshair_drawoutline)");
+    kb_crosshairOutlineThickness = _Dvar_RegisterFloat(
+        "kb_crosshairOutlineThickness",
+        1.0,
+        0.1,
+        3.0,
+        1u,
+        "Thickness of the crosshair's outline (cl_crosshair_outlinethickness)");
     cg_brass = _Dvar_RegisterBool("cg_brass", 1, 1u, "Weapons eject brass");
     cg_gun_fovcomp_x = _Dvar_RegisterFloat(
                                              "cg_gun_fovcomp_x",
@@ -2879,7 +2944,7 @@ void __cdecl CG_Init(int localClientNum, int serverMessageNum, int serverCommand
     UI_ClearLocalUIVisibilityBits(localClientNum);
     SCR_UpdateLoadScreen();
     cgMedia.whiteMaterial = Material_RegisterHandle("white", 7);
-    cg_kbReticleSide = Material_RegisterHandle("reticle_side_small", 7);
+    cg_kbCrosshairAdditive = Material_RegisterHandle("light_corona", 7);
     cgMedia.smallDevFont = CL_RegisterFont("fonts/smallDevFont", 1);
     cgMedia.bigDevFont = CL_RegisterFont("fonts/bigDevFont", 1);
     Material_RegisterHandle("net_disconnect", 7);

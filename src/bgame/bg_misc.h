@@ -169,10 +169,11 @@ enum entity_event_t : __int32
 
 void __cdecl BG_RegisterDvars();
 bool __cdecl BG_KbHumanPlayer(const playerState_s *ps);
-// kb_staticCrosshair's spread in degrees: the smallest crosshair a weapon draws (the Python's
-// prone minimum). Every weapon with side reticles draws reticle_side_small, 8 units, no offset.
-static const float KB_CROSSHAIR_SPREAD = 1.0f;
-static const int KB_CROSSHAIR_SIDE_SIZE = 8;
+// kb_staticCrosshair's spread in degrees: a human player's shots land inside the crosshair's gap.
+// The CS crosshair's gap is in pixels (the lines start 4 pixels from the centre with the user's
+// settings), so this is that gap at the user's 1280x720 and FOV 80 (tanHalfFovY 0.63):
+// atan(4 / 360 * 0.63) = 0.40 degrees (5 pixels at FOV 65, still inside the lines).
+static const float KB_CROSSHAIR_SPREAD = 0.4f;
 // kb_aaLean: Allied Assault's lean (OpenMoHAA, MoHAA 1.11's numbers; HANDOFF, Decisions session 18).
 // ps->leanf holds the lean angle / KB_LEAN_DEGREES, so AA's full 40 degrees is BO's full lean, 0.5.
 // AA's lengths are scaled to BO's soldier (the eye is 60 units high, AA's 82).

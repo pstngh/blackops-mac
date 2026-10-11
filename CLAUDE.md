@@ -81,10 +81,13 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18): `kb_godMode` (human players take no damage), `kb_noGrenades`, `kb_noLastStand`,
+sessions 16-18 and 20): `kb_godMode` (human players take no damage), `kb_noGrenades`, `kb_noLastStand`,
 `kb_noDeathCam` (respawn 0.1 s after dying), `kb_noMusic`, `kb_noAnnouncer`,
-`kb_infiniteReserve`, `kb_staticCrosshair` (a fixed small crosshair; the human players' shots
-land inside it, 1 degree), `kb_noAds`, `kb_sprintFire`, `kb_aaLean` (Medal of Honor: Allied
+`kb_infiniteReserve`, `kb_staticCrosshair` (the user's Counter-Strike crosshair, CS:GO's classic
+static one, in screen pixels; its look is `kb_crosshairSize`/`Gap`/`Thickness`/`Color`/`UseAlpha`/
+`Dot`/`Outline`/`OutlineThickness`, CS's `cl_crosshair*`; the human players' shots land inside its
+gap, 0.4 degrees), `kb_noVersion` (no version text at the bottom right), `kb_noAds`,
+`kb_sprintFire`, `kb_aaLean` (Medal of Honor: Allied
 Assault's lean from OpenMoHAA: 40 degrees, the view rolls, full speed and sprint while leaning;
 `ps->leanf` is the angle / 80). Tests where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`; a scratch profile keeps whatever a run set

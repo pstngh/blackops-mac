@@ -205,6 +205,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   AA's, and leaning no longer slows the player or ends a sprint. Dvar `kb_aaLean` (default 1,
   archived); verified in play against AA's formulas (Decisions session 18); the game folder's
   copy has it. With it the user's list of 10 changes is done.
+- **The user's crosshair and no version text** (session 20, asked for on top of the plan): the
+  crosshair is now the user's Counter-Strike one (CS:GO's classic static style with the user's
+  own settings: white, size 2.5, gap -1, thickness 1, added to the picture), drawn as CS draws it,
+  pixel for pixel at the screen's centre; it stays put and visible while reloading, switching
+  weapons, meleeing, sprinting and leaning, and doesn't turn red over enemies. The human players'
+  shots land inside its gap (0.4 degrees). The version text at the bottom right is gone
+  (`kb_noVersion`). Verified in play (Decisions session 20); the game folder's copy has it.
 - **Metal leftovers, cold shader cache** (session 19, verified on every map in session 20:
   Decisions sessions 19 and 20): with the system shader cache cold, mp_nuked's
   first frame (7 bots) waited 2.6-3.2 s, now 1.0-1.2 s, and the startup 0.33-0.41 s, now
@@ -744,6 +751,57 @@ Stage 1 of the session-19 plan: session 19's commit (8794ab5c) verified.
   524/651/650/704/657/605/681/405 and 520/664/691/724/651/686/725/418: the same. Default-mode
   screenshot runs, every view's geometric mean: reference 496 and 507, new 506.
 - make_portable.sh rerun (the game folder's copy and launcher).
+
+The user's requests at the start of the session (in their words: "remove the version text at
+the bottom right, and also, the crosshair still isn't static, it should be like my
+counterstrike one, as much as possible"):
+
+- **What "still isn't static" was**: session 17's crosshair kept the original's hiding (weapon
+  raise, drop and switch, reload, melee), its red colour over enemies, and a size in degrees,
+  so its pixels changed with the FOV; it was drawn through the 640x480 placement (filtered
+  texture edges).
+- **The user's CS settings**: their CS:GO port's config (~/Documents/game/csgo/cfg/config.cfg
+  and ~/Documents/Games/csgo/csgo/cfg/config.cfg, both written that night): cl_crosshairstyle 4
+  (classic static), size 2.5, gap -1, thickness 1, colour 5 = 255 255 255, alpha 255,
+  usealpha 0, no dot, no outline. (Steam's CS2 config from July has style 4, size 3, gap -2,
+  green, usealpha 1: older, not used.)
+- **kb_staticCrosshair** draws `CWeaponCSBase::DrawCrosshair` of the user's CS port
+  (~/Documents/CounterStrike_AA, game/shared/cstrike15/weapon_csbase.cpp) for style 4: the gap
+  `(int)(4 + cl_crosshairgap)` pixels, the lines `RoundFloatToInt(YRES(size))` long and
+  `max(1, RoundFloatToInt(YRES(thickness)))` thick (YRES: x * height / 480; RoundFloatToInt:
+  lrintf, halves to even), the same rectangles, the dot and outline as CS; screen pixels from
+  the view's real viewport (`R_AddCmdDrawStretchPic`). At 1280x720: lines 4 pixels long and 2
+  thick, an 8-pixel gap. The look is archived dvars named after CS's: `kb_crosshairSize`,
+  `kb_crosshairGap`, `kb_crosshairThickness`, `kb_crosshairColor` (r g b a), `kb_crosshairUseAlpha`,
+  `kb_crosshairDot`, `kb_crosshairOutline`, `kb_crosshairOutlineThickness`.
+- **Additive like CS**: with usealpha 0 CS adds its colour at alpha 200 (`whiteAdditive`). BO's
+  `white_additive` is a 3D material (the 2D path refuses it: it uses the depth buffer); the 2D
+  materials with additive blending all have textures (a probe of every loaded material). Of
+  those, `light_corona` (2d technique, ONE/ONE) is pure white at its centre: a quad whose four
+  UVs are its centre adds exactly the colour (read back on black: 0.25, 0.5, 200/255, 1 gave 64,
+  128, 200, 255; on grey 0.25 + 200/255 gave 255). The crosshair is that, with the colour times
+  200/255; `kb_crosshairUseAlpha 1` blends `white` instead, as CS does.
+- **When it shows**: wherever the original drew a crosshair at all (alive, a weapon, the HUD on,
+  not hardcore, `cg_drawCrosshair`, not in the killstreak map, not flashbanged; vehicles and
+  turrets keep theirs), but also during weapon raise, switch, reload and melee (the original
+  hid it there); it hides while aiming down the sights (CS hides it scoped; only with
+  `kb_noAds 0`). White always (no enemy red), no fading, no movement.
+- **The shots**: stage B locked a human player's spread to the crosshair (1 degree, the old
+  crosshair's gap). The CS crosshair's gap is in pixels: its lines start 4 pixels from the centre
+  at the user's 1280x720 and FOV 80 (tanHalfFovY 0.63), atan(4 / 360 * 0.63) = 0.40 degrees, so
+  KB_CROSSHAIR_SPREAD is 0.4 (5 pixels at FOV 65, still inside the lines). Shotguns keep their
+  pellet spread. At 1 degree shots landed ~10 pixels out, past the 8-pixel ends of the CS lines.
+- **kb_noVersion** (archived, default 1): `CG_DrawVersion` (the "Call of Duty Multiplayer -
+  Release COD_T5_R MP build 7.0.61 ..." line at the bottom right of menus and matches) is not
+  drawn. The main menu's build number (`UI_DrawBuildNumber`, top right) is untouched.
+- **Checked**: the client on mp_nuked with 7 bots and the scripted player firing, reloading,
+  switching weapons, sprint-firing, meleeing and leaning, 75 s, a screenshot every 150 frames:
+  every one of the 245 after the spawn has the crosshair's exact pixels (each bar pixel >= 199
+  in every channel, the pattern above), none before it (loading screen, menus); no version text.
+  With `kb_staticCrosshair 0 kb_noVersion 0`: the original crosshair and the version text.
+  fps with bots: 518/687/703/743/664/711/727/444 and 515/673/696/724/658/711/744/422 (the
+  same). ASan client (`MTL_DEBUG_LAYER=1`, bots, 250 s over three maps): no report. Every
+  changed file through check_file.py natively and `--i386`; audit_splitlocals.py 0.
 
 ## Decisions (session 19)
 

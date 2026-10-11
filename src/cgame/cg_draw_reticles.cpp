@@ -15,11 +15,160 @@
 #include <demo/demo_playback.h>
 #include <ui_mp/ui_main_mp.h>
 #include "cg_drawtools.h"
+#include <gfx_d3d/r_rendercmds.h>
+#include <math.h>
 
-// kb_staticCrosshair: every weapon draws the same small crosshair, the four side pieces of the
-// smallest one the game draws (KB_CROSSHAIR_SPREAD), fixed: no growing or fading with the
-// spread, no centre reticle. Registered by CG_Init.
-Material *cg_kbReticleSide;
+// kb_staticCrosshair: the user's Counter-Strike crosshair, CS:GO's classic static style
+// (cl_crosshairstyle 4) drawn as CWeaponCSBase::DrawCrosshair draws it, in screen pixels at the
+// centre of the view, the kb_crosshair* dvars standing for CS's cl_crosshair* ones. It never
+// moves, grows, fades or changes colour, and stays up while reloading, switching weapons or
+// meleeing; it hides where CS hides it (aiming down the sights) and where the HUD is off.
+// CS adds its crosshair to the picture (cl_crosshairusealpha 0). BO has no plain additive white
+// 2D material: light_corona (the 2d technique, ONE/ONE blending) is pure white at its centre,
+// so a quad sampling only that point adds exactly its colour (read back on black: colours 0.25,
+// 0.5, 200/255 and 1 gave 64, 128, 200 and 255). Registered by CG_Init.
+Material *cg_kbCrosshairAdditive;
+
+// CS's RoundFloatToInt: to the nearest integer, halves to even (fistp, lrintf on arm64).
+static int CG_KbRoundFloatToInt(float f)
+{
+    return (int)lrintf(f);
+}
+
+// CS's DrawCrosshairRect: [x0, x1) x [y0, y1) in screen pixels, its outline first. `additive`:
+// the colour is added (cg_kbCrosshairAdditive at its centre), else blended with its alpha.
+static void CG_KbDrawCrosshairRect(const float *color, float alpha, bool additive, int x0, int y0, int x1, int y1)
+{
+    float thick; // outline thickness
+    float outlineColor[4];
+    int ox0, oy0, ox1, oy1;
+
+    if ( x1 <= x0 || y1 <= y0 )
+        return;
+    if ( kb_crosshairOutline->current.enabled )
+    {
+        // vgui's DrawFilledRect takes ints: CS's float edges truncate.
+        thick = kb_crosshairOutlineThickness->current.value;
+        ox0 = (int)((float)x0 - thick);
+        oy0 = (int)((float)y0 - thick);
+        ox1 = (int)((float)x1 + thick);
+        oy1 = (int)((float)y1 + thick);
+        outlineColor[0] = 0.0f;
+        outlineColor[1] = 0.0f;
+        outlineColor[2] = 0.0f;
+        outlineColor[3] = alpha;
+        R_AddCmdDrawStretchPic(
+            (float)ox0,
+            (float)oy0,
+            (float)(ox1 - ox0),
+            (float)(oy1 - oy0),
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            outlineColor,
+            cgMedia.whiteMaterial);
+    }
+    if ( additive )
+        R_AddCmdDrawStretchPic(
+            (float)x0,
+            (float)y0,
+            (float)(x1 - x0),
+            (float)(y1 - y0),
+            0.5,
+            0.5,
+            0.5,
+            0.5,
+            color,
+            cg_kbCrosshairAdditive);
+    else
+        R_AddCmdDrawStretchPic(
+            (float)x0,
+            (float)y0,
+            (float)(x1 - x0),
+            (float)(y1 - y0),
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            color,
+            cgMedia.whiteMaterial);
+}
+
+static bool CG_KbCrosshairAllowed(int localClientNum, const playerState_s *predictedPlayerState)
+{
+    if ( !CG_IsShowingZombieMap() && cg_paused->current.integer && cg_drawpaused->current.enabled )
+        return 0;
+    if ( CG_IsReticleTurnedOff(localClientNum) )
+        return 0;
+    if ( Demo_IsGameHudHidden() )
+        return 0;
+    return (predictedPlayerState->locationSelectionInfo & 0xF) == 0;
+}
+
+static void CG_KbDrawStaticCrosshair(int localClientNum)
+{
+    const ScreenPlacement *scrPlace;
+    bool additive;
+    float color[4];
+    float alpha;
+    int screenHeight;
+    int centerX;
+    int centerY;
+    int crosshairDistance;
+    int barSize;
+    int barThickness;
+    int innerLeft;
+    int innerRight;
+    int innerTop;
+    int innerBottom;
+    int x0;
+    int x1;
+    int y0;
+    int y1;
+
+    scrPlace = &scrPlaceView[localClientNum];
+    screenHeight = (int)scrPlace->realViewportSize[1];
+    Dvar_GetUnpackedColor(kb_crosshairColor, color);
+    alpha = color[3];
+    additive = !kb_crosshairUseAlpha->current.enabled;
+    if ( additive )
+    {
+        // CS draws its "whiteAdditive" texture at alpha 200: the colour times 200/255 is added
+        // to the picture (and its outline is black at alpha 200).
+        alpha = 200.0f / 255.0f;
+        color[0] = color[0] * alpha;
+        color[1] = color[1] * alpha;
+        color[2] = color[2] * alpha;
+        color[3] = 1.0f;
+    }
+    // CS: iCrosshairDistance = fCrosshairDistanceGoal (4) + cl_crosshairgap, truncated, in
+    // pixels; the lines' length and thickness scale with the screen height (YRES).
+    crosshairDistance = (int)(4.0f + kb_crosshairGap->current.value);
+    barSize = CG_KbRoundFloatToInt((float)(kb_crosshairSize->current.value * ((float)screenHeight / 480.0)));
+    barThickness = CG_KbRoundFloatToInt((float)(kb_crosshairThickness->current.value * ((float)screenHeight / 480.0)));
+    if ( barThickness < 1 )
+        barThickness = 1;
+    centerX = (int)scrPlace->realViewportBase[0] + (int)scrPlace->realViewportSize[0] / 2;
+    centerY = (int)scrPlace->realViewportBase[1] + screenHeight / 2;
+
+    innerLeft = centerX - crosshairDistance - barThickness / 2;
+    innerRight = innerLeft + 2 * crosshairDistance + barThickness;
+    y0 = centerY - barThickness / 2;
+    y1 = y0 + barThickness;
+    CG_KbDrawCrosshairRect(color, alpha, additive, innerLeft - barSize, y0, innerLeft, y1);
+    CG_KbDrawCrosshairRect(color, alpha, additive, innerRight, y0, innerRight + barSize, y1);
+
+    innerTop = centerY - crosshairDistance - barThickness / 2;
+    innerBottom = innerTop + 2 * crosshairDistance + barThickness;
+    x0 = centerX - barThickness / 2;
+    x1 = x0 + barThickness;
+    CG_KbDrawCrosshairRect(color, alpha, additive, x0, innerTop - barSize, x1, innerTop);
+    CG_KbDrawCrosshairRect(color, alpha, additive, x0, innerBottom, x1, innerBottom + barSize);
+
+    if ( kb_crosshairDot->current.enabled )
+        CG_KbDrawCrosshairRect(color, alpha, additive, x0, y0, x1, y1);
+}
 
 void __cdecl CG_CalcCrosshairPosition(const cg_s *cgameGlob, float *x, float *y)
 {
@@ -251,6 +400,12 @@ void __cdecl CG_DrawCrosshair(int localClientNum)
                 }
                 if ( drawHud )
                 {
+                    if ( kb_staticCrosshair->current.enabled )
+                    {
+                        if ( posLerp == 0.0 && CG_KbCrosshairAllowed(localClientNum, ps) )
+                            CG_KbDrawStaticCrosshair(localClientNum);
+                        return;
+                    }
                     cgs = CG_GetLocalClientStaticGlobals(localClientNum);
                     CG_CalcCrosshairColor(localClientNum, reticleAlpha, color);
                     if ( color[3] >= 0.0099999998 )
@@ -297,8 +452,7 @@ void __cdecl CG_DrawCrosshair(int localClientNum)
                                                 v1 = centerW;
                                             centerW = v1;
                                         }
-                                        if ( !kb_staticCrosshair->current.enabled )
-                                            CG_DrawReticleCenter(localClientNum, weapDef, color, centerX, centerY, centerW, transScale);
+                                        CG_DrawReticleCenter(localClientNum, weapDef, color, centerX, centerY, centerW, transScale);
                                         CG_DrawReticleSides(localClientNum, weapIndex, color, centerX, centerY, centerW, transScale);
                                         //if ( g_DXDeviceThread == GetCurrentThreadId() )
                                             //D3DPERF_EndEvent();
@@ -1310,10 +1464,7 @@ void __cdecl CG_DrawReticleSides(
     {
         __debugbreak();
     }
-    if ( kb_staticCrosshair->current.enabled )
-        material = cg_kbReticleSide;
-    else
-        material = weapDef->reticleSide;
+    material = weapDef->reticleSide;
     if ( material )
     {
         horzAlign = 2;
@@ -1331,17 +1482,10 @@ void __cdecl CG_DrawReticleSides(
         {
             reticleAlpha = 1.0f;
         }
-        CG_CalcReticleColor(
-            baseColor,
-            reticleAlpha,
-            kb_staticCrosshair->current.enabled ? 0.0f : cgameGlob->predictedPlayerState.aimSpreadScale,
-            reticleColor);
+        CG_CalcReticleColor(baseColor, reticleAlpha, cgameGlob->predictedPlayerState.aimSpreadScale, reticleColor);
         if ( reticleColor[3] >= 0.0099999998 )
         {
-            if ( kb_staticCrosshair->current.enabled )
-                drawSize[0] = (float)KB_CROSSHAIR_SIDE_SIZE * transScale;
-            else
-                drawSize[0] = (float)weapDef->iReticleSideSize * transScale;
+            drawSize[0] = (float)weapDef->iReticleSideSize * transScale;
             drawSize[1] = drawSize[0];
             CG_CalcReticleSpread(cgameGlob, weapDef, drawSize, transScale, spread);
             scrPlace = &scrPlaceView[localClientNum];
@@ -1421,13 +1565,6 @@ void __cdecl CG_CalcReticleSpread(
         && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\cgame\\cg_draw_reticles.cpp", 1016, 0, "%s", "weapDef") )
     {
         __debugbreak();
-    }
-    if ( kb_staticCrosshair->current.enabled )
-    {
-        scale = (float)(240.0 * tan(KB_CROSSHAIR_SPREAD * transScale * 0.017453292)) / cgameGlob->refdef.tanHalfFovY;
-        *spread = scale;
-        spread[1] = scale;
-        return;
     }
     BG_GetSpreadForWeapon(&cgameGlob->predictedPlayerState, weapDef, &f, &maxSpread);
     f = (float)((float)((float)(maxSpread - f) * (float)(cgameGlob->predictedPlayerState.aimSpreadScale / 255.0)) + f)

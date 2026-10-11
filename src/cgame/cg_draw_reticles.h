@@ -2,7 +2,7 @@
 #include <cgame_mp/cg_local_mp.h>
 #include <bgame/bg_weapons.h>
 
-extern Material *cg_kbReticleSide;
+extern Material *cg_kbCrosshairAdditive;
 
 void __cdecl CG_CalcCrosshairPosition(const cg_s *cgameGlob, float *x, float *y);
 char __cdecl CG_GetWeapReticleZoom(const cg_s *cgameGlob, float *zoom);

@@ -84,7 +84,8 @@ void __cdecl CL_DrawScreen(int localClientNum)
     {
         //BLOPS_NULLSUB();
     }
-    if ( cg_draw2D && cg_drawVersion && cg_draw2D->current.enabled && cg_drawVersion->current.enabled )
+    if ( cg_draw2D && cg_drawVersion && cg_draw2D->current.enabled && cg_drawVersion->current.enabled
+        && !kb_noVersion->current.enabled )
         CG_DrawVersion();
     Con_DrawConsole(localClientNum);
     DevGui_Draw(localClientNum);
