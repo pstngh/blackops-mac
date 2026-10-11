@@ -258,7 +258,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **No launchers, no killstreaks** (session 23, the user's request on top of `kb_noGrenades`):
   `kb_noLaunchers` (nobody holds an RPG, M72 LAW or Strela-3; a class's comes as an AK-47) and
   `kb_noKillstreaks` (nobody earns any), both for everyone, bots too (Decisions session 23).
-  The game folder's copy does not have them yet.
+  The game folder's copy has them.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
