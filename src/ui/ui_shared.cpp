@@ -11060,6 +11060,57 @@ void __cdecl UI_AddMenuList(int localClientNum, UiContext *dc, MenuList *menuLis
     }
 }
 
+// kb_cacButton (HANDOFF, Decisions session 28): the main menu's THEATER (films, which need the removed
+// online service: offline it only says "No network connection") opens Create a Class, as the lobbies'
+// CREATE A CLASS button does. The menu comes from the zone, so the change is made to the menu as the UI
+// takes it: the labels' text and the button's action. A menu taken again is already changed.
+static GenericEventScript s_kbCacButtonScript;
+
+static bool UI_KbIsTextExp(const ExpressionStatement *exp, const char *text)
+{
+    return exp->numRpn == 2
+        && exp->rpn[0].type == 0
+        && exp->rpn[0].data.constant.dataType == VAL_STRING
+        && exp->rpn[1].type == 3
+        && !I_stricmp(exp->rpn[0].data.constant.internals.string, text);
+}
+
+static void UI_KbPatchMenu(menuDef_t *menu)
+{
+    int i;
+    itemDef_s *item;
+    textDef_s *textDef;
+    GenericEventHandler *handler;
+    GenericEventScript *eventScript;
+
+    if ( !kb_cacButton->current.enabled || I_stricmp(menu->window.name, "main_text") )
+        return;
+    for ( i = 0; i < menu->itemCount; ++i )
+    {
+        item = menu->items[i];
+        if ( item->type != 1 && item->type != 3 )
+            continue;
+        textDef = item->typeData.textDef;
+        if ( !textDef || !textDef->textExpData || !UI_KbIsTextExp(&textDef->textExpData->textExp, "@MPUI_THEATER_LOBBY_CAPS") )
+            continue;
+        textDef->textExpData->textExp.rpn[0].data.constant.internals.string = "@MPUI_CREATE_A_CLASS_CAPS";
+        for ( handler = item->onEvent; handler; handler = handler->next )
+        {
+            if ( I_stricmp(handler->name, "action") )
+                continue;
+            for ( eventScript = handler->eventScript; eventScript; eventScript = eventScript->next )
+            {
+                if ( eventScript->action && strstr(eventScript->action, "open theater_flyout") )
+                    break;
+            }
+            if ( !eventScript )
+                continue;
+            s_kbCacButtonScript.action = "play \"uin_navigation_click\" ; exec \"set ui_cac_ingame 0\" ; setdvar invite_visible \"0\" ; open cac_main ;";
+            handler->eventScript = &s_kbCacButtonScript;
+        }
+    }
+}
+
 void __cdecl UI_AddMenu(int localClientNum, UiContext *dc, menuDef_t *menu, int close)
 {
     int i; // [esp+8h] [ebp-8h]
@@ -11090,6 +11141,7 @@ void __cdecl UI_AddMenu(int localClientNum, UiContext *dc, menuDef_t *menu, int 
     {
         __debugbreak();
     }
+    UI_KbPatchMenu(menu);
     dc->Menus[dc->menuCount++] = menu;
     if ( close )
         Menus_Close(localClientNum, dc, menu);

@@ -438,5 +438,6 @@ extern const dvar_t *ui_readingSaveDevice;
 extern const dvar_t *ui_signedInToProfile;
 extern const dvar_t *emblem_scroll_delay_first;
 extern const dvar_t *emblem_scroll_delay_rest;
+extern const dvar_t *kb_cacButton;
 
 extern uiInfo_s uiInfoArray[1];

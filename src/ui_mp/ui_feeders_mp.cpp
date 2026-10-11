@@ -125,20 +125,20 @@ int __cdecl UI_Project_FeederCount(int localClientNum, int contextIndex, float f
         case 49:
         case 58:
         case 97:
-            sharedUiInfo.numAttachments = BG_UnlockablesGetGroupItemCount();
-            if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments
+            sharedUiInfo.numItemsInSlot = BG_UnlockablesGetGroupItemCount();
+            if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\ui_mp\\ui_feeders_mp.cpp",
                             377,
                             0,
                             "%s",
-                            "listPtr->cursorPos[contextIndex] < sharedUiInfo.sortedItemPivot") )
+                            "listPtr->cursorPos[contextIndex] < sharedUiInfo.numItemsInSlot") )
             {
                 __debugbreak();
             }
             sharedUiInfo.itemIndex = BG_UnlockablesGetItemIndexInSlot(listPtr->cursorPos[contextIndex]);
-            sharedUiInfo.itemIndex = listPtr->cursorPos[contextIndex];
-            result = sharedUiInfo.numAttachments;
+            sharedUiInfo.itemNum = listPtr->cursorPos[contextIndex];
+            result = sharedUiInfo.numItemsInSlot;
             break;
         case 55:
             friendCount = Friends_GetCount(controllerIndex, 0);
@@ -148,21 +148,24 @@ int __cdecl UI_Project_FeederCount(int localClientNum, int contextIndex, float f
         case 57:
             if ( sharedUiInfo.itemIndex == -1 )
                 goto LABEL_55;
-            sharedUiInfo.attachmentNum = BG_UnlockablesGetNumItemAttachmentsWithAttachPoint(
+            // The attachment count in numAttachments and the item group's count in numItemsInSlot, the fields
+            // IDA's cross-references give them: after the struct rework (18948a32) this count went to
+            // attachmentNum, the picked attachment, so a click in the list equipped attachment number <count>
+            sharedUiInfo.numAttachments = BG_UnlockablesGetNumItemAttachmentsWithAttachPoint(
                                                                          sharedUiInfo.itemIndex,
                                                                          attachmentFilter->current.integer);
-            if ( sharedUiInfo.attachmentNum == 1 )
+            if ( sharedUiInfo.numAttachments == 1 )
                 result = 1;
             else
-                result = sharedUiInfo.attachmentNum - 1;
+                result = sharedUiInfo.numAttachments - 1;
             break;
         case 59:
         case 65:
         case 66:
         case 67:
         case 100:
-            sharedUiInfo.numAttachments = BG_UnlockablesGetGroupItemCount();
-            result = sharedUiInfo.numAttachments;
+            sharedUiInfo.numItemsInSlot = BG_UnlockablesGetGroupItemCount();
+            result = sharedUiInfo.numItemsInSlot;
             break;
         case 60:
             numWeaponOptions = 0;
@@ -171,8 +174,8 @@ int __cdecl UI_Project_FeederCount(int localClientNum, int contextIndex, float f
             result = numWeaponOptions;
             break;
         case 61:
-            sharedUiInfo.numAttachments = BG_UnlockablesGetGroupItemCount() + 1;
-            result = sharedUiInfo.numAttachments;
+            sharedUiInfo.numItemsInSlot = BG_UnlockablesGetGroupItemCount() + 1;
+            result = sharedUiInfo.numItemsInSlot;
             break;
         case 68:
             result = LiveContracts_GetContractsCountForList();
@@ -689,11 +692,11 @@ char *__cdecl UI_FeederItemText_Attachments(
     bool isSelectedItem; // [esp+53h] [ebp-1h]
 
     listPtr = Item_GetListBoxDef(item);
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.attachmentNum && sharedUiInfo.attachmentNum )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.attachmentNum - 1;
-        v13 = sharedUiInfo.attachmentNum - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
+        v13 = sharedUiInfo.numAttachments - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v13);
     }
@@ -703,7 +706,7 @@ char *__cdecl UI_FeederItemText_Attachments(
     isSelectedItem = 0;
     isItemGreyedOut = 0;
     itemIndex = sharedUiInfo.itemIndex;
-    if ( sharedUiInfo.attachmentNum == 1 )
+    if ( sharedUiInfo.numAttachments == 1 )
         attachmentNum = BG_UnlockablesGetItemAttachmentNumWithAttachPoint(
                                             sharedUiInfo.itemIndex,
                                             index,
@@ -1313,11 +1316,11 @@ char *__cdecl UI_FeederItemText_ChallengesPerks(
     bool itemPurchased; // [esp+1Bh] [ebp-1h]
 
     listPtr = Item_GetListBoxDef(item);
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot && sharedUiInfo.numItemsInSlot )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
-        v9 = sharedUiInfo.numAttachments - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numItemsInSlot - 1;
+        v9 = sharedUiInfo.numItemsInSlot - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v9);
     }
@@ -1356,11 +1359,11 @@ char *__cdecl UI_FeederItemText_ItemInSlot(
     bool isSelectedItem; // [esp+23h] [ebp-1h]
 
     listPtr = Item_GetListBoxDef(item);
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot && sharedUiInfo.numItemsInSlot )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
-        v9 = sharedUiInfo.numAttachments - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numItemsInSlot - 1;
+        v9 = sharedUiInfo.numItemsInSlot - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v9);
     }
@@ -1369,7 +1372,7 @@ char *__cdecl UI_FeederItemText_ItemInSlot(
     if ( listPtr->cursorPos[contextIndex] == index && !item->animInfo->animating )
     {
         sharedUiInfo.itemIndex = itemIndex;
-        sharedUiInfo.itemIndex = index;
+        sharedUiInfo.itemNum = index;
         isSelectedItem = Window_HasFocus(contextIndex, &item->window);
     }
     cost = BG_UnlockablesGetItemCost(itemIndex);
@@ -1420,7 +1423,7 @@ char *__cdecl UI_FeederItemText_CustomPerksInSlot(
     if ( Item_GetListBoxDef(item)->cursorPos[contextIndex] == index )
     {
         sharedUiInfo.itemIndex = itemIndex;
-        sharedUiInfo.itemIndex = index;
+        sharedUiInfo.itemNum = index;
         isSelectedItem = Window_HasFocus(contextIndex, &item->window);
     }
     isTweakable = UI_Gametype_Custom_IsPerkTweakable(itemIndex);
@@ -1459,11 +1462,11 @@ char *__cdecl UI_FeederItemText_ChallengesKillstreaks(
     int v12; // [esp+4h] [ebp-Ch]
     int itemIndex; // [esp+Ch] [ebp-4h]
 
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot && sharedUiInfo.numItemsInSlot )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
-        v12 = sharedUiInfo.numAttachments - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numItemsInSlot - 1;
+        v12 = sharedUiInfo.numItemsInSlot - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v12);
     }
@@ -1524,11 +1527,11 @@ char *__cdecl UI_FeederItemText_SortedItems(
     unsigned int v35[257]; // [esp+C30h] [ebp-408h]
     bool v36; // [esp+1037h] [ebp-1h]
 
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot && sharedUiInfo.numItemsInSlot )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
-        v23 = sharedUiInfo.numAttachments - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numItemsInSlot - 1;
+        v23 = sharedUiInfo.numItemsInSlot - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v23);
     }
@@ -1672,11 +1675,11 @@ const char *__cdecl UI_FeederItemText_CustomKillstreaks(
     int itemIndex; // [esp+10h] [ebp-8h]
     bool isSelectedItem; // [esp+17h] [ebp-1h]
 
-    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numAttachments && sharedUiInfo.numAttachments )
+    if ( listPtr->cursorPos[contextIndex] >= sharedUiInfo.numItemsInSlot && sharedUiInfo.numItemsInSlot )
     {
         listPtr->startPos[contextIndex] = 0;
-        listPtr->cursorPos[contextIndex] = sharedUiInfo.numAttachments - 1;
-        v11 = sharedUiInfo.numAttachments - 1;
+        listPtr->cursorPos[contextIndex] = sharedUiInfo.numItemsInSlot - 1;
+        v11 = sharedUiInfo.numItemsInSlot - 1;
         LocalClientNum = Com_ControllerIndex_GetLocalClientNum(controllerIndex);
         UI_FeederSelection(LocalClientNum, contextIndex, feederID, v11);
     }
@@ -3708,8 +3711,11 @@ void __cdecl UI_Project_FeederSelection(int localClientNum, int contextIndex, fl
         case 'C':
         case 'a':
         case 'd':
+            // The row goes to its own field: the struct rework (18948a32) renamed IDA's modIndex here, the
+            // item, to itemIndex and left the row's store on top of it, so a picked row was taken for an item
+            // number (the Uzi's row 4 equipped item 4, the Makarov); the item texts above did the same
             sharedUiInfo.itemIndex = BG_UnlockablesGetItemIndexInSlot(index);
-            sharedUiInfo.itemIndex = index;
+            sharedUiInfo.itemNum = index;
             break;
         case '9':
             sharedUiInfo.attachmentNum = BG_UnlockablesGetItemAttachmentNumWithAttachPoint(

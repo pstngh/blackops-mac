@@ -12,6 +12,7 @@
 #include <win32/win_net.h>
 #include <win32/win_input.h>
 #include <win32/win_wndproc.h>
+#include <client/cl_keys.h>   // Key_StringToKeynum (kb_key)
 
 #include <pthread.h>
 #include <unistd.h>
@@ -270,6 +271,31 @@ sysEvent_t *Sys_GetEvent(sysEvent_t *result) {
 void Sys_LoadingKeepAlive() { Sys_PumpSDLEvents(Sys_Milliseconds()); }
 
 // ---- Input / window (driven by the SDL layer / GL backend) -----------------
+// Test tools for the menus, run from KB_MENU_CMDS or KB_CMDS (CLAUDE.md): `kb_mouse <x> <y>` puts the menu
+// cursor at that back-buffer pixel in place of the mouse's position (no arguments: the mouse again), and
+// `kb_key <key>` presses and releases a key by its bind name (MOUSE1 clicks there, ESCAPE, ENTER, ...).
+static bool kbMouseOverride;
+static int kbMouseX, kbMouseY;
+static cmd_function_s KB_Mouse_f_VAR;
+static cmd_function_s KB_Key_f_VAR;
+
+static void KB_Mouse_f() {
+    kbMouseOverride = Cmd_Argc() >= 3;
+    if (kbMouseOverride) {
+        kbMouseX = atoi(Cmd_Argv(1));
+        kbMouseY = atoi(Cmd_Argv(2));
+    }
+}
+static void KB_Key_f() {
+    int key = Cmd_Argc() >= 2 ? Key_StringToKeynum(Cmd_Argv(1)) : -1;
+    if (key < 0) {
+        Com_Printf(0, "usage: kb_key <key>, a bind name such as MOUSE1, ESCAPE, ENTER or a letter\n");
+        return;
+    }
+    Sys_QueEvent(Sys_Milliseconds(), SE_KEY, key, 1, 0, nullptr);
+    Sys_QueEvent(Sys_Milliseconds(), SE_KEY, key, 0, 0, nullptr);
+}
+
 // Poll the mouse each frame and feed it to the client, mirroring win_input.cpp's
 // IN_Frame -> IN_MouseMove -> CL_MouseEvent. SDL events are pumped every frame by
 // Com_EventLoop (Sys_GetEvent -> Sys_PumpSDLEvents), so SDL_GetMouseState is
@@ -283,7 +309,13 @@ void IN_Frame() {
     // garbage deltas (the view "teleports" while looking). Use SDL_GetRelativeMouseState
     // for motion when captured; only the menu path needs the absolute cursor position.
     static bool relative = false;
+    static bool commandsAdded = false;
     int x = 0, y = 0, dx = 0, dy = 0;
+    if (!commandsAdded) {
+        commandsAdded = true;
+        Cmd_AddCommandInternal("kb_mouse", KB_Mouse_f, &KB_Mouse_f_VAR);
+        Cmd_AddCommandInternal("kb_key", KB_Key_f, &KB_Key_f_VAR);
+    }
     if (relative) {
         SDL_GetRelativeMouseState(&dx, &dy);   // accumulated look deltas since last call
         SDL_GetMouseState(&x, &y);             // position (unused in-game, but harmless)
@@ -291,6 +323,7 @@ void IN_Frame() {
         SDL_GetMouseState(&x, &y);             // absolute window-relative cursor (menu)
         KB_GLWindowToPixels(&x, &y);
         KB_WindowToBackbuffer(&x, &y);
+        if (kbMouseOverride) { x = kbMouseX; y = kbMouseY; }
         static int oldX = 0, oldY = 0;
         static bool primed = false;
         if (!primed) { oldX = x; oldY = y; primed = true; }

@@ -101,7 +101,8 @@ gap, 0.4 degrees), `kb_noVersion` (no version text at the bottom right), `kb_noA
 Assault's lean from OpenMoHAA: 40 degrees, the view rolls, full speed and sprint while leaning;
 `ps->leanf` is the angle / 80), `kb_noProne` (nobody goes prone or dives to prone; the prone keys
 crouch, `toggleprone` toggles crouch), `kb_noHitMarker` (no hit marker around the crosshair; the hit
-sound stays). Tests where the player should die pass
+sound stays), `kb_cacButton` (the main menu's THEATER button is CREATE A CLASS; read at startup). Tests
+where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`; a scratch profile keeps whatever a run set
 (they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`; `viewpos` prints the
@@ -122,7 +123,12 @@ KB_CMDS='8:openscriptmenu team_marinesopfor autoassign|11:openscriptmenu changec
 custom class; the default classes are `assault_mp`, `smg_mp`, `cqb_mp` (shotgun), `lmg_mp`,
 `sniper_mp`. Weapons: `take all|give rpg_mp|weapnext`. On mp_nuked, `setviewpos -100 360 200 90`
 drops the player into the street with ~700 units of clear run north (sprint tests). `KB_MENU_CMDS` takes the same list but times it from startup and runs it once,
-in a map or not: the main menu (`12:openmenu cac_main|30:quit`).
+in a map or not: the main menu (`12:openmenu cac_main|30:quit`). Clicking through menus from either list:
+`kb_mouse <x> <y>` puts the menu cursor at that back-buffer pixel (no arguments: the mouse again) and
+`kb_key <key>` presses and releases a key by bind name (`MOUSE1` clicks there, `ESCAPE`, `ENTER`); read
+positions off a `KB_SCREENSHOT` frame. In a 1024x768 window the main menu's CREATE A CLASS is at 170 131,
+then Custom 1 160 190, Primary 154 191 (twice: the gun screen, then its groups), the SMG group 190 223
+(HANDOFF, Decisions session 28); frames lag the command clock by ~2 s at `com_maxfps 60`.
 
 With vsync on (the default), a GL client started while the display sleeps hangs in
 its first buffer swap (SDL3 waits for a display refresh that never comes): wake
@@ -175,7 +181,8 @@ leaves none); `damage <weapon>=<mp weapon>` copies a multiplayer gun's damage, `
 of the install path, so a written zone is a source only from a scratch game folder; tool runs pass
 `+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
 `listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold
-and their damage, localized strings with their text, `menu <name>` a menu's items and scripts),
+and their damage, localized strings with their text, `menu <name>` a menu's items with their rect,
+visibility and text expressions and the scripts with their conditions, in postfix order),
 `listzone - weapon` multiplayer's weapons, `listzone - localize [prefix]` its strings, `listzone -
 rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a table. Commands too long
 for the command line (1 KB) go in a cfg under `<fs_h>/main` (`+exec`).

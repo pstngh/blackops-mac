@@ -120,6 +120,7 @@ const dvar_t *ui_readingSaveDevice;
 const dvar_t *ui_signedInToProfile;
 const dvar_t *emblem_scroll_delay_first;
 const dvar_t *emblem_scroll_delay_rest;
+const dvar_t *kb_cacButton;
 
 uiInfo_s uiInfoArray[1];
 const serverFilter_s serverFilters[1] = {};
@@ -3250,6 +3251,13 @@ void __cdecl UI_InitOnceForAllClients()
     double Float; // st6
     Font_s *FontHandleDefault; // eax
 
+    // The user's main menu (HANDOFF, Decisions session 28; 0 gives the original menu), read as
+    // UI_InitUIInfos adds the menus, before UI_RegisterDvars
+    kb_cacButton = _Dvar_RegisterBool(
+        "kb_cacButton",
+        1,
+        1u,
+        "The main menu's THEATER button is CREATE A CLASS (read when the menus load: at startup)");
     UI_InitUIInfos();
     if ( useFastFile->current.enabled )
         DB_ResetZoneSize(0);

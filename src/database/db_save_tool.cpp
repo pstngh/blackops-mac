@@ -15,6 +15,7 @@
 #include <universal/com_memory.h>
 #include <universal/com_stringtable.h>
 #include <universal/com_stringtable_obj.h>
+#include <universal/q_parse.h>
 #include <universal/q_shared.h>
 #include <zlib/zlib.h>
 
@@ -1376,10 +1377,77 @@ static void DB_SaveTool_PrintStringTable(const StringTable *table)
     }
 }
 
+// The expression functions' names by index (expressions/functions.txt, which Expression_Init reads on the
+// client only): a compiled expression's operators past the arithmetic ones are 24 + that index.
+static const char *DB_SaveTool_ExpressionFunction(int index)
+{
+    static std::vector<std::string> names;
+    static bool loaded;
+    const RawFile *rawFile;
+    const char *parse;
+    const char *token;
+
+    if (!loaded)
+    {
+        loaded = true;
+        rawFile = DB_FindXAssetHeader(ASSET_TYPE_RAWFILE, (char *)"expressions/functions.txt", 0, -1).rawfile;
+        if (rawFile && rawFile->buffer)
+        {
+            parse = rawFile->buffer;
+            Com_BeginParseSession("expressions/functions.txt");
+            for (token = (const char *)Com_Parse(&parse); token && *token; token = (const char *)Com_Parse(&parse))
+                names.push_back(token);
+            Com_EndParseSession();
+        }
+    }
+    return index >= 0 && index < (int)names.size() ? names[index].c_str() : "?";
+}
+
+// An expression as the menu compiler left it, in postfix order: constants, operators and functions.
+static const char *DB_SaveTool_Expression(const ExpressionStatement *exp)
+{
+    static std::string text;
+    const expressionRpn *rpn;
+
+    if (!exp->rpn)
+        return "-";
+    text.clear();
+    for (rpn = exp->rpn; rpn->type != 3; ++rpn)
+    {
+        if (!text.empty())
+            text += ' ';
+        if (rpn->type == 0)
+        {
+            if (rpn->data.constant.dataType == VAL_STRING)
+                text += va("\"%s\"", DB_SaveTool_String(rpn->data.constant.internals.string));
+            else if (rpn->data.constant.dataType == VAL_FLOAT)
+                text += va("%g", rpn->data.constant.internals.floatVal);
+            else
+                text += va("%i", rpn->data.constant.internals.intVal);
+        }
+        else if (rpn->type == 1)
+        {
+            if (rpn->data.cmdIdx < NUM_EXPRESSION_OPERATORS)
+                text += g_expOperatorNames[rpn->data.cmdIdx];
+            else
+                text += DB_SaveTool_ExpressionFunction(rpn->data.cmdIdx - NUM_EXPRESSION_OPERATORS);
+        }
+        else
+        {
+            text += "<function>";
+        }
+    }
+    return text.c_str();
+}
+
 static void DB_SaveTool_PrintEventScripts(const char *who, const char *event, const GenericEventScript *script)
 {
     for (; script; script = script->next)
     {
+        if (script->blockID || script->constructID)
+            Com_Printf(0, "listzone:   %s %s: [type %i block %i construct %i%s, if %s]\n", who, event, script->type,
+                       script->blockID, script->constructID, script->fireOnTrue ? "" : " not",
+                       DB_SaveTool_Expression(&script->condition));
         if (script->action)
             Com_Printf(0, "listzone:   %s %s: %s\n", who, event, (const char *)script->action);
     }
@@ -1408,16 +1476,21 @@ static const focusItemDef_s *DB_SaveTool_FocusDef(const itemDef_s *item)
     }
 }
 
-static const char *DB_SaveTool_ItemText(const itemDef_s *item)
+static const textDef_s *DB_SaveTool_TextDef(const itemDef_s *item)
 {
     switch (item->type)
     {
     case 1: case 3: case 4: case 5: case 7: case 8: case 9: case 10: case 11: case 12: case 13: case 14: case 15:
     case 16: case 18: case 20: case 22:
-        return item->typeData.textDef ? DB_SaveTool_String(item->typeData.textDef->text) : "-";
+        return item->typeData.textDef;
     default:
-        return "-";
+        return NULL;
     }
+}
+
+static const char *DB_SaveTool_ItemText(const itemDef_s *item)
+{
+    return DB_SaveTool_TextDef(item) ? DB_SaveTool_String(DB_SaveTool_TextDef(item)->text) : "-";
 }
 
 // A menu's items and the scripts its events, keys and items run (for driving
@@ -1437,6 +1510,11 @@ static void DB_SaveTool_PrintMenu(const menuDef_t *menu)
         Com_Printf(0, "listzone:  item %i %s type %i dvar %s text \"%s\"\n", i, DB_SaveTool_String(item->window.name),
                    item->type, DB_SaveTool_String(item->dvar), DB_SaveTool_ItemText(item));
         Com_sprintf(who, sizeof(who), "item %i", i);
+        Com_Printf(0, "listzone:   %s rect %g %g %g %g align %i %i, visible if %s\n", who, item->window.rect.x,
+                   item->window.rect.y, item->window.rect.w, item->window.rect.h, item->window.rect.horzAlign,
+                   item->window.rect.vertAlign, DB_SaveTool_Expression(&item->visibleExp));
+        if (DB_SaveTool_TextDef(item) && DB_SaveTool_TextDef(item)->textExpData)
+            Com_Printf(0, "listzone:   %s text exp %s\n", who, DB_SaveTool_Expression(&DB_SaveTool_TextDef(item)->textExpData->textExp));
         focus = DB_SaveTool_FocusDef(item);
         DB_SaveTool_PrintHandlers(who, item->onEvent, focus ? (const ItemKeyHandler *)focus->onKey : NULL);
         if (focus && focus->mouseEnter)

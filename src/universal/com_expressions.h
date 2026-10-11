@@ -153,4 +153,5 @@ char __cdecl Expression_Read(int handle, ExpressionStatement *statement);
 void __cdecl Expression_Init();
 
 
+extern const char *g_expOperatorNames[];
 extern const char *g_expFunctionNames[457];

@@ -330,6 +330,16 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   hit is gone; the hit sound stays), both archived, default 1. Verified in play (Decisions session 28).
   The game folder has it (make_portable.sh at fc432bdf, the user's request; the DLC zone came out the
   same bytes, the shader library step still stops at the missing Metal Toolchain).
+- **Create a Class from the main menu, by mouse** (session 28, the user: "add a create a class button to the
+  main menu, ideally replace a button i can no longer use"): the main menu's THEATER (films, which need the
+  removed online service) is CREATE A CLASS (`kb_cacButton`, archived, default 1, read at startup), and the
+  Create-a-Class lists work with the mouse now. They had never been used by hand: a click in a gun list
+  equipped the item whose number was the row's (the Uzi's row 4: the Makarov), the perk lists likewise, and
+  an attachment click equipped attachment number <count> (nothing); upstream's sharedUiInfo rework left
+  those fields doubled up (Decisions session 28). Clicked through in the game: the button, Custom 1, a gun
+  (Thompson, MP5K), Perk 1 (Ghost Pro), an attachment (Suppressor), a camo (Tiger), Esc saves; the class
+  survives a restart and spawns in a match with the MP5K, suppressor and Tiger camo. New test commands
+  `kb_mouse` and `kb_key` click through menus (CLAUDE.md). Not in the game folder yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -750,7 +760,8 @@ build (`tools/make_portable.sh`: rerun after each build).
 5. The main menu's PLAY (Find Match, Private Match, Combat Training) depends on
    the removed online service; the launcher starts matches against bots instead.
    Combat Training proper (`xblive_basictraining`, its own rank) is not wired.
-6. Drive the main-menu menus by hand (keyboard/mouse) beyond the screens
+6. (Session 28: `kb_mouse`/`kb_key` click through menus now, CLAUDE.md; Create a Class's lists were
+   fixed that way, Decisions session 28.) Drive the main-menu menus by hand (keyboard/mouse) beyond the screens
    `KB_MENU_CMDS` reached (`cac_main`, `cac_weapon`, killstreaks): attachment/
    camo/reticle pickers, emblem editor, clan tag, barracks, combat record,
    after-action report; combat training (`xblive_basictraining`, its own buffer
@@ -776,6 +787,13 @@ StringTable assets; table strings shared with earlier assets are references
 that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
+
+Seen in session 28 (the sharedUiInfo rework, Decisions session 28): other fields still serve two meanings.
+UI_FeederSelection's mods list (feeder 9) stores the picked mod in `modCount`; the camo/option index
+(feeder 60, the UI viewer's camo, equipClassCurrentOption) and the combat record's pivot share
+`sortedItemPivot`; the clan tag feature to buy and the combat record's item count share `clanTagFeature`.
+Different screens, so no clash was seen. Also: every Create-a-Class screen shows a loading spinner in its
+middle (the UI viewer's character?); not looked at.
 
 Seen in session 27: a client that joins a separate dedicated server (two processes, no online service)
 and picks a custom class spawns with only the knife, whatever the class holds (Custom 1 with a DLC gun,
@@ -998,6 +1016,46 @@ Pre-existing (wrong on every build):
     `set kb_noHitMarker 1` mid-match: 15 hits, no marker drawn (screenshot right after a hit: the crosshair
     only). No script-patch warning; both dvars land in the profile's config_mp.cfg.
   - check_file.py natively and `--i386` on every changed .cpp, audit_splitlocals.py 0.
+
+**Create a Class on the main menu (`kb_cacButton`) and the Create-a-Class lists by mouse** (Status).
+- **Getting there**: the menus' own way is PLAY -> lobby -> CREATE A CLASS, and PLAY, OPERATIONS and THEATER
+  only say "No network connection detected" offline (`isSignedInToLive` 0; `listzone patch_ui_mp menu
+  main_text`). THEATER became the button: films are the least likely of the three to ever work offline.
+  The menus come from the zones (patch_ui_mp), so UI_KbPatchMenu (ui_shared.cpp) changes `main_text` as
+  UI_AddMenu takes it: the four items whose text expression is "@MPUI_THEATER_LOBBY_CAPS" (the button, its
+  highlighted and dimmed labels, the flyout header) say "@MPUI_CREATE_A_CLASS_CAPS" ("CREATE A CLASS",
+  the lobbies' own string), and the button's `action` handler runs one unconditional script, the
+  lobbies' `exec "set ui_cac_ingame 0" ; setdvar invite_visible "0" ; open cac_main`. cac_main's Esc
+  saves (`uploadstats`) and closes back to the main menu. UI_InitUIInfos adds main_text before
+  UI_RegisterDvars, so `kb_cacButton` is registered at the top of UI_InitOnceForAllClients (registered
+  later, the menu was added while the dvar was null: the first try crashed there).
+- **The lists' bug**: a click in a drop-down list (modal listbox) runs its `doubleClick` at once:
+  equipclasscurrentitem / equipclasscurrentattachment / equipclasscurrentoption with sharedUiInfo's
+  current item, attachment or option. Upstream's struct rework (18948a32, "IDA got the struct wrong")
+  renamed the stores of IDA's `modIndex` (the item) to `itemIndex` but left the next store, the row, as
+  `itemIndex` too: in UI_Project_FeederCount (49/58/97), UI_FeederItemText_ItemInSlot,
+  UI_FeederItemText_CustomPerksInSlot (every frame, for the highlighted row) and UI_Project_FeederSelection.
+  The row now goes to `itemNum` (nothing reads it). Likewise feeder 57 (attachments) counted into
+  `attachmentNum`, the picked attachment, which UI_FeederItemText_Attachments also read as the count:
+  the count is `numAttachments` now and the item groups' count (feeders 49/58/97/59/65-67/100 and the item
+  texts' cursor clamps) `numItemsInSlot`, the fields the struct's IDA cross-references give them (the
+  original assert text still says numItemsInSlot). sharedUiInfo is runtime-only, so only the code's
+  consistency matters, not the layout. "Item WEAPON_MP5K does not have attachment number 7" every frame
+  in the attachment list is gone with it.
+- **Tools**: `kb_mouse <x> <y>` / `kb_key <key>` (sys_platform.cpp, registered on the first IN_Frame)
+  stand in for the mouse and keyboard in KB_MENU_CMDS/KB_CMDS; listzone's menus print each item's rect,
+  visibility and text expressions and each script's condition (postfix; function names from
+  expressions/functions.txt, which the dedicated server doesn't load into the evaluator).
+- **Checked** (release client, scratch profile, 1024x768 window, KB_SCREENSHOT): the main menu shows CREATE A
+  CLASS, highlighted under the cursor; the click opens Create a Class (Custom 1-10), Esc returns. Before
+  the fix: Custom 1's Thompson row equipped nothing visible ("MAKAROV DUAL WIELD" label; the class's secondary
+  showed that item afterwards), the Uzi row showed "MAKAROV". After: Thompson (`statReadDDL cacLoadouts
+  customclass1 primary` 25, the screen THOMPSON with its stat bars), MP5K (15), Perk 1 Ghost Pro, the MP5K's
+  Suppressor (primaryattachmentmuzzle 5; the others grey out, Clear Attachments appears), Tiger camo
+  (primarycamo 8); the stats file is written on Esc and a restart reads them back; a listen match spawns
+  the player with that class (MP5K, suppressor, Tiger camo). check_file.py natively and `--i386` (only the
+  known SDL/TargetConditionals artefacts in sys_platform.cpp), audit_splitlocals.py 0, gen_db_save.py
+  `--check`.
 
 ## Decisions (session 27)
 
