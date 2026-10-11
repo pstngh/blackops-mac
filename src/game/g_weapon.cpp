@@ -1740,6 +1740,24 @@ bool __cdecl G_KbNoGrenadeWeapon(unsigned int weaponIndex)
     return 1;
 }
 
+// kb_noLaunchers: no rocket launcher (a class's RPG, M72 LAW or Strela-3, or a killstreak's) is
+// given, to anyone; PlayerCmd_giveWeapon gives a class's as an AK-47.
+bool __cdecl G_KbNoLauncherWeapon(unsigned int weaponIndex)
+{
+    static unsigned char reported[ARRAY_COUNT(bg_weaponVariantDefs) / 8];
+
+    if ( !kb_noLaunchers->current.enabled || !weaponIndex )
+        return 0;
+    if ( BG_GetWeaponDef(weaponIndex)->weapClass != WEAPCLASS_ROCKETLAUNCHER )
+        return 0;
+    if ( weaponIndex < ARRAY_COUNT(bg_weaponVariantDefs) && (reported[weaponIndex >> 3] & (1 << (weaponIndex & 7))) == 0 )
+    {
+        reported[weaponIndex >> 3] |= 1 << (weaponIndex & 7);
+        Com_DPrintf(17, "kb_noLaunchers: not giving %s\n", BG_WeaponName(weaponIndex));
+    }
+    return 1;
+}
+
 int __cdecl G_GivePlayerWeapon(
                 playerState_s *pPS,
                 int iWeaponIndex,
@@ -1766,7 +1784,7 @@ int __cdecl G_GivePlayerWeapon(
         return 0;
     if ( !weapDef->gunXModel[altModelIndex] )
         return 0;
-    if ( G_KbNoGrenadeWeapon(iWeaponIndex) )
+    if ( G_KbNoGrenadeWeapon(iWeaponIndex) || G_KbNoLauncherWeapon(iWeaponIndex) )
         return 0;
     if ( level.clientIsSpawning )
     {
@@ -1831,7 +1849,8 @@ int __cdecl G_GivePlayerWeapon(
             else
             {
                 for ( iCurrIndex = BG_GetWeaponVariantDef(iWeaponIndex)->altWeaponIndex;
-                            iCurrIndex && !BG_PlayerHasWeapon(pPS, iCurrIndex) && !G_KbNoGrenadeWeapon(iCurrIndex);
+                            iCurrIndex && !BG_PlayerHasWeapon(pPS, iCurrIndex) && !G_KbNoGrenadeWeapon(iCurrIndex)
+                                && !G_KbNoLauncherWeapon(iCurrIndex);
                             iCurrIndex = BG_GetWeaponVariantDef(iCurrIndex)->altWeaponIndex )
                 {
                     if ( !BG_HoldWeapon(pPS, iCurrIndex) )

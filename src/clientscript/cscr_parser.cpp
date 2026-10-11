@@ -1134,6 +1134,12 @@ static const ScrKbPatch scrKbPatches[] =
         "if ( self playerads() == 1.0 )",
         "if ( self playerads() == 1.0 || ( GetDvarInt( \"kb_noAds\" ) && !self istestclient() ) )"
     },
+    // kb_noKillstreaks: the custom game mode's killstreaks off, which every award checks
+    {
+        "maps/mp/gametypes/_globallogic.gsc",
+        "if( getDvarInt( \"custom_killstreak_mode\" ) == 1 )",
+        "if( getDvarInt( \"custom_killstreak_mode\" ) == 1 || GetDvarInt( \"kb_noKillstreaks\" ) )"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)

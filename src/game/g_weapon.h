@@ -52,6 +52,7 @@ void __cdecl BreakDownWeapon(gentity_s *ent);
 void __cdecl G_UseOffHand(gentity_s *ent);
 void __cdecl FireWeaponMelee(gentity_s *ent, int gametime);
 bool __cdecl G_KbNoGrenadeWeapon(unsigned int weaponIndex);
+bool __cdecl G_KbNoLauncherWeapon(unsigned int weaponIndex);
 int __cdecl G_GivePlayerWeapon(
                 playerState_s *pPS,
                 int iWeaponIndex,

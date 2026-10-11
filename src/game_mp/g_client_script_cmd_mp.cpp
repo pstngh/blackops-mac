@@ -380,6 +380,16 @@ void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
         if ( (unsigned int)Scr_GetNumParam(SCRIPTINSTANCE_SERVER) > 2 )
             weaponOptions.i = Scr_GetInt(2u, SCRIPTINSTANCE_SERVER);
     }
+    // kb_noLaunchers: a class's launcher (not a killstreak's) comes as an AK-47, with its ammo
+    if ( G_KbNoLauncherWeapon(weaponIndex) && !BG_GetWeaponDef(weaponIndex)->bIsCarriedKillstreakWeapon )
+    {
+        weaponIndex = G_GetWeaponIndexForName((char *)"ak47_mp");
+        if ( !weaponIndex )
+            return;
+        weaponModel = 0;
+        weaponOptions.i = 0;
+        hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
+    }
     if ( G_GivePlayerWeapon(&pSelf->client->ps, weaponIndex, weaponModel, weaponOptions) )
     {
         _snprintf(svcmd, 0x40u, "%c \"%i\"", 74, 1);

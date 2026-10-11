@@ -255,6 +255,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   widths, plus effects on dynents (stored as DObj bolts); checked in game, before and after
   (Decisions session 23). The game folder's copy has it (make_portable.sh, which also collected
   the shaders into `codbo/kb_shaders/bytecode`: 16140; the library still waits for the toolchain).
+- **No launchers, no killstreaks** (session 23, the user's request on top of `kb_noGrenades`):
+  `kb_noLaunchers` (nobody holds an RPG, M72 LAW or Strela-3; a class's comes as an AK-47) and
+  `kb_noKillstreaks` (nobody earns any), both for everyone, bots too (Decisions session 23).
+  The game folder's copy does not have them yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -875,6 +879,37 @@ absDynEntId overlays bits 8-28 (`& 0x1FFFFF`).
 - **Checks**: check_file.py natively and `--i386` (fx_system, fx_update, fx_sort: clean);
   audit_splitlocals.py: 0; a final 100 s run of the release build (7 bots, grenades, RPG): no
   assert, crash or `[mtl] BUG`.
+
+**No launchers or killstreaks** (the user's request: "I don't want ANY nades, RPGs, grenade
+launchers, or even airstrikes". Grenades, grenade launchers, the explosive crossbow and equipment
+were already off: `kb_noGrenades`, Decisions session 16). The user's answers: all killstreaks, not
+only the explosive ones; a launcher in a class becomes an AK-47; everyone, bots included. Both are
+`kb_*` dvars, archived, default 1.
+- **kb_noLaunchers**: `G_KbNoLauncherWeapon` (g_weapon.cpp, beside `G_KbNoGrenadeWeapon`) makes
+  `G_GivePlayerWeapon` refuse every `WEAPCLASS_ROCKETLAUNCHER` weapon (and such an alt weapon), on
+  every path. The script command `giveWeapon` (`PlayerCmd_giveWeapon`), which class loadouts
+  (custom and default, `_class.gsc`) and the bots' random loadouts (`_bot.gsc`) use, gives
+  `ak47_mp` in place of a launcher that isn't a carried killstreak weapon
+  (`bIsCarriedKillstreakWeapon`). `G_InitializeAmmo` gives it starting ammo, and the scripts' later
+  ammo calls on the launcher do nothing for a weapon not held. China Lake is grenade-class, so
+  `kb_noGrenades` already covers it. The developer console prints "kb_noLaunchers: not giving X"
+  once per weapon.
+- **kb_noKillstreaks**: a `Scr_KbPatchSource` patch on `_globallogic.gsc`'s
+  `if( getDvarInt( "custom_killstreak_mode" ) == 1 )`, the custom game mode's "killstreaks off",
+  run after the gametype's start. It clears `level.killstreaksenabled` (and `hardpointsenabled`),
+  which every award checks (`_hardpoints.gsc`: `giveKillstreakForStreak`,
+  `giveKillstreakInternal`, `takeKillstreak`). The care package is a killstreak itself, so its
+  contents never come either (`_supplydrop.gsc` gives some, like the carried weapons, with
+  `GiveWeapon` directly). Wager modes already turn killstreaks off this way. The HUD's killstreak slots stay empty, as at any spawn.
+- **Checked** (temporary logging of every script `giveWeapon`; mp_nuked listen server, 7 managed
+  bots, the scripted player fighting, 180 s per run). With both dvars 0, the bots got RPG x8,
+  Strela-3 x5 and M72 LAW x4, and killstreaks from 40 s on: RC-XD x10, the care package's sentry
+  gun x4, Spy Plane x3. With the defaults, all 15 launcher picks (LAW 7, Strela 4, RPG 4) came as
+  `ak47_mp`, with no killstreak in 174 s and no script patch warning. No assert or crash in either
+  run. check_file.py natively and `--i386` (g_weapon, g_client_script_cmd_mp, g_main_mp,
+  cscr_parser): clean; audit_splitlocals.py: 0.
+- **Not changed**: the Create-a-Class menus still offer grenades, equipment and launchers (a pick
+  is refused or swapped at spawn); destructible cars and barrels still explode.
 
 ## Decisions (session 22)
 

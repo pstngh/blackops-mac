@@ -122,6 +122,8 @@ const dvar_t *kb_godMode;
 const dvar_t *kb_noGrenades;
 const dvar_t *kb_noLastStand;
 const dvar_t *kb_noDeathCam;
+const dvar_t *kb_noLaunchers;
+const dvar_t *kb_noKillstreaks;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2072,6 +2074,12 @@ void G_RegisterDvars()
         1,
         1u,
         "No killcam, final killcam or death view: respawn right after dying");
+    kb_noLaunchers = _Dvar_RegisterBool(
+        "kb_noLaunchers",
+        1,
+        1u,
+        "Nobody gets a rocket launcher: a class's RPG, M72 LAW or Strela-3 comes as an AK-47");
+    kb_noKillstreaks = _Dvar_RegisterBool("kb_noKillstreaks", 1, 1u, "Nobody earns killstreaks");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

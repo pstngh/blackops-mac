@@ -439,6 +439,8 @@ extern const dvar_t *kb_godMode;
 extern const dvar_t *kb_noGrenades;
 extern const dvar_t *kb_noLastStand;
 extern const dvar_t *kb_noDeathCam;
+extern const dvar_t *kb_noLaunchers;
+extern const dvar_t *kb_noKillstreaks;
 extern const dvar_t *g_speed;
 extern const dvar_t *g_knockback;
 extern const dvar_t *g_maxDroppedWeapons;
