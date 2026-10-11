@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 22)
+## Status (2026-10-11, session 23)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -247,6 +247,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   hand-offs (a drawer could see a freed effect); the job queue, physics, streaming, sound, demo
   and cinematic workers were clean. None was reproduced; regression and fps checks passed
   (Decisions session 22). The game folder's copy does not have it yet (make_portable.sh).
+- **Effect bolts** (session 23): `FxBoltAndSortOrder` had the bone index 8 bits wide, so "no bone"
+  (511) became bone 255. Runner sub-effects of unbolted effects and impacts were bolted to entity
+  255 or the world and killed on their first update (grenade explosions' flash and smoke, impacts'
+  dust, sparks, falling snow, waves, stars), and effects on an entity without a tag (silenced
+  muzzle flashes, glass hits, grenade and tomahawk trails) stopped at once. Fixed with the IDA
+  widths, plus effects on dynents (stored as DObj bolts); checked in game, before and after
+  (Decisions session 23). The game folder's copy does not have it yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -661,11 +668,8 @@ Seen in session 22 (the worker audit, Decisions session 22; races on x86 too, so
   frame of streaming priority); `SND_FreePlayback` runs on the sound worker without
   `CRITSECT_SOUND_PLAYBACK_ALLOC`; `GlassRenderer::Update` returns with the lock held if
   `CG_GetLocalClientGlobals` gives null (it never does).
-- Not ordering, found in passing: `FxBoltAndSortOrder` (fxprimitives.h) declares
-  `temporalBits:2, boneIndex:8`, but the IDA code (the `#if 0` copies of `FX_SpawnRunner`,
-  `FX_UpdateEffectBolt` and `FX_SpawnEffect`'s bolt setup) uses 1 temporal bit at bit 19 and a
-  9-bit bone index at bit 20 (0x1FF: no bone); the live code uses the struct. The audit expects runners of
-  unbolted effects to spawn their children as bolted to dobj 255; not checked in game.
+- Not ordering, found in passing: `FxBoltAndSortOrder`'s bitfield widths. Fixed in session 23
+  (Decisions session 23).
 
 Seen in session 21 (the physics crash, Decisions session 21):
 - Only the broad phase's environment queries were checked for objects published under a lock
@@ -816,6 +820,60 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 23)
+
+**`FxBoltAndSortOrder`** (fxprimitives.h; session 22's open item). Every `#if 0` IDA copy that
+touches `boltAndSortOrder` (FX_SpawnEffect's bolt setup, FX_SpawnRunner, FX_UpdateEffectBolt,
+FX_ShouldProcessEffect, FX_UpdateSpotLightEffect, FX_RewindTo, FX_SpawnElem's decal case,
+FX_FirstEffectIsFurther) packs the word as: sortOrder bits 0-7; dobjHandle 8-18 (`0xFFF800FF`,
+`>> 8 & 0x7FF`); temporalBits 19 (`0xFFF7FFFF`, `>> 19 & 1`); boneIndex 20-28 (`0xE00FFFFF`,
+`>> 20 & 0x1FF`, `|= 0x1FF00000`, 511 meaning no bone); type 29-30 (0 none, 1 DObj
+0x20000000, 2 dynent 0x40000000, 3 mark entity 0x60000000); rewindKill 31 (the `< 0` test).
+absDynEntId overlays bits 8-28 (`& 0x1FFFFF`).
+- **The struct**: `temporalBits:2, boneIndex:8` stored bone 511 as 255 and dropped the top bit of
+  bones 256-510. The widths are now 1 and 9, in the same 32-bit word. clang's record dump gives the
+  IDA bit ranges for i386 (`-mms-bitfields`) and natively; FxEffect's size is unchanged.
+- **Two more slips in the rewritten code**: FX_SpawnEffect's dynent branch set `_type = 1` (a DObj
+  bolt) where IDA writes 0x40000000 (type 2). FX_UpdateEffectBolt's dynent case passed
+  `dobjHandle` (11 bits) where IDA passes `bolt >> 8` to the u16 `DynEnt_Valid` and
+  `DynEnt_GetClientPose` (absDynEntId). Both fixed. FX_SpawnEffect also clears the temporal bit for
+  every type now, as IDA does: the mark-entity branch kept the slot's old value, which was harmless
+  because only DObj bolts read it.
+- **The other live uses** match IDA and needed no change: FX_ShouldProcessEffect (`type != 0`),
+  FX_UpdateSpotLightEffect (type, dobjHandle), FX_RewindTo (dobjHandle, rewindKill), the decal case
+  (type 3 -> dobjHandle as the mark entity), FX_FirstEffectIsFurther (sortOrder). Nothing addresses
+  the word through a raw offset.
+- **What it broke** (temporary logging, mp_nuked listen server, 7 managed bots with grenades, the
+  scripted player firing an RPG, 100 s per build). Every runner child of an unbolted effect went
+  down FX_SpawnRunner's bolted branch (bone 255 is not 511), and FX_SpawnEffect(2047, 255) took the
+  dynent branch, which stored type 1, dobj 255, bone 0. So the child was a DObj bolt to entity 255,
+  killed or stopped on its first update (or, had entity 255 a DObj, glued to its bone 0). Lost this
+  way: grenade explosions' flash and lingering smoke (`fx_grenade_flash`, `fx_grenade_smk_ling_w`),
+  electric boxes' spark showers, and the ambient runners found on 6 of the 14 maps: tree snow
+  (mp_array, mp_duga), shore-break waves (mp_crisis, mp_villa), blinking and shooting stars
+  (mp_hanoi), spark showers (mp_mountain). Impacts (mark entity 1022, the world, or the entity hit)
+  passed their mark entity on as a DObj handle with bone 255, so every impact's distant-dust child
+  (`fx_distant_grain`/`_conc`) was killed. Effects bolted to an entity without a tag (bone 511:
+  FX_SpawnBoltedEffect for defs that need no bolt update, CG_PlayBoltedEffect without a tag) failed
+  FX_GetBoneOrientation on any model with fewer than 256 bones: silenced world muzzle flashes, glass
+  hits on cars, thrown grenades' and tomahawks' trails (stopped mid-flight), Nightingale. Over 500
+  bolts were lost in 100 s.
+- **After**: children inherit the parent's bolt as in IDA (unbolted stays unbolted, a mark entity
+  stays the same mark entity, a DObj bone the same bone, a dynent becomes unbolted). They spawn
+  within 4.4 units of the parent's frame. The 63 bolts lost in 100 s are all entities that went
+  away (dead players, exploded missiles, landed grenades). Screenshots at 2/s, same scripted throw:
+  the grenade's dark smoke cloud is there half a second after the explosion, where the old build
+  shows thin dust only. A sweep of the other 13 maps (45 s each) lost no bolts.
+- **Not run in game**: the dynent bolt (FX_PlayBoltedEffect_DynEnt): burning debris
+  (`destructibles/fx_dest_fire_trail_sm`, from a burning destructible's pieces or
+  DynEntCl_FlameDamage) and CG_EntityEvent's dynent FX. A car blown up by a grenade threw no
+  burning pieces, and `give ft_ak47_mp` gives no flamethrower (the `ak47_ft_mp` alt mode needs the
+  class's action slot). Before the fix those were DObj bolts with the dynent id's bits as handle
+  and bone: stopped at once, or attached to an unrelated entity. The fix follows IDA's masks.
+- **Checks**: check_file.py natively and `--i386` (fx_system, fx_update, fx_sort: clean);
+  audit_splitlocals.py: 0; a final 100 s run of the release build (7 bots, grenades, RPG): no
+  assert, crash or `[mtl] BUG`.
 
 ## Decisions (session 22)
 

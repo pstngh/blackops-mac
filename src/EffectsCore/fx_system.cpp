@@ -1278,7 +1278,8 @@ unsigned int __cdecl FX_SpawnEffect(
     /*
         Base bone index setup
     */
-    bolt.boneIndex = boneIndex & 0xFF;
+    bolt.boneIndex = boneIndex & 0x1FF;
+    bolt.temporalBits = 0;
     bolt.rewindKill = 0;
 
     /*
@@ -1316,7 +1317,7 @@ unsigned int __cdecl FX_SpawnEffect(
         // Absolute dynamic entity case
 
         bolt.absDynEntId = boneIndex & 0x1FFFFF;
-        bolt._type = 1; // matches 0x40000000
+        bolt._type = 2; // matches 0x40000000 (FX_BOLT_TYPE_DYNENT; it was 1, a DObj bolt)
 
         iassert(bolt.absDynEntId == static_cast<uint32_t>(boneIndex));
     }

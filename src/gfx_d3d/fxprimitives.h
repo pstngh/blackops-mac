@@ -319,8 +319,8 @@ union FxBoltAndSortOrder // sizeof=0x4
     {                                       // XREF: FxBoltAndSortOrder/r
         unsigned __int32 sortOrder : 8;
         unsigned __int32 dobjHandle : 11;
-        unsigned __int32 temporalBits : 2;
-        unsigned __int32 boneIndex : 8;
+        unsigned __int32 temporalBits : 1;  // bit 19 and bits 20-28 in the IDA code (were 2 and 8 wide,
+        unsigned __int32 boneIndex : 9;     // which stored FX_BONE_INDEX_NONE, 511, as 255)
         unsigned __int32 type : 2;
         unsigned __int32 rewindKill : 1;
     };
