@@ -328,7 +328,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   included; every prone key or command crouches instead, and the user's Ctrl, `toggleprone`, toggles
   crouch) and `kb_noHitMarker` (the X the scripts flashed around the crosshair for a second after each
   hit is gone; the hit sound stays), both archived, default 1. Verified in play (Decisions session 28).
-  Not in the game folder yet (make_portable.sh only when the user asks).
+  The game folder has it (make_portable.sh at fc432bdf, the user's request; the DLC zone came out the
+  same bytes, the shader library step still stops at the missing Metal Toolchain).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
