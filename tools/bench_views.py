@@ -13,9 +13,11 @@ usage: bench_views.py [options] [-- extra game args]
   --sample S       macOS `sample` for S seconds at each view: <out>/<map>_<view>.sample
   --gpu-trace S    Metal System Trace for S seconds at each view: <out>/<map>_<view>.trace
   --out DIR        logs, samples and traces (default: a new temporary directory)
+  --home DIR       the profile (fs_h) to use and keep, e.g. to keep the Metal pipeline cache
+                   (players/metal_pipelines) between runs; default a fresh one per map in <out>
   --env K=V        extra environment for the game (repeatable), e.g. KB_NOPREPASS=1
 
-The game starts with a fresh scratch profile (fs_h in <out>), r_vsync 0 and com_maxfps 0,
+The game starts with a fresh scratch profile (fs_h in <out>, or --home), r_vsync 0 and com_maxfps 0,
 joins a team, takes `god` and `noclip`, and sits at each view (`setviewpos`) for S
 seconds; KB_FPS=1 gives the fps. The schedule runs on the game's clock
 (KB_CMDS_GAMETIME=1), so screenshots of two builds or backends show the same moment of
@@ -89,9 +91,13 @@ def run_map(args, mapname, views, out):
         seconds = max(seconds, settle + args.sample + 2)
     if args.gpu_trace:
         seconds = max(seconds, settle + args.gpu_trace + 12)   # xctrace takes a while to attach
-    home = os.path.join(out, f'home_{mapname}')
-    subprocess.run(['rm', '-rf', home])
-    os.makedirs(home)
+    if args.home:
+        home = args.home
+        subprocess.run(['rm', '-rf', os.path.join(home, 'main', 'screenshots')])
+    else:
+        home = os.path.join(out, f'home_{mapname}')
+        subprocess.run(['rm', '-rf', home])
+    os.makedirs(home, exist_ok=True)
     team = 'allies' if args.bots else 'autoassign'
     cmds = [f'8:openscriptmenu team_marinesopfor {team}', '11:openscriptmenu changeclass assault_mp,0',
             '13:god', '13.5:noclip']
@@ -192,6 +198,8 @@ def main():
     args.shots = os.path.abspath(args.shots) if args.shots else ''
     args.sample = opt('--sample', 0.0, float)
     args.gpu_trace = opt('--gpu-trace', 0.0, float)
+    args.home = opt('--home', '')
+    args.home = os.path.abspath(args.home) if args.home else ''
     out = opt('--out', '') or tempfile.mkdtemp(prefix='bench_views_')
     out = os.path.abspath(out)
     if a:

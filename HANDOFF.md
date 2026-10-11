@@ -220,6 +220,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   in hardware (`sample_compare` on a `depth2d`, the samplers found by name in the shaders'
   constant tables): 21% less compile work, same images on every map. The game folder's copy has
   it (session 20).
+- **Metal leftovers, the pipeline cache** (session 20): the game keeps the compiled pipelines each
+  map drew in `players/metal_pipelines/<map>.bin` (under fs_h) and takes them from there in later
+  runs: after another map has evicted a map's pipelines from the system's shader cache, the 4-5
+  frames per 2-minute match that stalled 20-390 ms building 10-100 pipelines at once are gone (one
+  22 ms frame left in one run: a pipeline not seen before). It fills and refreshes itself (Decisions
+  session 20), ~15 MB a map. The game folder's copy has it.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -491,11 +497,16 @@ are in 0's list.
      missing (it is per Xcode version). The game loads it at startup; a function is keyed so
      a stale file can't be used for a changed translation, and a shader missing from it
      compiles at run time with a log line. AIR is chip-independent; the user needs only M4
-     (no pre-M4 support). Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
+     (no pre-M4 support). **Next (stage 2 of the plan, not started)**: it needs the Metal
+     Toolchain download (`xcodebuild -downloadComponent metalToolchain`; `-showComponent`
+     says "uninstalled", Xcode 27.0 27A266a; its size shows only once the download starts:
+     ~700 MB for Xcode 26's): the user's one final yes before downloading. Session 20 ran
+     unattended (the user asleep) and didn't download. Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
      front end. `KB_MTL_BATCH=<n>` gives a cold cache to measure with, `KB_MTL_SHADERLOG` the
      timeline. Also every load waits 0.2-0.4 s for a missing asset, `python_speed_snub_mp`
      (`Error: Waited ... msec for missing asset`), in every build: not looked at.
-   - **Warm-cache hitches: the user said yes to a cache file** (session 19): a Metal binary
+   - **Done (session 20): the warm-cache hitches**, the self-filling pipeline cache (Decisions
+     session 20). The plan, as the user agreed it in session 19: a Metal binary
      archive (MTLBinaryArchive) the game fills by itself as it plays, in the game folder
      (`players/`, under fs_h, so test runs with a scratch fs_h never touch the user's), saved
      after a map and at quit, so later runs reuse specialized functions
@@ -586,6 +597,13 @@ StringTable assets; table strings shared with earlier assets are references
 that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
+
+- **Physics crash, seen once (session 20)**: SIGSEGV on a physics worker thread in
+  `bp_env_jq_batch_function2` (phys_broad_phase.cpp:2446) after `collide_bpg_environment`, just
+  after `colgeom_visitor_t::intersect_box: leafList overflow (max 2048)` (an object with a huge
+  query box), ~53 s into an mp_nuked TDM with 7 managed bots and the scripted player (Decisions
+  session 20). The decompiled loop also re-reads the shared `g_bpb_list_cur` twice per iteration.
+  A task card with the details was left for it.
 
 Seen in session 14 (the split-locals scan, Decisions session 14):
 - `CG_SP_trigger_multiple`/`_radius` (cg_spawn.cpp) pass a `char` parameter as `int *`
@@ -802,6 +820,81 @@ counterstrike one, as much as possible"):
   fps with bots: 518/687/703/743/664/711/727/444 and 515/673/696/724/658/711/744/422 (the
   same). ASan client (`MTL_DEBUG_LAYER=1`, bots, 250 s over three maps): no report. Every
   changed file through check_file.py natively and `--i386`; audit_splitlocals.py 0.
+
+Stage 3 (the pipeline cache):
+
+Stage 3 of the session-19 plan: the self-filling pipeline cache (stage 2, the shader file, waits for
+the Metal Toolchain download, which needs the user's final yes).
+
+- **What it is**: `players/metal_pipelines/<map>.bin` under the home path (fs_h; test runs with a
+  scratch fs_h never touch the user's), one MTLBinaryArchive per map (and `menus.bin`) with the
+  compiled code of the pipelines that map drew and of their pixel functions specialised for the
+  alpha test (`MTLFunctionDescriptor.binaryArchives`, the pipeline descriptor's `binaryArchives`).
+  At startup every file is opened for lookups (`...FailOnBinaryArchiveMiss` first, then the
+  usual compile on a miss). Everything a map draws (from the files or compiled) is listed, and at
+  the map's end (`CL_ShutdownCGame` -> `g_kbRendererLevelEnd(cgs mapname)`, the render thread's next
+  Present, or the device's destructor at a quit) the list goes to a writer queue that adds it to a
+  new archive and writes it as that map's file (a temporary file renamed: a crash mid-write
+  leaves the old one), 0.8-1.5 s for ~300-370 pipelines, off the render thread. `stamp.txt`
+  holds the macOS build and the GPU; files made on another are deleted at startup (log line) and
+  refill as the maps are played; a file that can't be read is deleted (log line). Log lines:
+  `[mtl] pipeline cache: <dir>, N files, X MB` and `wrote <map>.bin, N pipelines (H built from
+  the files, C compiled; F pixel functions from the files), X MB, T ms`. `KB_FPS`'s pipeline part
+  adds `, N from the cache file`; `KB_MTL_SHADERLOG`'s frame lines (`p`) add the frame's pipelines
+  and their build ms.
+- **Why one file per map, rewritten**: Metal can't write an archive that was read from a file
+  once something is added to it (`serializeToURL` fails: "cannot pack ... expecting 'fragment'
+  stage in pipeline no. N", reproduced in a 60-line test with one pipeline added; then "Nothing to
+  serialize"), so the files are read-only and each map's is rebuilt from what it drew. A pipeline
+  that came from a file can be added to a new archive (0.1 ms). File count is bounded (the maps
+  played), and each file holds what its map drew the last time. A map's file is ~15-17 MB
+  (~300-370 pipelines, ~50 KB each): every map played, ~400-450 MB.
+- **Measured** (mp_nuked, 7 managed bots, the scripted player, 2-minute TDM; the same build with
+  its files deleted before each run as "before"; frames over 20 ms in the match with more than
+  10 ms of pipeline builds in them):
+  - System cache warm (mp_nuked the last map compiled): ~0.4 ms a pipeline either way (302
+    compiled in 124 ms; 291 of 317 from the file in 97-220 ms): no hitches from pipelines in both.
+  - After another map (mp_array with a shader set not compiled before, which evicts mp_nuked's
+    from the system cache): before 4 and 5 frames (21-386 ms; 15-99 pipelines each, 533-721 ms of
+    builds); after 1 frame (22 ms: one pipeline not in the file) and none, 311 of 364 and 322 of
+    344 pipelines from the file.
+  - Strictly cold (the measured map's own shaders in batches of a new size, so the system cache
+    has none of them): before 2 and 2 (30-82 ms); after 2 (29-33 ms: with another batch size some
+    functions differ from those in the file, 57 misses) and none; the map's first frame 0.77 s
+    instead of 1.24-1.33 s (157 pipelines from the file; the rest of it is shader batches still
+    compiling: stage 2's part).
+  - Does a lookup go to the compiler service? Little: in the match the compiler service retired
+    1.1-2.0 G instructions without the files and 0.3-1.2 G with them (the misses); the hitches were
+    mostly waiting on its round trips (0.5-0.7 s of stalled frames against ~0.1 s of its CPU for
+    the whole match).
+- **Checked**: screenshots of mp_nuked's views and the overviews of mp_array, mp_hanoi,
+  mp_kowloon, mp_villa, mp_radiation and mp_cracked (bench_views.py `--home`, a profile kept
+  between runs: one pass filling the files, one with them, one of 5305e7d7 without): with the
+  HUD masked within the reference noise except Nuketown's random mannequin and mp_radiation's
+  steam. The second pass took nearly everything from the files (mp_kowloon 377 of 378, mp_villa
+  343 of 345; a map's pipelines are mostly in the other maps' files too). `MTL_DEBUG_LAYER=1` with
+  the files: no message. ASan client (`MTL_DEBUG_LAYER=1`, bots, the scripted player, 1-minute
+  TDM rotations), 300 s writing mp_nuked.bin and mp_array.bin at the maps' ends, then 200 s
+  reading them (344 of 373 from the files): no report. fps with bots, alternating with 5305e7d7
+  in four pairs: 5305e7d7 569/695/715/744/687/710/741/456, 562/684/710/747/677/750/741/458,
+  552/707/708/718/670/739/713/472, 554/707/686/722/696/707/696/450; the cache
+  550/707/687/702/645/754/697/444, 528/704/700/699/699/711/742/435, 558/664/679/700/710/716/701/475,
+  552/712/703/703/675/703/732/442. View D was 2-6% lower in each pair, the rest mixed: samples
+  of view D show the same profile in both (the pipeline lookups 0.2-0.3% of the render thread,
+  which waits 72% of the time: that view runs into the engine's frame pacing), so no cost found.
+  check_file.py natively and `--i386` (cl_cgame_mp.cpp; the .mm files are macOS-only).
+- **Metal's shader validation can't read binary archives**: with `MTL_SHADER_VALIDATION=1`, opening
+  any archive written by `serializeToURL` crashes in `-[_MTLBinaryArchive
+  getScriptsWithAIRNTObject:]` (macOS 26.6.2 25G83; a one-pipeline archive in a test does it too),
+  and an archive written under it holds instrumented pipelines that normal runs miss. So the
+  cache is off under `MTL_SHADER_VALIDATION` (a log line says so); `MTL_DEBUG_LAYER` alone reads
+  and writes it fine.
+- **Found, not fixed**: the release client crashed once (SIGSEGV, ~53 s into an mp_nuked match
+  with bots, build 5305e7d7, before this stage's code) on a physics worker thread in
+  `bp_env_jq_batch_function2` (phys_broad_phase.cpp:2446, the loop node's callee-saved register
+  bad after `collide_bpg_environment`), right after the only `colgeom_visitor_t::intersect_box:
+  leafList overflow (max 2048)` of the night: an object with a huge query box. Not reproduced;
+  a task card was left for it (Open items).
 
 ## Decisions (session 19)
 

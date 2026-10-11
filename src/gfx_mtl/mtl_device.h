@@ -125,6 +125,7 @@ public:
     MetalSurface *backBuffer() { return bbSurface_; }
     unsigned nextId() { return ++ids_; }
     MetalShaderCompiler *compiler() { return &compiler_; }
+    MetalPipelineCache *pipelineCache() { return &pipelineCache_; }
 
 private:
     struct Stream { MetalVertexBuffer *vb = nullptr; UINT offset = 0, stride = 0; };
@@ -168,6 +169,7 @@ private:
     pthread_t renderThread_;
     std::atomic<unsigned> ids_{0};
     MetalShaderCompiler compiler_;
+    MetalPipelineCache pipelineCache_;
 
     // Back buffer (our own texture; Present draws it into the drawable) and the
     // device's automatic depth-stencil surface.
@@ -227,7 +229,16 @@ private:
         bool operator==(const PipeKey &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
     };
     struct PipeHash { size_t operator()(const PipeKey &k) const; };
-    std::unordered_map<PipeKey, id<MTLRenderPipelineState>, PipeHash> pipes_;
+    // A pipeline and how it was made (for the pipeline cache's map file; epoch: the map it was
+    // last given to).
+    struct PipeEntry {
+        id<MTLRenderPipelineState> state;
+        MTLRenderPipelineDescriptor *desc;
+        MTLFunctionDescriptor *fd;
+        id<MTLLibrary> lib;
+        unsigned epoch;
+    };
+    std::unordered_map<PipeKey, PipeEntry, PipeHash> pipes_;
     std::unordered_map<unsigned long long, id<MTLDepthStencilState>> dss_;
     std::unordered_map<unsigned long long, id<MTLSamplerState>> samplers_;
     id<MTLTexture> dummy_[5] = {};
@@ -257,7 +268,9 @@ private:
     // KB_FPS. Presented: frames given a drawable; shown: those the display showed.
     double statsStart_ = 0, statsLast_ = 0, statsSum_ = 0, statsMax_ = 0, statsWait_ = 0, statsBuild_ = 0;
     double statsBatchWait_ = 0, statsFunctions_ = 0, statsBuildMax_ = 0;   // of statsBuild_
-    unsigned statsFrames_ = 0, statsPresented_ = 0, statsPipes_ = 0;
+    unsigned statsFrames_ = 0, statsPresented_ = 0, statsPipes_ = 0, statsCacheHits_ = 0;
+    double frameBuild_ = 0;                   // this frame's pipeline builds (KB_MTL_SHADERLOG)
+    unsigned framePipes_ = 0;
     std::atomic<unsigned> statsShown_{0};
     unsigned long statsDraws_ = 0, statsBlits_ = 0, statsUploads_ = 0;
     unsigned long long statsUploadBytes_ = 0;

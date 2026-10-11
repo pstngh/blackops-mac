@@ -41,6 +41,7 @@ void __cdecl CL_ConfigstringModified(int localClientNum);
 void __cdecl CL_SetExpectedHunkUsage(const char *mapname);
 void __cdecl CL_CM_LoadMap(char *mapname);
 void __cdecl CL_ShutdownCGame(int localClientNum);
+extern void (*g_kbRendererLevelEnd)(const char *mapName);
 void __cdecl CL_LocalClient_ClearCUIFlag(int localClientNum, int flag);
 void __cdecl CL_ShutdownAllClientsCGame();
 bool __cdecl CL_DObjCreateSkelForBone(DObj *obj, int boneIndex, DObjAnimMat **pMatOut);

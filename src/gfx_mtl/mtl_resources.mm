@@ -8,8 +8,13 @@
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
+#include <cctype>
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
 #include <set>
+#include <sys/stat.h>
+#include <unistd.h>
 
 // Counters shared with the GL layer's KB_FPS line (gl_query.cpp).
 extern unsigned long g_kbUploads;
@@ -603,6 +608,149 @@ id<MTLLibrary> MetalShaderCompiler::library(const std::shared_ptr<MetalShaderBat
     return b->lib;
 }
 
+// ---- The pipeline cache ---------------------------------------------------------------
+const char *Dvar_GetString(const char *dvarName);   // the engine's (universal/dvar.h)
+
+void MetalPipelineCache::open(id<MTLDevice> dev) {
+    dev_ = dev;
+    files_ = @[];
+    writer_ = dispatch_queue_create("kb.pipelinecache", DISPATCH_QUEUE_SERIAL);
+    NSError *e = nil;
+    const char *sv = getenv("MTL_SHADER_VALIDATION");
+    if (sv && strcmp(sv, "0")) {
+        // Metal's GPU validation crashes reading any binary archive (-[_MTLBinaryArchive
+        // getScriptsWithAIRNTObject:], macOS 26.6), and what it compiles is instrumented.
+        fprintf(stderr, "[mtl] pipeline cache: off under MTL_SHADER_VALIDATION (its GPU validation can't read "
+                        "binary archives)\n");
+        return;
+    }
+    const char *home = Dvar_GetString("fs_h");
+    if (!home || !*home) { MTL_Bug("pipeline cache: no home path (fs_h)"); return; }
+    dir_ = std::string(home) + "/players/metal_pipelines";
+    stamp_ = std::string("macOS ") + [NSProcessInfo processInfo].operatingSystemVersionString.UTF8String + ", " +
+             dev.name.UTF8String;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = @(dir_.c_str());
+    NSArray<NSString *> *names = [[fm contentsOfDirectoryAtPath:dir error:nil]
+        sortedArrayUsingSelector:@selector(compare:)];
+    std::string made;
+    if (FILE *f = fopen((dir_ + "/stamp.txt").c_str(), "r")) {
+        char line[512] = {};
+        if (fgets(line, sizeof(line), f)) made = line;
+        fclose(f);
+        while (!made.empty() && (made.back() == '\n' || made.back() == '\r')) made.pop_back();
+    }
+    NSMutableArray *files = [NSMutableArray array];
+    double bytes = 0;
+    for (NSString *n in names) {
+        if (![n hasSuffix:@".bin"]) continue;
+        NSString *path = [dir stringByAppendingPathComponent:n];
+        if (made != stamp_) {
+            // Compiled for another GPU compiler: it would only miss.
+            [fm removeItemAtPath:path error:nil];
+            continue;
+        }
+        MTLBinaryArchiveDescriptor *ad = [MTLBinaryArchiveDescriptor new];
+        ad.url = [NSURL fileURLWithPath:path];
+        if (id<MTLBinaryArchive> a = [dev newBinaryArchiveWithDescriptor:ad error:&e]) {
+            [files addObject:a];
+            bytes += [[fm attributesOfItemAtPath:path error:nil] fileSize];
+        } else {
+            fprintf(stderr, "[mtl] pipeline cache: %s can't be read (%s): deleted, it refills\n", path.UTF8String,
+                    e.localizedDescription.UTF8String);
+            [fm removeItemAtPath:path error:nil];
+        }
+    }
+    if (made != stamp_ && !made.empty())
+        fprintf(stderr, "[mtl] pipeline cache: %s was made on %s, this is %s: deleted, it refills\n", dir_.c_str(),
+                made.c_str(), stamp_.c_str());
+    files_ = files;
+    fprintf(stderr, "[mtl] pipeline cache: %s, %lu files, %.1f MB\n", dir_.c_str(), (unsigned long)files.count,
+            bytes / 1048576.0);
+}
+
+id<MTLFunction> MetalPipelineCache::function(id<MTLLibrary> lib, MTLFunctionDescriptor *fd, NSError **e) {
+    if (files_.count) {
+        fd.binaryArchives = files_;
+        fd.options = MTLFunctionOptionFailOnBinaryArchiveMiss;
+        id<MTLFunction> fn = [lib newFunctionWithDescriptor:fd error:nil];
+        fd.options = MTLFunctionOptionNone;
+        if (fn) { ++mapFunctionHits_; return fn; }
+    }
+    return [lib newFunctionWithDescriptor:fd error:e];
+}
+
+id<MTLRenderPipelineState> MetalPipelineCache::pipeline(MTLRenderPipelineDescriptor *pd, NSError **e) {
+    if (files_.count) {
+        pd.binaryArchives = files_;
+        if (id<MTLRenderPipelineState> p = [dev_ newRenderPipelineStateWithDescriptor:pd
+                                                                               options:MTLPipelineOptionFailOnBinaryArchiveMiss
+                                                                            reflection:nil error:nil]) {
+            ++pipelineHits;
+            ++mapHits_;
+            return p;
+        }
+    }
+    ++mapMisses_;
+    return [dev_ newRenderPipelineStateWithDescriptor:pd error:e];
+}
+
+void MetalPipelineCache::use(MTLRenderPipelineDescriptor *pd, MTLFunctionDescriptor *fd, id<MTLLibrary> lib) {
+    map_.push_back({ pd, fd, lib });
+}
+
+// The finished map's archive is written by the writer queue, to a temporary file renamed when
+// complete (a crash mid-write leaves the old file); the next map gets a new archive.
+void MetalPipelineCache::endMap(const std::string &map) {
+    mapPipelines_ = (unsigned)map_.size();
+    if (dir_.empty() || map_.empty()) { map_.clear(); ++epoch; return; }
+    std::string name;
+    for (char c : map) name += isalnum((unsigned char)c) || c == '_' || c == '-' ? c : '_';
+    if (name.empty()) name = "unnamed";
+    char counts[160];
+    snprintf(counts, sizeof(counts), "%u pipelines (%u built from the files, %u compiled; %u pixel functions from the files)",
+             mapPipelines_, mapHits_, mapMisses_, mapFunctionHits_);
+    auto uses = std::make_shared<std::vector<Use>>(std::move(map_));
+    map_.clear();
+    id<MTLDevice> dev = dev_;
+    const std::string dir = dir_, stamp = stamp_, info = counts;
+    dispatch_async(writer_, ^{
+        const double t0 = Seconds();
+        const std::string path = dir + "/" + name + ".bin", tmp = path + ".tmp";
+        NSError *e = nil;
+        id<MTLBinaryArchive> done = [dev newBinaryArchiveWithDescriptor:[MTLBinaryArchiveDescriptor new] error:&e];
+        if (!done) { MTL_Bug("pipeline cache: no archive: %s", e.localizedDescription.UTF8String); return; }
+        for (const Use &u : *uses) {
+            if (u.fd && ![done addFunctionWithDescriptor:u.fd library:u.lib error:&e])
+                MTL_Bug("pipeline cache: adding a function: %s", e.localizedDescription.UTF8String);
+            if (![done addRenderPipelineFunctionsWithDescriptor:u.pd error:&e])
+                MTL_Bug("pipeline cache: adding a pipeline: %s", e.localizedDescription.UTF8String);
+        }
+        [[NSFileManager defaultManager] createDirectoryAtPath:@(dir.c_str()) withIntermediateDirectories:YES
+                                                   attributes:nil error:nil];
+        FILE *f = fopen((dir + "/stamp.txt").c_str(), "w");
+        const bool stamped = f && fprintf(f, "%s\n", stamp.c_str()) > 0;
+        if (f) fclose(f);
+        if (!stamped) MTL_Bug("pipeline cache: writing %s/stamp.txt: %s", dir.c_str(), strerror(errno));
+        else if (![done serializeToURL:[NSURL fileURLWithPath:@(tmp.c_str())] error:&e])
+            MTL_Bug("pipeline cache: writing %s: %s", tmp.c_str(), e.localizedDescription.UTF8String);
+        else if (rename(tmp.c_str(), path.c_str()) != 0)
+            MTL_Bug("pipeline cache: writing %s: %s", path.c_str(), strerror(errno));
+        else {
+            struct stat st = {};
+            stat(path.c_str(), &st);
+            fprintf(stderr, "[mtl] pipeline cache: wrote %s.bin, %s, %.1f MB, %.0f ms\n", name.c_str(), info.c_str(),
+                    st.st_size / 1048576.0, (Seconds() - t0) * 1000.0);
+        }
+    });
+    mapPipelines_ = mapHits_ = mapMisses_ = mapFunctionHits_ = 0;
+    ++epoch;
+}
+
+void MetalPipelineCache::finish() {
+    if (writer_) dispatch_sync(writer_, ^{});
+}
+
 // KB_DUMP_MSL=<dir> writes each translation as <dir>/<hash>.<vs|ps>.metal.
 MetalShader::MetalShader(MetalDevice *dev, const DWORD *tokens, bool pixel) : dev_(dev), pixel_(pixel) {
     extern unsigned KB_ShaderHash(const unsigned int *tokens);
@@ -675,11 +823,24 @@ id<MTLFunction> MetalShader::function(int alphaFunc, unsigned variant) {
             MTLFunctionConstantValues *cv = [MTLFunctionConstantValues new];
             int a = alphaFunc;
             [cv setConstantValue:&a type:MTLDataTypeInt atIndex:MSL_FC_ALPHAFUNC];
-            v.fn[alphaFunc] = [v.lib newFunctionWithName:name constantValues:cv error:&e];
+            MTLFunctionDescriptor *fd = [MTLFunctionDescriptor functionDescriptor];
+            fd.name = name;
+            fd.constantValues = cv;
+            v.fn[alphaFunc] = dev_->pipelineCache()->function(v.lib, fd, &e);
+            v.fd[alphaFunc] = fd;
         }
         if (!v.fn[alphaFunc]) MTL_Bug("shader %08x (alpha %d): %s", hash, alphaFunc, e ? e.localizedDescription.UTF8String : "no entry");
     }
     return v.fn[alphaFunc];
+}
+
+MTLFunctionDescriptor *MetalShader::descriptor(int alphaFunc, unsigned variant, id<MTLLibrary> *lib) {
+    if (alphaFunc < 0 || alphaFunc > 8 || !pixel_) alphaFunc = 0;
+    std::lock_guard<std::mutex> g(mu_);
+    auto it = variants_.find(variant);
+    if (it == variants_.end()) return nil;
+    *lib = it->second.lib;
+    return it->second.fd[alphaFunc];
 }
 
 HRESULT WINAPI MetalVertexShader::GetDevice(IDirect3DDevice9 **pp) { *pp = dev_; dev_->AddRef(); return D3D_OK; }

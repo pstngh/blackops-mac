@@ -13,6 +13,28 @@
 extern unsigned long g_kbDraws, g_kbBlits, g_kbUploads, g_kbPresentEnter;
 extern unsigned long long g_kbUploadBytes;
 void KB_NotePresentRect(int x, int y, int w, int h, int bbWidth, int bbHeight);
+// The end of a map (cl_cgame_mp.cpp, main thread): the render thread writes the map's
+// pipeline cache file at its next Present (or as the device goes, at a quit).
+extern void (*g_kbRendererLevelEnd)(const char *mapName);
+static std::mutex g_kbLevelEndMu;
+static std::string g_kbLevelEndMap;
+static std::atomic<bool> g_kbLevelEnded;
+static void MTL_LevelEnd(const char *mapName) {
+    std::string map = mapName ? mapName : "";
+    const size_t slash = map.find_last_of('/');
+    if (slash != std::string::npos) map = map.substr(slash + 1);
+    const size_t dot = map.find('.');
+    if (dot != std::string::npos) map = map.substr(0, dot);
+    std::lock_guard<std::mutex> g(g_kbLevelEndMu);
+    g_kbLevelEndMap = map;
+    g_kbLevelEnded.store(true, std::memory_order_release);
+}
+static bool MTL_TakeLevelEnd(std::string *map) {
+    if (!g_kbLevelEnded.exchange(false, std::memory_order_acq_rel)) return false;
+    std::lock_guard<std::mutex> g(g_kbLevelEndMu);
+    *map = g_kbLevelEndMap;
+    return true;
+}
 
 // The Objective-C runtime's autorelease pool calls (what @autoreleasepool compiles to):
 // a pool spans each command buffer, as the engine's render thread has none. Pools nest:
@@ -206,6 +228,9 @@ MetalDevice::MetalDevice(MetalWindow *win, id<MTLDevice> dev, const D3DPRESENT_P
     sd.minFilter = sd.magFilter = MTLSamplerMinMagFilterLinear;
     linearClamp_ = [dev newSamplerStateWithDescriptor:sd];
 
+    pipelineCache_.open(dev);
+    g_kbRendererLevelEnd = MTL_LevelEnd;
+
     createBackBuffer();
     Rebind(rt_[0], bbSurface_);
     if (pp.EnableAutoDepthStencil) Rebind(ds_, autoDSSurface_);
@@ -216,6 +241,10 @@ MetalDevice::MetalDevice(MetalWindow *win, id<MTLDevice> dev, const D3DPRESENT_P
 
 MetalDevice::~MetalDevice() {
     finishGPU();
+    g_kbRendererLevelEnd = nullptr;
+    std::string map;
+    pipelineCache_.endMap(MTL_TakeLevelEnd(&map) ? map : std::string("menus"));
+    pipelineCache_.finish();
     for (MetalSurface *&s : rt_) Rebind(s, (MetalSurface *)nullptr);
     Rebind(ds_, (MetalSurface *)nullptr);
     for (IDirect3DBaseTexture9 *&t : tex_) Rebind(t, (IDirect3DBaseTexture9 *)nullptr);
@@ -717,7 +746,14 @@ id<MTLRenderPipelineState> MetalDevice::pipeline() {
     }
     k.mask = (unsigned char)(rs_[D3DRS_COLORWRITEENABLE] & 0xF);
     auto it = pipes_.find(k);
-    if (it != pipes_.end()) return it->second;
+    if (it != pipes_.end()) {
+        PipeEntry &pe = it->second;
+        if (pe.state && pe.epoch != pipelineCache_.epoch) {
+            pe.epoch = pipelineCache_.epoch;
+            pipelineCache_.use(pe.desc, pe.fd, pe.lib);
+        }
+        return pe.state;
+    }
 
     // Built at the first draw that needs it, waiting for its shaders (KB_FPS counts it).
     const double t0 = Now(), w0 = compiler_.waited;
@@ -728,7 +764,12 @@ id<MTLRenderPipelineState> MetalDevice::pipeline() {
     const double t1 = Now();
     statsBatchWait_ += compiler_.waited - w0;
     statsFunctions_ += t1 - t0 - (compiler_.waited - w0);
-    if (!pd.vertexFunction || !pd.fragmentFunction) { pipes_[k] = nil; statsBuild_ += Now() - t0; return nil; }
+    if (!pd.vertexFunction || !pd.fragmentFunction) {
+        pipes_[k] = PipeEntry{};
+        statsBuild_ += Now() - t0;
+        frameBuild_ += Now() - t0;
+        return nil;
+    }
     MTLVertexDescriptor *vd = [MTLVertexDescriptor vertexDescriptor];
     for (const MetalDecl::Attr &a : decl_->attrs) {
         if (!(vs.attribMask & (1u << a.index))) continue;
@@ -778,11 +819,18 @@ id<MTLRenderPipelineState> MetalDevice::pipeline() {
         if (ds_->tex()->mformat().stencil) pd.stencilAttachmentPixelFormat = (MTLPixelFormat)k.depthFmt;
     }
     NSError *e = nil;
-    id<MTLRenderPipelineState> p = [mtl newRenderPipelineStateWithDescriptor:pd error:&e];
+    const unsigned hits = pipelineCache_.pipelineHits;
+    id<MTLRenderPipelineState> p = pipelineCache_.pipeline(pd, &e);
+    statsCacheHits_ += pipelineCache_.pipelineHits - hits;
     if (!p) MTL_Bug("pipeline (vs %08x, ps %08x): %s", vs.hash, ps.hash, e.localizedDescription.UTF8String);
-    pipes_[k] = p;
+    id<MTLLibrary> psLib = nil;
+    MTLFunctionDescriptor *psFd = ps.descriptor(k.alphaFunc, k.aa ? MetalShader::VARIANT_PER_SAMPLE : 0, &psLib);
+    if (p) pipelineCache_.use(pd, psFd, psLib);
+    pipes_[k] = PipeEntry{ p, pd, psFd, psLib, pipelineCache_.epoch };
     const double t2 = Now();
     statsBuild_ += t2 - t0;
+    frameBuild_ += t2 - t0;
+    ++framePipes_;
     if (t2 - t0 > statsBuildMax_) statsBuildMax_ = t2 - t0;
     return p;
 }
@@ -1313,6 +1361,10 @@ static void MaybeScreenshot(MetalDevice *dev, MetalSurface *bb) {
 // ---- Present -------------------------------------------------------------------------------
 HRESULT WINAPI MetalDevice::Present(const RECT *, const RECT *, HWND, const RGNDATA *) {
     compiler_.submitIdle();
+    {
+        std::string map;
+        if (MTL_TakeLevelEnd(&map)) pipelineCache_.endMap(map);
+    }
     MaybeScreenshot(this, bbSurface_);
     flushClear();
     endEncoder();
@@ -1380,8 +1432,10 @@ HRESULT WINAPI MetalDevice::Present(const RECT *, const RECT *, HWND, const RGND
     {
         static double last;
         const double now = Now();
-        if (last && now - last > 0.015) MTL_ShaderLog("p %.1f", (now - last) * 1000.0);
+        if (last && now - last > 0.015) MTL_ShaderLog("p %.1f %u %.1f", (now - last) * 1000.0, framePipes_, frameBuild_ * 1000.0);
         last = now;
+        frameBuild_ = 0;
+        framePipes_ = 0;
     }
     stats();
     return D3D_OK;
@@ -1407,14 +1461,15 @@ void MetalDevice::stats() {
         const double el = now - statsStart_;
         fprintf(stderr, "[fps] %.1f fps, frame %.2f ms avg %.2f max, swap %.2f ms avg, %lu draws/frame; "
                         "per frame: %lu blits, %lu uploads %llu KB, %llu KB orphaned; %.0f presented/s, %.0f shown/s; "
-                        "%u pipelines built in %.0f ms (%.0f waiting for shader batches, %.0f functions, longest %.0f)\n",
+                        "%u pipelines built in %.0f ms (%.0f waiting for shader batches, %.0f functions, longest %.0f), %u from the "
+                        "cache file\n",
                 statsFrames_ / el, statsSum_ / statsFrames_, statsMax_, statsWait_ * 1000.0 / statsFrames_,
                 (g_kbDraws - statsDraws_) / statsFrames_, (g_kbBlits - statsBlits_) / statsFrames_,
                 (g_kbUploads - statsUploads_) / statsFrames_, (g_kbUploadBytes - statsUploadBytes_) / statsFrames_ / 1024, 0ull,
                 statsPresented_ / el, statsShown_.exchange(0) / el, statsPipes_, statsBuild_ * 1000.0,
-                statsBatchWait_ * 1000.0, statsFunctions_ * 1000.0, statsBuildMax_ * 1000.0);
+                statsBatchWait_ * 1000.0, statsFunctions_ * 1000.0, statsBuildMax_ * 1000.0, statsCacheHits_);
         statsStart_ = now;
-        statsFrames_ = statsPresented_ = statsPipes_ = 0;
+        statsFrames_ = statsPresented_ = statsPipes_ = statsCacheHits_ = 0;
         statsSum_ = statsMax_ = statsWait_ = statsBuild_ = statsBatchWait_ = statsFunctions_ = statsBuildMax_ = 0;
         statsDraws_ = g_kbDraws; statsBlits_ = g_kbBlits; statsUploads_ = g_kbUploads; statsUploadBytes_ = g_kbUploadBytes;
     }

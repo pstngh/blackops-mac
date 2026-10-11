@@ -162,8 +162,13 @@ waiting for shader batches still compiling, function lookups and the longest bui
 system's shader cache keeps about one map's batches; `KB_MTL_BATCH=<n>` (shaders per
 batch, default 64; a size not used before) gives a cold one to measure with.
 `KB_MTL_SHADERLOG=<file>` logs each shader's creation and batch, batch submits and
-completions, a draw's waits, first uses and frames over 15 ms (timestamps);
-`KB_MTL_COMPILES=<n>` sets the batches Metal compiles at once (default cores - 2).
+completions, a draw's waits, first uses and frames over 15 ms with the pipelines built in them
+and their ms (timestamps);
+`KB_MTL_COMPILES=<n>` sets the batches Metal compiles at once (default cores - 2). The
+pipeline cache (HANDOFF, Decisions session 20): `players/metal_pipelines/<map>.bin` under fs_h,
+the pipelines each map drew the last time, written at the map's end; a scratch profile starts
+without it, `bench_views.py --home <dir>` keeps one between runs; off under
+`MTL_SHADER_VALIDATION` (Metal's GPU validation crashes reading binary archives).
 `KB_DUMP_MSL=<dir>` writes each translated shader. On the GL
 backend (`KB_RENDERER=gl`), `KB_SPEC=<file>` (`%p` for the pid) records every D3D9 method, state, format,
 lock flag and shader pairing the game uses (the list Metal implements), and

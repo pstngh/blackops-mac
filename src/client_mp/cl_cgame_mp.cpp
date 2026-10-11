@@ -573,10 +573,16 @@ void __cdecl CL_CM_LoadMap(char *mapname)
     }
 }
 
+// Set by the renderer for the end of a map: the Metal backend writes the map's pipeline cache
+// file then (HANDOFF, Decisions session 20). Called on the main thread, with cgs's map name.
+void (*g_kbRendererLevelEnd)(const char *mapName);
+
 void __cdecl CL_ShutdownCGame(int localClientNum)
 {
     if ( CL_LocalClient_IsCUIFlagSet(localClientNum, 16) )
     {
+        if ( g_kbRendererLevelEnd )
+            g_kbRendererLevelEnd(CG_GetLocalClientStaticGlobals(localClientNum)->mapname);
         CG_Shutdown(localClientNum);
         CL_LocalClient_ClearCUIFlag(localClientNum, 16);
         CL_LocalClient_ClearCUIFlag(localClientNum, 32);

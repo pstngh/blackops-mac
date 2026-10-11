@@ -381,6 +381,42 @@ private:
     std::unordered_map<std::string, std::shared_ptr<MetalShaderBatch>> entries_;
 };
 
+// The pipeline cache, players/metal_pipelines/<map>.bin under the home path (fs_h): binary
+// archives the game fills itself as it plays, with the compiled code of the pipelines and of
+// the pixel functions specialised for the alpha test, so that later runs skip those compiles
+// (~0.4 ms each when the system's shader cache still has them; when it has dropped them, after
+// another map, the frames where 10-100 pipelines are first used in a match took 20-390 ms). The files
+// are opened at startup and only looked in; what a map draws goes into a new archive, written
+// as that map's file at its end (or "menus" at a quit from the menus), so each file holds what
+// its map drew the last time it was played. (Metal can't write an archive that was read from a
+// file once something is added to it: "expecting 'fragment' stage".) A finished map's pipelines
+// are added to an archive and written by a queue of their own (0.8-1.3 s for ~300 pipelines:
+// not on the render thread). Files made on another macOS build or chip (stamp.txt) are deleted
+// and refilled, with a log line. Off under MTL_SHADER_VALIDATION (Metal's GPU validation crashes
+// reading binary archives). Render thread, but for those writes.
+class MetalPipelineCache {
+public:
+    void open(id<MTLDevice> dev);
+    // From the files, else compiled.
+    id<MTLFunction> function(id<MTLLibrary> lib, MTLFunctionDescriptor *fd, NSError **e);
+    id<MTLRenderPipelineState> pipeline(MTLRenderPipelineDescriptor *pd, NSError **e);
+    // A pipeline drawn in this map, with its pixel function (fd and lib, or nil): into its file.
+    void use(MTLRenderPipelineDescriptor *pd, MTLFunctionDescriptor *fd, id<MTLLibrary> lib);
+    // Writes this map's file (`map`: the engine's map name, or "menus"); the next map starts anew.
+    void endMap(const std::string &map);
+    void finish();                           // waits for the files being written
+    unsigned epoch = 1;                      // a pipeline's use() is due again when this changes
+    unsigned pipelineHits = 0;               // this run, for KB_FPS
+private:
+    id<MTLDevice> dev_;
+    NSArray *files_;                         // id<MTLBinaryArchive>, read at startup
+    struct Use { MTLRenderPipelineDescriptor *pd; MTLFunctionDescriptor *fd; id<MTLLibrary> lib; };
+    std::vector<Use> map_;                   // what this map drew
+    std::string dir_, stamp_;
+    unsigned mapPipelines_ = 0, mapHits_ = 0, mapFunctionHits_ = 0, mapMisses_ = 0;
+    dispatch_queue_t writer_;
+};
+
 // A shader's MSL, translated when the engine creates it and compiled in a batch. A
 // pixel shader is specialised for the alpha test, and translated again (a library of
 // its own, made at first use) for the per-sample variant (transparency AA).
@@ -391,13 +427,15 @@ public:
     bool pixel() const { return pixel_; }
     enum { VARIANT_PER_SAMPLE = 1 };
     id<MTLFunction> function(int alphaFunc, unsigned variant);
+    // A pixel function's specialisation and library (for the pipeline cache), after function().
+    MTLFunctionDescriptor *descriptor(int alphaFunc, unsigned variant, id<MTLLibrary> *lib);
     unsigned hash = 0, uid = 0;
     unsigned attribMask = 0, samplerMask = 0, shadowMask = 0;
     unsigned char samplerDim[16] = {};
     int constCount = 0;
     unsigned long long varyingsOut = 0, varyingsIn = 0;
 private:
-    struct Variant { id<MTLLibrary> lib; id<MTLFunction> fn[9]; };
+    struct Variant { id<MTLLibrary> lib; id<MTLFunction> fn[9]; MTLFunctionDescriptor *fd[9]; };
     MetalDevice *dev_;
     bool pixel_, ok_ = false;
     std::vector<DWORD> tokens_;
