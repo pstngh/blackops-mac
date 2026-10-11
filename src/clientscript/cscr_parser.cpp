@@ -1154,6 +1154,13 @@ static const ScrKbPatch scrKbPatches[] =
         "if ( RandomInt( 100 ) > 20 )",
         "if ( GetDvarInt( \"kb_noDualWield\" ) || RandomInt( 100 ) > 20 )"
     },
+    // kb_noHitMarker: a hit leaves the hit marker (the hud element every hit flashes around the
+    // crosshair) hidden; the hit sound still plays
+    {
+        "maps/mp/gametypes/_damagefeedback.gsc",
+        "self.hud_damagefeedback.alpha = 1;",
+        "if ( !GetDvarInt( \"kb_noHitMarker\" ) ) self.hud_damagefeedback.alpha = 1;"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)

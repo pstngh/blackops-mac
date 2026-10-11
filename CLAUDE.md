@@ -87,7 +87,7 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23, 26 and 27): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26, 27 and 28): `kb_godMode` (human players take no damage), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
@@ -99,10 +99,15 @@ static one, in screen pixels; its look is `kb_crosshairSize`/`Gap`/`Thickness`/`
 gap, 0.4 degrees), `kb_noVersion` (no version text at the bottom right), `kb_noAds`,
 `kb_sprintFire`, `kb_aaLean` (Medal of Honor: Allied
 Assault's lean from OpenMoHAA: 40 degrees, the view rolls, full speed and sprint while leaning;
-`ps->leanf` is the angle / 80). Tests where the player should die pass
+`ps->leanf` is the angle / 80), `kb_noProne` (nobody goes prone or dives to prone; the prone keys
+crouch, `toggleprone` toggles crouch), `kb_noHitMarker` (no hit marker around the crosshair; the hit
+sound stays). Tests where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
-`kb_noLaunchers`, `kb_noKillstreaks`); a scratch profile keeps whatever a run set
-(they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`.
+`kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`; a scratch profile keeps whatever a run set
+(they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`; `viewpos` prints the
+eye position (60 above the feet standing, 40 crouched, 11 prone). Hits on demand: with `+set
+developer_script 1 +set scr_testclients 4 +set sv_botsAllowMovement 0`, `set scr_playerwarp enemies_host`
+moves the enemy bots to the player; `setviewpos` back ~130 units facing them and fire.
 
 Playing without a keyboard: `KB_CMDS` runs console commands at times (seconds) after
 the client becomes active in a map (again after each map change), `|`-separated;

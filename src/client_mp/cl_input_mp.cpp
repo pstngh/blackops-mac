@@ -22,6 +22,7 @@
 #include <monkey/monkey.h>
 #include <universal/com_math_anglevectors.h>
 #include <cgame/cg_main.h>
+#include <bgame/bg_misc.h>
 
 kbutton_t playersKb[1][47];
 bool gAttackEdgeDetected[1];
@@ -673,6 +674,14 @@ void __cdecl CL_AddCurrentStanceToCmd(int localClientNum, usercmd_s *cmd)
     clientActive_t *LocalClientGlobals; // [esp+4h] [ebp-4h]
 
     LocalClientGlobals = CL_GetLocalClientGlobals(localClientNum);
+    // kb_noProne: a prone stance (goprone, lowerstance, holding +stance, a forced prone) is a
+    // crouch, so the stance keys' next press starts from the stance the player is in (pmove
+    // crouches on a prone request anyway)
+    if ( kb_noProne->current.enabled
+        && (LocalClientGlobals->stance == CL_STANCE_PRONE || LocalClientGlobals->stance == CL_STANCE_DIVE_TO_PRONE) )
+    {
+        LocalClientGlobals->stance = CL_STANCE_CROUCH;
+    }
     stance = LocalClientGlobals->stance;
     switch ( stance )
     {
@@ -2351,6 +2360,9 @@ void __cdecl CL_ToggleStance(int localClientNum, StanceState preferredStance)
 
     if ( !playersKb[localClientNum][27].active && !playersKb[localClientNum][11].active )
     {
+        // kb_noProne: the prone toggle toggles crouch
+        if ( kb_noProne->current.enabled && preferredStance == CL_STANCE_PRONE )
+            preferredStance = CL_STANCE_CROUCH;
         if ( CG_IsSprinting(localClientNum) && preferredStance == CL_STANCE_PRONE )
             preferredStance = CL_STANCE_DIVE_TO_PRONE;
         LocalClientGlobals = CL_GetLocalClientGlobals(localClientNum);

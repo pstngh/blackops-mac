@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 27)
+## Status (2026-10-11, session 28)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -322,6 +322,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   them). make_portable.sh writes the zone into the game folder: the game folder has it (make_portable.sh
   at 3fcbb7f4, the user's request; its kb_dlc_weapons.ff is the tested one, same bytes; the shader
   library step still stops at the missing Metal Toolchain). Checks in Decisions session 27.
+- **No prone, no hit marker** (session 28, the user's requests: "disable/prevent prone, only crouch";
+  "when im shooting someone, i get a second crosshair around my new static one, i dont want that, only
+  the static one"): `kb_noProne` (nobody goes prone or dives to prone, bots and scripts' commands
+  included; every prone key or command crouches instead, and the user's Ctrl, `toggleprone`, toggles
+  crouch) and `kb_noHitMarker` (the X the scripts flashed around the crosshair for a second after each
+  hit is gone; the hit sound stays), both archived, default 1. Verified in play (Decisions session 28).
+  Not in the game folder yet (make_portable.sh only when the user asks).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -509,6 +516,15 @@ the engine's frame pacing (~730 fps: the main loop's `NET_Sleep(1)` until the ne
 millisecond), so CPU and GPU are close to balanced at A and the engine caps the rest.
 
 ## Next steps (in order)
+
+**The user's list for later** (session 28: offered as the menu of what to do next, the user answered
+"remember these we'll come back to them. i wanna fix a few more things first"; ask before each, in plain
+words): 1 the shader library's Metal Toolchain download (~700 MB; Xcode shows the size only once the
+download starts; the user's yes first) and the rest of item 0's stage 2; 2 colour pictures for the WWII
+guns in Create a Class (white HUD silhouettes now; new pictures would have to be rendered); 3 camo on the
+WWII guns; 4 attachments for them; 5 the knife-only custom class of a client on a separate dedicated
+server (Open items, session 27). Session 28 did the user's first fixes (no prone, no hit marker: Status);
+the user may have more before the list.
 
 **DLC weapons in Create a Class: done (sessions 25-27)** (the user's request, session 24; facts and the
 reasons for the design in Decisions sessions 24-27; what is left is optional, below). The user's answers: the 12 WWII guns (Thompson, Type 100, STG-44,
@@ -941,6 +957,46 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 28)
+
+**No prone (`kb_noProne`) and no hit marker (`kb_noHitMarker`)**, the user's requests (Status).
+- **Prone, where**: pmove decides the stance on the server and in the client's prediction from the
+  command's buttons (8 prone, 9 crouch, 44 dive to prone; PM_CheckDuck, Dtp_IsDtp). PmoveSingle now turns
+  a prone request into a crouch request and drops the dive bit before anything reads them, so nobody goes
+  prone, bots included (they never choose prone anyway; only `sv_botsForceProne` asks for it, which now
+  crouches them) and script commands that force the prone stance through the client (EV_STANCE_FORCE_PRONE).
+  A player already prone when the dvar comes on gets up to crouch on the next move (from the code, not
+  tried). Not covered: a
+  turret's own prone stance (eFlags 0x100, turret.cpp; multiplayer has no mounted prone turret) and last
+  stand's pose (`kb_noLastStand` has none).
+- **Prone, the client's keys**: the client keeps its own stance state and toggles from it (cl_input_mp.cpp).
+  With only pmove changed, Ctrl (`toggleprone`, the user's binding) after a crouch would have needed two
+  presses to stand. CL_ToggleStance now treats the prone toggle as the crouch toggle (also while
+  sprinting: no dive), and CL_AddCurrentStanceToCmd turns a prone or dive state (goprone, lowerstance,
+  holding `+stance`, a forced prone) into crouch, so the next key press starts from what the player sees.
+  `+prone` (held) is left to pmove. The dvar lives with the other pmove ones (bg_misc.cpp, read by both
+  sides: a remote client's own value drives its prediction, as with `kb_noAds`).
+- **Hit marker, what it is**: maps/mp/gametypes/_damagefeedback.gsc's `hud_damagefeedback`, a 24x48
+  `damage_feedback` hud element centred on the crosshair, set to alpha 1 and faded over 1 s by
+  `updateDamageFeedback` on each hit (Callback_PlayerDamage). The script patch (cscr_parser.cpp) skips
+  only the `alpha = 1`, read at each hit (`GetDvarInt`), so the `mpl_hit_alert` sound still plays and a
+  change takes effect at once. The other indicator in that script, `directionalHitIndicator`, is
+  Tactical Mask Pro's flash/concussion feedback (blocked with `kb_noGrenades` anyway). The code's
+  `CG_DamageFeedback` is the damage the player takes, not this.
+- **Checked** (release client, listen server on mp_nuked, scratch profiles):
+  - Stances by eye height (`viewpos` at -100 360 on the street, feet at -70): with `kb_noProne 1`,
+    `toggleprone`, `goprone`, `lowerstance` twice and `+prone` all gave crouch (eye -30; standing -10),
+    `toggleprone` again or from a crouch stood up, `-prone` stood up; with `kb_noProne 0` the same commands
+    lay down (eye -59). Sprinting then `toggleprone`: the original game dives (eye up to +16, then down to
+    -56), with the dvar the player crouches and keeps walking (eye -23).
+  - Hit marker (temporary logging of human hits in finishPlayerDamage and of `damage_feedback` draws, removed):
+    `+set developer_script 1 +set scr_testclients 4 +set sv_botsAllowMovement 0`, a KB_CMDS loop of
+    `set scr_playerwarp enemies_host`, `setviewpos` 130 units back and fire. `kb_noHitMarker 0`: 12 hits,
+    the marker drawn after each and faded over 1 s (screenshot: the X around the CS crosshair);
+    `set kb_noHitMarker 1` mid-match: 15 hits, no marker drawn (screenshot right after a hit: the crosshair
+    only). No script-patch warning; both dvars land in the profile's config_mp.cfg.
+  - check_file.py natively and `--i386` on every changed .cpp, audit_splitlocals.py 0.
 
 ## Decisions (session 27)
 

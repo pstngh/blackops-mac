@@ -425,6 +425,7 @@ const dvar_s *kb_staticCrosshair;
 const dvar_s *kb_noAds;
 const dvar_s *kb_sprintFire;
 const dvar_s *kb_aaLean;
+const dvar_s *kb_noProne;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1056,6 +1057,11 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Lean like Medal of Honor: Allied Assault (OpenMoHAA): 40 degrees, the view rolls, full speed while leaning");
+    kb_noProne = _Dvar_RegisterBool(
+        "kb_noProne",
+        1,
+        1u,
+        "Nobody goes prone or dives to prone; the prone keys crouch instead");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,

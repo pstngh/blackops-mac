@@ -1764,6 +1764,17 @@ void __cdecl PmoveSingle(pmove_t *pm)
     const WeaponDef *weapDef; // [esp+194h] [ebp-4h]
 
     memset(&pml.groundTrace, 0, 16);
+    // kb_noProne: nobody goes prone or dives to prone (bots, scripts' commands too); a prone
+    // request crouches instead
+    if ( kb_noProne->current.enabled )
+    {
+        if ( pm->cmd.button_bits.testBit(8u) )
+        {
+            pm->cmd.button_bits.resetBit(8u);
+            pm->cmd.button_bits.setBit(9u);
+        }
+        pm->cmd.button_bits.resetBit(0x2Cu);
+    }
     set_stance(pm);
     ps = pm->ps;
     if ( !ps && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\bgame\\bg_pmove.cpp", 6122, 0, "%s", "ps") )
