@@ -339,7 +339,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   those fields doubled up (Decisions session 28). Clicked through in the game: the button, Custom 1, a gun
   (Thompson, MP5K), Perk 1 (Ghost Pro), an attachment (Suppressor), a camo (Tiger), Esc saves; the class
   survives a restart and spawns in a match with the MP5K, suppressor and Tiger camo. New test commands
-  `kb_mouse` and `kb_key` click through menus (CLAUDE.md). Not in the game folder yet.
+  `kb_mouse` and `kb_key` click through menus (CLAUDE.md). The game folder has it (make_portable.sh at
+  342765a3, the user's request).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
