@@ -476,14 +476,12 @@ are in 0's list.
    - Load time with a cold system shader cache (common: it keeps about one map's batches):
      the map's first frame waits 1.0-1.2 s on mp_nuked with bots (was 2.6-3.2 s), the startup
      ~0.2 s, for batches still compiling (~165 M instructions, 10-17 ms of a P core, a shader;
-     ~3,200 a map, ~12% of them drawn). Two ways on, **the user's choice is pending**: they
-     asked (session 19) for the "by the book" way of both to be explained before deciding:
-     (q1) a list of the shaders each map draws, compiled first (a prototype gave 0.36 s; a
-     fixed list committed to the repo, or one the game learns into the game folder), or (q4)
-     Apple's way, shaders compiled ahead of time into a .metallib (`xcrun metal`/`metallib`,
-     the Metal Toolchain download: ask before downloading; built from the game's own shaders on
-     the user's Mac, e.g. by make_portable.sh), which removes the front-end compile entirely
-     and makes the list unneeded. MTLBinaryArchive keeps only backend binaries, not the MSL
+     ~3,200 a map, ~12% of them drawn). **The user chose Apple's way** (end of session 19,
+     after both were explained): every shader compiled ahead of time into a .metallib
+     (`xcrun metal`/`metallib`, the Metal Toolchain download: confirm its size and ask once
+     before downloading), built from the game's own shaders on the user's Mac by
+     make_portable.sh, loaded at startup; a shader missing from it compiles at run time with
+     a log line. Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
      front end. `KB_MTL_BATCH=<n>` gives a cold cache to measure with, `KB_MTL_SHADERLOG` the
      timeline. Also every load waits 0.2-0.4 s for a missing asset, `python_speed_snub_mp`
      (`Error: Waited ... msec for missing asset`), in every build: not looked at.
@@ -777,6 +775,7 @@ checks at the end of this section are not all done.
   load (a shader list) and the offline metallib (the toolchain download) they asked for the
   "by the book" way of each to be explained first: Apple's way is the offline .metallib (and a
   binary archive for pipelines); the list is a workaround that only reorders runtime compiles.
+  They then chose Apple's way: the offline .metallib, not the list.
 - **Diagnostic**: `KB_MTL_SHADERLOG=<file>` (CLAUDE.md) logs each shader's creation and batch,
   batch submits and completions, a draw's waits, first uses and frames over 15 ms.
 - **Checked**: the validation layer (API and shader) on mp_nuked, 7 bots, every view, cold:
