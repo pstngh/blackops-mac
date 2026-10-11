@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 23)
+## Status (2026-10-11, session 24)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -259,6 +259,18 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   `kb_noLaunchers` (nobody holds an RPG, M72 LAW or Strela-3; a class's comes as an AK-47) and
   `kb_noKillstreaks` (nobody earns any), both for everyone, bots too (Decisions session 23).
   The game folder's copy has them.
+- **Glossy look, reflections** (session 24, the user: "all textures look glassy or glossy, like
+  covered by ice"; "even the m16 is extremely shiny", seen on GL too): the Metal device reported
+  no D3D9 texture caps, so the engine kept only level 0 of every cube map and the shaders'
+  roughness-to-LOD reads of the reflection probes reflected mirror-sharp on every surface; it never
+  asked for the anisotropic filtering materials specify either. Both caps are reported now
+  (Decisions session 24): the M16's carry handle is satin metal instead of chrome, ground at shallow
+  angles slightly sharper, fps unchanged. The weapon's overall brightness is the data's (the map's
+  vision file scales the viewmodel's sun light x3, specular x1.5). The GL layer keeps its
+  deviations (no mipmaps: still mirror-sharp). Not yet in the game folder's copy.
+- **DLC weapons** (session 24, asked, waiting for the user's choice): the Thompson and the other
+  WWII guns are Rezurrection's zombie-map weapons, absent from every MP zone; the MP loader reads
+  those zones in step (Decisions session 24).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -640,7 +652,11 @@ build (`tools/make_portable.sh`: rerun after each build).
    client, at the main menu too; each fix of this kind so far came from a run.
 8. Rendering fidelity: compare against a Windows screenshot (shadows, reflections,
    gamma). `vFace`, `vPos` and the half-pixel offset follow D3D9 now; textures
-   stream their high mips since session 10.
+   stream their high mips since session 10. Session 24: mipmapped reflection probes and
+   anisotropic filtering (Decisions session 24), checked only against a 2010 console-video
+   frame the user found (Nuketown backyard, M16). Left: the brightness slider (`r_gamma`) does
+   nothing on either backend (no `D3DCAPS2_FULLSCREENGAMMA`, `SetGammaRamp` empty; on Windows it
+   is the fullscreen gamma ramp); the GL layer's caps are still all zero but the D3D9 basics.
 9. Later: wire compatibility with a Windows/Linux server, an .app bundle (a
    double-clickable app; today `codbo/blackops` opens in Terminal), controller
    support.
@@ -825,6 +841,66 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 24)
+
+**Reflections and anisotropic filtering** (the user: "all textures look glassy or glossy, or like
+covered by ice", the M16 "extremely shiny", on GL too; their reference: a 2010 console-video frame of
+Nuketown's backyard holding the M16, dark gunmetal where ours was chrome).
+- **Shared code**: Metal, Metal with `KB_MTL_GLCOMPAT=1` and GL give the same look at mp_nuked's views.
+- **Ruled out**: the texture setting (the user's config: `r_picmip 2` for colour, normal and specular
+  maps, i.e. "Low", most likely the recommended set for an unknown GPU; full quality changes little:
+  mean |Laplacian| 19.7 -> 20.5 at view c, 29.1 -> 30.0 at the overview); streaming (temporary logging:
+  ~500 high-mip loads replace the in-zone mips, a 512x512 file loads as 128x128 at picmip 2 and 512x512
+  at 0; `r_streamLog`'s "allocation complete. bytes=0" is the request before its read; `r_streamTaint`
+  is registered but unused); the shader translator's maths (log/exp base 2, abs in pow/rsq/log, the
+  source modifiers); the reflection probe choice (drawsurf bits 25-27 as the readers take them).
+  `$blacktransparent`, `$g16r16` and `$r5g6b5` are missing from the PC zones (data, as on Windows), so
+  `r_specularRoughnessMap 1` ("Matte Smooth") binds garbage: don't use it to judge specular.
+- **The M16's shading** (temporary logging of each pass's arguments): technique
+  `pimp_technique_lprobe_*`, pixel shader `pimp_shader_lprobe_*` (translated with
+  tools/shader_test.sh from bytecode cut out of common_mp). The specular map's alpha is roughness
+  (specular power 2^(13 - 13a), probe LOD 8a); the probe sample is decoded as rgb^2 x 8 and scaled by
+  the model lighting volume (rgb^2 x 31.875), the `_e` map's RGB (reflection mask) and the material's
+  `envMapParms` (1, 1, 1, 0.5 on the M16). The viewmodel's sun light is scaled by the vision file
+  (mp_nuked.vision: `r_primaryLightUseTweaks 1`, diffuse 2.9825, specular 1.5): its brightness is data.
+- **Cause**: `FillCaps` (mtl_device.mm, after the GL layer's `FillDefaultCaps`) reported `TextureCaps`
+  and `TextureFilterCaps` 0. `R_StoreDirect3DCaps` derives `canMipCubemaps` from
+  D3DPTEXTURECAPS_MIPCUBEMAP; without it `Image_CreateCubeTexture_PC` makes one level and
+  `Image_UploadData` drops the rest (mp_nuked's probe: 256x256 DXT1, 9 levels in the zone, 1 used), so
+  the shaders' `texldl` at LOD 8 x roughness read level 0 and every reflective surface was a mirror.
+  Without D3DPTFILTERCAPS_MIN/MAGFANISOTROPIC, `R_SetTexFilter` turns the materials' 2x/4x anisotropic
+  sampler states into plain linear. Both bits are reported now. The GL layer had seen the symptom
+  (`GLCubeTexture::maybeGenMips` builds a chain for single-level uncompressed cubes; the probes are
+  DXT1) and samples unmipmapped by design (session 13's deviations): left as is, and compat mode ignores
+  anisotropy so it still draws like GL.
+- **Checked**: the M16 at the reference spot: carry handle's mean luminance 105 -> 106, mean
+  |Laplacian| 34.9 -> 31.0 (the mirror reflections gone, satin metal); ground at view a 51.8 -> 54.8,
+  overview 30.9 -> 32.3. fps at views a/c/overview, two runs each: before 552/755/496, 559/762/497;
+  after 577/751/516, 558/727/501 (each bit alone in the same range). API and GPU validation quiet;
+  compat vs GL within the noise; all 26 maps' overviews drawn (234-773 fps), no `[mtl] BUG` or error.
+
+**DLC weapons** (the user: "make the DLC weapons available in classes/custom"; "I know Thompson is one
+of the DLC weapons"). Asked which ones, the damage (zombie values or MP-like) and bots; nothing built.
+- **What they are**: the map packs added MP maps only. The Thompson and the other WWII guns are
+  Rezurrection's remade World at War zombie maps' (zombie_cod5_prototype/asylum/sumpf/factory.ff):
+  `zombie_thompson`, `zombie_type100_smg`, `zombie_stg44`, `zombie_fg42`, `zombie_bar` (+`_bipod`),
+  `zombie_m1garand`, `zombie_gewehr43`, `zombie_m1carbine`, `zombie_kar98k`, `kar98k_scoped_zombie`,
+  `zombie_type99_rifle`, `zombie_shotgun` (M1897), `zombie_doublebarrel` (+`_sawed`); factory also has
+  their Pack-a-Punch `_upgraded` versions. Wonder weapons per map: tesla_gun (Wunderwaffe),
+  thundergun, freezegun, humangun (V-R11), sniper_explosive (Scavenger), shrink_ray (31-79 JGb215),
+  microwavegundw (Zap Guns); common_zombie has ray_gun_zm and mp40_zm. No MP zone has any of them
+  (models, anims, sounds). The MP scripts register an MP40 care-package weapon (`mp40_blinged_mp`,
+  `mp40_drop_mp` in _supplydrop.gsc) whose weapon def is in no MP zone either (only iw_00.iwd's text
+  files, like `ks23_mp`). statsTable (code_post_gfx_mp) offers every MP primary; empty rows: 11, 25, 36,
+  41, 46, 52, 58-61, 66, 72, 79-87.
+- **Feasibility**: SP and MP share the zone format (one XAssetType enum, `GAMEWORLD_SP` included).
+  `loadzone zombie_cod5_prototype` at the main menu parsed in step through weapons, GfxWorld, ComWorld
+  and clipmap until "Exceeded limit of 1 'game_map_sp' assets"; `loadzone common_zombie` stopped at
+  "Exceeded limit of 5100 'xanim' assets" (MP's 3355 + its 1882). Zone memory (XFile blocks):
+  prototype ~62 MB, asylum ~76, factory ~102, sumpf ~105; factory alone has 9 of the 12 guns. A build
+  would load the chosen zombie zones at map start keeping only the weapons (world types not linked),
+  give them MP names, add statsTable rows, and retune damage if the user wants.
 
 ## Decisions (session 23)
 

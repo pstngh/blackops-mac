@@ -430,6 +430,12 @@ static void FillCaps(D3DCAPS9 *c) {
     c->MaxVertexIndex = 0x00FFFFFF;
     c->MaxStreams = 16;
     c->RasterCaps |= 0x02000000;   // D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS
+    // Every D3D9 GPU the game ran on had both. Without the first the engine keeps only level 0
+    // of each cube map (Image_CreateCubeTexture_PC), so the shaders' roughness-to-LOD lookups
+    // into the reflection probes reflect mirror-sharp; without the second it never asks for
+    // the anisotropic filtering materials specify (R_SetTexFilter).
+    c->TextureCaps |= 0x00010000;           // D3DPTEXTURECAPS_MIPCUBEMAP
+    c->TextureFilterCaps |= 0x04000400;     // D3DPTFILTERCAPS_MINFANISOTROPIC | MAGFANISOTROPIC
 }
 
 HRESULT WINAPI MetalDevice::GetDeviceCaps(D3DCAPS9 *c) {
@@ -885,7 +891,8 @@ id<MTLSamplerState> MetalDevice::sampler(int st) {
     const bool raw = depth && GLCompat();
     const DWORD minF = raw ? 1 : s[D3DSAMP_MINFILTER], magF = raw ? 1 : s[D3DSAMP_MAGFILTER];
     const DWORD mipF = depth || GLCompat() ? 0 : s[D3DSAMP_MIPFILTER];
-    const DWORD aniso = minF == 3 ? s[D3DSAMP_MAXANISOTROPY] : 1;
+    // The GL layer reports no anisotropic filtering, so the engine never asks it for any.
+    const DWORD aniso = minF == 3 && !GLCompat() ? s[D3DSAMP_MAXANISOTROPY] : 1;
     const bool compare = depth && !raw;
     unsigned long long key = (unsigned long long)(minF & 0xF) | (unsigned long long)(magF & 0xF) << 4 |
                              (unsigned long long)(mipF & 0xF) << 8 | (unsigned long long)(s[D3DSAMP_ADDRESSU] & 0xF) << 12 |
