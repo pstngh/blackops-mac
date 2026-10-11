@@ -28,6 +28,7 @@
 #include <universal/mem_largelocal.h>
 #include <universal/com_convexhull.h>
 #include "r_primarylights.h"
+#include <atomic>
 
 
 
@@ -2463,6 +2464,8 @@ void __cdecl R_InitialEntityCulling()
                     dpvsView = &views[viewIndex];
                     if ( sceneEnt->cull.state >= 2 )
                     {
+                        // the bounds a worker published with cull.state (R_UpdateSceneEntBounds)
+                        std::atomic_thread_fence(std::memory_order_acquire);
                         frustumPlaneCount = dpvsView->frustumPlaneCount;
                         v14 = 0;
                         plane = dpvsView->frustumPlanes;

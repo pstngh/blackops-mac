@@ -4,6 +4,7 @@
 #include "r_dvars.h"
 #include <cgame_mp/cg_pose_mp.h>
 #include <EffectsCore/fx_marks.h>
+#include <atomic>
 
 float4 g_worldMins = { { -131072.0, -131072.0, -131072.0, 0.0 } }; // KISAKTODO: better spot
 float4 g_worldMaxs = { { 131072.0, 131072.0, 131072.0, 0.0 } }; // KISAKTODO: better spot
@@ -63,6 +64,7 @@ DObjAnimMat * R_UpdateSceneEntBounds(
                 state = sceneEnt->cull.state;
                 iassert(state >= CULL_STATE_BOUNDED_PENDING);
             } while (state == CULL_STATE_BOUNDED_PENDING);
+            std::atomic_thread_fence(std::memory_order_acquire);  // pairs with the release below
 
             if (state == CULL_STATE_DONE)
             {
@@ -262,6 +264,10 @@ DObjAnimMat * R_UpdateSceneEntBounds(
                 if ((radiusLo * radiusLo) > radiusSqActual || radiusSqActual > (radiusHi * radiusHi))
                     localSceneEnt->obj->radius = sqrtf(radiusSqActual);
 
+                // Other threads spin on cull.state (above) or test it without a lock, then read the
+                // skeleton, lods and bounds filled here: on arm64 they could see the state before
+                // those stores. x86 keeps stores in order; the fences are no code there.
+                std::atomic_thread_fence(std::memory_order_release);
                 localSceneEnt->cull.state = CULL_STATE_BOUNDED;
                 return boneMatrix;
             }

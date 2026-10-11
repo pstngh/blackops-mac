@@ -13,6 +13,7 @@
 #include <glass/glass_client.h>
 #include <xanim/xanim.h>
 #include <gfx_d3d/r_scene.h>
+#include <atomic>
 
 void(__cdecl *const s_drawElemHandler[10])(FxDrawState *) =
 {
@@ -1302,6 +1303,11 @@ void __cdecl FX_DrawNonSpriteElems(FxSystem *system, const FxReflectParams *refl
     FX_BeginIteratingOverEffects_Cooperative(system);
     for ( activeIndex = system->shared->firstActiveEffect; activeIndex != system->shared->firstNewEffect; ++activeIndex )
     {
+        // A spawner (any thread) fills the effect, then publishes it by advancing firstNewEffect;
+        // elements and trails are linked into it the same way. On arm64 the loads below could be
+        // satisfied before the one that saw the new index or handle (last use's def, owner).
+        // x86 keeps loads in order; the fences are no code there.
+        std::atomic_thread_fence(std::memory_order_acquire);
         effect = FX_EffectFromHandle(system, system->shared->allEffectHandles[activeIndex & 0x3FF]);
         FX_DrawNonSpriteEffect(system, &effect->effect, 1u, system->msecDraw, reflect, cameraType);
     }
@@ -1351,6 +1357,7 @@ void __cdecl FX_DrawNonSpriteEffect(
     drawState.effect = effect;
     drawState.msecDraw = drawTime;
     elemHandle = effect->firstElemHandle[elemClass];
+    std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
     if ( elemHandle != 0xFFFF )
     {
         drawState.system = system;
@@ -1572,6 +1579,7 @@ void __cdecl FX_DrawSpotLight(FxSystem *system)
     FX_BeginIteratingOverEffects_Cooperative(system);
     if ( system->shared->activeSpotLightElemCount > 0 )
     {
+        std::atomic_thread_fence(std::memory_order_acquire);  // the handles were published before the counts
         if ( system->shared->activeSpotLightEffectCount != 1
             && !Assert_MyHandler(
                         "C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_draw.cpp",
@@ -1690,6 +1698,7 @@ void __cdecl FX_DrawSpriteElems(FxSystem *system, int drawTime, const FxReflectP
 
         for (activeIndex = system->shared->firstActiveEffect; activeIndex != system->shared->firstNewEffect; ++activeIndex)
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             effectHandle = system->shared->allEffectHandles[activeIndex & 0x3FF];
             effect = FX_EffectFromHandle(system, effectHandle);
             FX_DrawSpriteEffect(system, &effect->effect, drawTime, reflect);
@@ -1773,6 +1782,7 @@ void __cdecl FX_DrawTrailsForEffect(FxSystem *system, FxEffect *effect, int draw
     drawState.elem = 0;
     for ( trailHandle = drawState.effect->firstTrailHandle; trailHandle != 0xFFFF; trailHandle = trail->nextTrailHandle )
     {
+        std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
         trail = (FxTrail *)FX_TrailFromHandle(system, trailHandle);
         FX_DrawTrail(system, &drawState, trail);
     }
@@ -2219,6 +2229,7 @@ void __cdecl FX_DrawSpriteEffect(FxSystem *system, FxEffect *effect, int drawTim
     drawState.effect = effect;
     drawState.msecDraw = drawTime;
     elemHandle = effect->firstElemHandle[0];
+    std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
     if ( elemHandle != 0xFFFF )
     {
         drawState.system = system;

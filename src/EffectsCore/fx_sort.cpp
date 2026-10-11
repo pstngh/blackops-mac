@@ -1,6 +1,7 @@
 #include "fx_sort.h"
 #include "fx_archive.h"
 #include "fx_update_util.h"
+#include <atomic>
 
 void __cdecl FX_SortEffects(FxSystem *system)
 {
@@ -24,6 +25,7 @@ void __cdecl FX_SortEffects(FxSystem *system)
     FX_WaitBeginIteratingOverEffects_Exclusive(system);
     for ( i = system->shared->firstActiveEffect; i != system->shared->firstNewEffect; ++i )
     {
+        std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
         v4 = system->shared->allEffectHandles[i & 0x3FF];
         firstEffect = FX_EffectFromHandle(system, v4);
         v9 = Vec3DistanceSq(firstEffect->effect.frameNow.origin, p2);
@@ -49,6 +51,7 @@ void __cdecl FX_SortEffects(FxSystem *system)
         v2[v7] = v9;
         system->shared->allEffectHandles[v7] = v4;
     }
+    std::atomic_thread_fence(std::memory_order_release);  // as in FX_RunGarbageCollectionAndPrioritySort
     system->shared->iteratorCount = 0;
 }
 

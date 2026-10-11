@@ -2,6 +2,7 @@
 #include "fx_system.h"
 #include "fx_draw.h"
 #include "fx_archive.h"
+#include <atomic>
 
 void __cdecl FX_DrawProfile(int clientIndex, void (__cdecl *drawFunc)(char *), float *profilePos)
 {
@@ -29,6 +30,7 @@ void __cdecl FX_DrawProfile(int clientIndex, void (__cdecl *drawFunc)(char *), f
         entryCount = 0;
         for ( i = system->shared->firstActiveEffect; i != system->shared->firstNewEffect; ++i )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             effect = FX_EffectFromHandle(system, system->shared->allEffectHandles[i & 0x3FF]);
             entry = FX_GetProfileEntry(effect->effect.def, entryPool, &entryCount);
             FX_ProfileSingleEffect(system, &effect->effect, entry);
@@ -241,6 +243,7 @@ void __cdecl FX_DrawPriorityDebug(int clientIndex, void (__cdecl *drawFunc)(char
     num = 0;
     for ( i = system->system.shared->firstActiveEffect; i != system->system.shared->firstNewEffect; ++i )
     {
+        std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
         v14 = FX_EffectFromHandle(&system->system, system->system.shared->allEffectHandles[i & 0x3FF]);
         v11 = 0;
         for ( j = 0; j < num; ++j )

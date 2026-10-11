@@ -2,6 +2,7 @@
 #include <universal/com_workercmds.h>
 #include "r_dpvs_entity.h"
 #include "r_scene.h"
+#include <atomic>
 
 #if 0
 void    R_AddCellSceneEntSurfacesInFrustumCmd(GfxWorldDpvsPlanes *data)
@@ -430,6 +431,8 @@ void R_AddCellSceneEntSurfacesInFrustumCmd(GfxWorldDpvsPlanes *data)
                     {
                         if (sceneEnt->cull.state < 2)
                             goto LABEL_36;
+                        // the bounds a worker published with cull.state (R_UpdateSceneEntBounds)
+                        std::atomic_thread_fence(std::memory_order_acquire);
                         v11 = 0;
                         v10 = planes;
                         while (v11 < planeCount)

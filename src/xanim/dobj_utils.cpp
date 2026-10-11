@@ -9,6 +9,7 @@
 #include <EffectsCore/fx_beam.h>
 #include <gfx_d3d/r_dvars.h>
 #include <ik/ik_import.h>
+#include <atomic>
 
 DObjAnimMat *__cdecl DObjGetRotTransArray(const DObj *obj)
 {
@@ -870,6 +871,9 @@ void __cdecl DObjUnlock(const DObj *obj)
     iassert(obj->locked);
 
     //obj->locked = 0;
+    // A plain store releases the lock: on arm64 the next owner could see it before the skeleton
+    // written under it. x86 keeps stores in order; the fence is no code there.
+    std::atomic_thread_fence(std::memory_order_release);
     ((DObj *)obj)->locked = 0;
 }
 

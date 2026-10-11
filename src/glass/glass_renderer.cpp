@@ -505,7 +505,11 @@ void GlassRenderer::Reset()
         GlassShard::removeReasonsCount[i] = 0;
     }
 
+    // The lock is released with a plain store: on arm64 the next owner (fx_draw's GenerateVerts,
+    // the main thread's RemoveGlassShards) could see it before the shard groups written under
+    // it. x86 keeps stores in order; the fences are no code there.
     // Release lock
+    std::atomic_thread_fence(std::memory_order_release);
     rendererLock.lock = 0;
 }
 
@@ -596,6 +600,7 @@ void GlassRenderer::RemoveGlassShards(unsigned int glassIndex)
     DoGroupChanges();
 
     // Release lock
+    std::atomic_thread_fence(std::memory_order_release);  // as in Reset
     rendererLock.lock = 0;
 }
 
@@ -971,6 +976,7 @@ void GlassRenderer::Update(int threadId)
     if (!threadId)
         DoGroupChanges();
 
+    std::atomic_thread_fence(std::memory_order_release);  // as in Reset
     rendererLock.lock = 0;
 }
 
@@ -1076,6 +1082,7 @@ void GlassRenderer::GenerateVerts(int localClientNum, unsigned int viewIndex, un
     }
 
     // Release renderer lock
+    std::atomic_thread_fence(std::memory_order_release);  // as in Reset
     rendererLock.lock = 0;
 
     // Start maintenance tasks
@@ -2128,6 +2135,7 @@ void GlassRenderer::DoMaintenance()
 
     if (!doMaintenance->current.enabled)
     {
+        std::atomic_thread_fence(std::memory_order_release);  // as in Reset
         rendererLock.lock = 0;
         return;
     }
@@ -2198,6 +2206,7 @@ void GlassRenderer::DoMaintenance()
 
 
     // Release renderer lock
+    std::atomic_thread_fence(std::memory_order_release);  // as in Reset
     rendererLock.lock = 0;
 }
 

@@ -19,6 +19,7 @@
 #include <gfx_d3d/rb_light.h>
 #include <cgame_mp/cg_main_mp.h>
 #include <bgame/bg_wind.h>
+#include <atomic>
 
 FxSystemContainer *fx_systemPool;
 FxSystemBuffers *fx_systemBufferPool;
@@ -402,6 +403,7 @@ void __cdecl FX_RunPrioritySorting(FxSystem *system)
     v11 = 0;
     firstActiveEffect = system->shared->firstActiveEffect;
     firstNewEffect = system->shared->firstNewEffect;
+    std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
     for ( i = firstActiveEffect; i != firstNewEffect; ++i )
     {
         v8 = system->shared->allEffectHandles[i & 0x3FF];
@@ -480,6 +482,7 @@ void __cdecl FX_RunGarbageCollectionAndPrioritySort(FxSystem *system)
             {
                 system->needsGarbageCollection = 0;
                 activeIndex = system->shared->firstNewEffect;
+                std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
                 freedCount = 0;
                 while ( activeIndex != system->shared->firstActiveEffect )
                 {
@@ -504,11 +507,16 @@ void __cdecl FX_RunGarbageCollectionAndPrioritySort(FxSystem *system)
                     UniqueHandleRelease(system, effect);
                     localEffectContainer->effect.def = 0;
                 }
+                // The exclusive iterator ends with plain stores: on arm64 the next iterator, or a
+                // spawner taking a freed handle (FX_SpawnEffect), could see them before the handles
+                // and effects written above. x86 keeps stores in order; the fences are no code there.
+                std::atomic_thread_fence(std::memory_order_release);
                 system->shared->firstActiveEffect = activeIndex;
                 system->shared->iteratorCount = 0;
             }
             else
             {
+                std::atomic_thread_fence(std::memory_order_release);
                 system->shared->iteratorCount = 0;
             }
         }
@@ -749,6 +757,7 @@ void __cdecl FX_RemoveStaleAttachedEffects(FxSystem *system)
         FX_BeginIteratingOverEffects_Cooperative(system);
         for ( activeIndex = system->shared->firstActiveEffect; activeIndex != system->shared->firstNewEffect; ++activeIndex )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             effect = FX_EffectFromHandle(system, system->shared->allEffectHandles[activeIndex & 0x3FF]);
             status = effect->atomics.status;
             if ( (status & 0x60000000) == 0 && (status & 0x4000) != 0 )
@@ -867,9 +876,12 @@ void __cdecl FX_SpawnEffect_AllocTrails(FxSystem *system, FxEffect *effect, FxEf
             HIWORD(localTrail) = -1;
             LOWORD(localTrail_4) = -1;
             HIBYTE(localTrail_4) = 0;
-            effect->firstTrailHandle = FX_TrailToHandle(system, (FxTrail *)remoteTrail);
             remoteTrail->nextFree = localTrail;
             *(unsigned int *)&remoteTrail->item.lastElemHandle = localTrail_4;
+            // Linked after the trail is filled in (it was before): the drawers walk the trails
+            // without a lock.
+            std::atomic_thread_fence(std::memory_order_release);
+            effect->firstTrailHandle = FX_TrailToHandle(system, (FxTrail *)remoteTrail);
         }
     }
 }
@@ -1055,6 +1067,7 @@ unsigned int __cdecl FX_SpawnEffect(
         }
         if ( allocIndex - system->shared->firstActiveEffect >= 1014 )
             FX_SetWarningPriority(system, remoteDef->efPriority);
+        std::atomic_thread_fence(std::memory_order_acquire);  // the GC wrote the slot before firstActiveEffect
         effectHandle = system->shared->allEffectHandles[allocIndex & 0x3FF];
         remoteEffect = FX_EffectFromHandle(system, effectHandle);
         for ( remoteEffect->atomics.status = 0;
@@ -1449,8 +1462,9 @@ char __cdecl FX_SpawnEffect_AllocSpotLightEffect(FxSystem *system, FxEffect *eff
             {
                 __debugbreak();
             }
-            _InterlockedExchangeAdd(&system->shared->activeSpotLightEffectCount, 1u);
+            // The handle before the count (it was after): readers test the count, then use the handle.
             system->shared->activeSpotLightEffectHandle = FX_EffectToHandle(system, remoteEffect);
+            _InterlockedExchangeAdd(&system->shared->activeSpotLightEffectCount, 1u);
         }
     }
     return 1;
@@ -2015,6 +2029,7 @@ void __cdecl FX_StopEffect(FxSystem *system, FxEffectContainer *effect)
             FX_BeginIteratingOverEffects_Cooperative(system);
             for ( activeIndex = system->shared->firstActiveEffect; activeIndex != system->shared->firstNewEffect; ++activeIndex )
             {
+                std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
                 effectHandle = system->shared->allEffectHandles[activeIndex & 0x3FF];
                 if ( effectHandle != stoppedEffectHandle )
                 {
@@ -2106,6 +2121,7 @@ void __cdecl FX_KillEffect(FxSystem *system, FxEffectContainer *effect)
         count = 0;
         for ( activeIndex = system->shared->firstActiveEffect; (effect->atomics.status & 0x7FE0000) != 0; ++activeIndex )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             if ( activeIndex == system->shared->firstNewEffect
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_system.cpp",
@@ -2265,6 +2281,7 @@ void __cdecl FX_KillAllEffects(int localClientNum)
                     activeIndex != system->system.shared->firstNewEffect;
                     ++activeIndex )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             effect = FX_EffectFromHandle(&system->system, system->system.shared->allEffectHandles[activeIndex & 0x3FF]);
             if ( (effect->atomics.status & 0x3FFF) != 0 )
             {
@@ -2575,8 +2592,8 @@ void __cdecl FX_SpawnSpotLightElem(FxSystem *system, FxElem *elem)
     {
         __debugbreak();
     }
+    system->shared->activeSpotLightElemHandle = FX_ElemToHandle(system, elem);  // before the count, as in FX_SpawnEffect_AllocSpotLightEffect
     _InterlockedExchangeAdd(&system->shared->activeSpotLightElemCount, 1u);
-    system->shared->activeSpotLightElemHandle = FX_ElemToHandle(system, elem);
 }
 
 bool __cdecl FX_ImpactMarkWithinRange(const FxSystem *system, const float *markLocation)
@@ -2796,6 +2813,8 @@ void __cdecl FX_SpawnElem(
                                     }
                                     nextElemHandle = effect->firstElemHandle[elemClass];
                                     remoteElem->item.shared.nextElemHandleInEffect = nextElemHandle;
+                                    // the drawers walk the list without a lock (FX_DrawNonSpriteEffect)
+                                    std::atomic_thread_fence(std::memory_order_release);
                                     effect->firstElemHandle[elemClass] = FX_ElemToHandle(system, (FxElem *)remoteElem);
                                     if ( nextElemHandle != 0xFFFF )
                                         FX_ElemFromHandle(system, nextElemHandle)->item.shared.prevElemHandleInEffect = effect->firstElemHandle[elemClass];
@@ -3673,6 +3692,7 @@ void __cdecl FX_FreeSpotLightElem(FxSystem *system, unsigned __int16 elemHandle,
     {
         __debugbreak();
     }
+    std::atomic_thread_fence(std::memory_order_acquire);  // the handle was published before the count
     elem = FX_ElemFromHandle(system, system->shared->activeSpotLightElemHandle);
     FX_FreePool_Generic_FxElem_FxElemContainer_(
         &effect->effect,

@@ -26,6 +26,7 @@
 #include <universal/q_shared.h>
 #include <bgame/bg_wind.h>
 #include <cgame_mp/cg_local_mp.h>
+#include <atomic>
 
 
 bool __cdecl FX_IsDemoPlaying()
@@ -2814,6 +2815,7 @@ void __cdecl FX_UpdateSpotLight(FxCmd *cmd)
         FX_BeginIteratingOverEffects_Cooperative(system);
         if ( system->shared->activeSpotLightEffectCount > 0 )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // the handle was published before the count (FX_SpawnEffect_AllocSpotLightEffect)
             if ( system->shared->activeSpotLightEffectCount != 1
                 && !Assert_MyHandler(
                             "C:\\projects_pc\\cod\\codsrc\\src\\EffectsCore\\fx_update.cpp",
@@ -3000,6 +3002,7 @@ void __cdecl FX_UpdateSpotLightEffectPartial(
     }
     if ( system->shared->activeSpotLightElemCount )
     {
+        std::atomic_thread_fence(std::memory_order_acquire);  // as above
         elem = FX_ElemFromHandle(system, system->shared->activeSpotLightElemHandle);
         if ( FX_UpdateElement(system, &effect->effect, (FxElem *)elem, msecUpdateBegin, msecUpdateEnd) == FX_UPDATE_REMOVE )
             FX_FreeSpotLightElem(system, system->shared->activeSpotLightElemHandle, effect);
@@ -3102,6 +3105,7 @@ void __cdecl FX_RewindTo_Setup(int localClientNum, int time)
                     activeIndex != system->system.shared->firstNewEffect;
                     ++activeIndex )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             effectHandle = system->system.shared->allEffectHandles[activeIndex & 0x3FF];
             effect = FX_EffectFromHandle(&system->system, effectHandle);
             if ( (effect->atomics.status & 0x3FFF) != 0 )
@@ -3258,6 +3262,7 @@ void __cdecl FX_RewindTo(int localClientNum, int time)
         FX_BeginIteratingOverEffects_Cooperative(&system->system);
         for ( i = system->system.shared->firstActiveEffect; i != system->system.shared->firstNewEffect; ++i )
         {
+            std::atomic_thread_fence(std::memory_order_acquire);  // as in FX_DrawNonSpriteElems
             v5 = system->system.shared->allEffectHandles[i & 0x3FF];
             effect = FX_EffectFromHandle(&system->system, v5);
             v12[v13++] = (unsigned int)Ptr32_Encode(effect);

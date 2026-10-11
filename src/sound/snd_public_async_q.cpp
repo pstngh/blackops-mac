@@ -137,7 +137,6 @@ unsigned int __cdecl SND_CommandPush(snd_command *cmd)
     // never sees a head before the slot and the command it publishes, and a slot is
     // reused only after the consumer is done with it.
     id = g_snd.command_id++;
-    std::atomic_thread_fence(std::memory_order_acquire);   // the tail read below pairs with SND_CommandPop
     if ( SND_NextCommandIndex(g_snd.command_q_head) == g_snd.command_q_tail )
     {
         Com_PrintError(9, "Failed to push sound command: queue is full\n");
@@ -146,6 +145,7 @@ unsigned int __cdecl SND_CommandPush(snd_command *cmd)
     }
     else
     {
+        std::atomic_thread_fence(std::memory_order_acquire);   // the tail read above pairs with SND_CommandPop
         cmd->id = id;
         if ( g_snd.command_q[g_snd.command_q_head]
             && !Assert_MyHandler(

@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 21)
+## Status (2026-10-11, session 22)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -240,6 +240,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   release/acquire fences; `KB_PHYS_STRESS=2500` (CLAUDE.md) crashes the old code within about a
   minute and ran 5 x 4 minutes clean on the new (Decisions session 21). The game folder's copy
   has it.
+- **Memory-ordering audit of the worker threads** (session 22): every job-queue module and what it
+  shares, for session 21's pattern. Real on arm64 and fixed with fences: the scene entities'
+  bounds hand-off (skinning could read a stale skeleton), `DObjUnlock` and the glass renderer's
+  lock (plain-store unlocks), and the effects system's ring, element, trail and spot-light
+  hand-offs (a drawer could see a freed effect); the job queue, physics, streaming, sound, demo
+  and cinematic workers were clean. None was reproduced; regression and fps checks passed
+  (Decisions session 22). The game folder's copy does not have it yet (make_portable.sh).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -584,6 +591,13 @@ build (`tools/make_portable.sh`: rerun after each build).
    the plain `iteratorCount = 0` stores without an arm64 release fence, and
    `FX_RunGarbageCollectionAndPrioritySort`'s `effect[1].def & 0x3FFF` (an alias of
    the effect's reference count, rule 9; sizeof(FxEffect) differs on 64-bit).
+   Session 22: every Begin has an End on every path; the plain stores could not leak a
+   count (only release ordering was missing: fenced, Decisions session 22); the alias is
+   fine (FxEffect is 192 bytes on both ABIs, `effect[1]` is `atomics.status`). The audit's
+   remaining suspect, not checked: `FX_ResetSystem` and the `FX_InitSystem`/`FX_ShutdownSystem`
+   memsets (`CG_MapRestart`) zero the count while an iteration is still running (the ppu job
+   is not in `R_WaitFrontendWorkerCmds`); its decrement then leaves -1, which blocks every
+   Begin. A stuck value of 0xFFFFFFFF would confirm it, a positive one a leaked Begin.
 3. **Sound leftovers**: (a) streamed ambient loops churn: in a 110 s match on
    mp_mountain the 10 stream voices started 7675 times (`amb_wind_edge_r` 1704
    times) and ~33000 loaded-sound requests found no free voice (reason: the engine's
@@ -627,10 +641,37 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 22 (the worker audit, Decisions session 22; races on x86 too, so not ordering bugs):
+- Model lighting: `R_AllocModelLighting` runs from fx_draw (glass, `ShardGroup::GenerateVerts`,
+  the port's "LWSS HACK" in place of `R_AllocModelLighting_PrimaryLight`) while r_add_sceneent's
+  batches call it, with plain read-modify-writes of `pixelFreeRover`/`currPixelFreeBits`
+  (two models can get one entry); glass's r_model_lighting batches are never waited for (its wait
+  is commented out; `R_WaitFrontendWorkerCmds` has no r_model_lighting), so one can still write
+  `frontEndDataOut` patches across `R_ToggleSmpFrame`. Reported by the audit, not reproduced.
+- Effects: `FX_DelRefToEffect` tests the count, then decrements (two drops can both miss the
+  last); trail elements are linked before they are filled in (`FX_SpawnTrailElem_NoCull`); the
+  drawers walk element lists while the main thread kills or relinks them (the "Loop in element
+  list" check); `g_fxMarkPoints`' four rotating buffers are shared by the update workers and the
+  main thread.
+- Physics: a wheel trace on a worker can create a dynent's physics object
+  (`GetTraceResultsRigidBody`) without a lock; the GJK cache inserts after a read-unlocked miss
+  without re-checking (each body is handled by one thread, so the same pair is never looked up
+  twice at once).
+- `imageTouchBits` are OR'ed plainly from the main, render and fx_draw threads (a lost bit costs a
+  frame of streaming priority); `SND_FreePlayback` runs on the sound worker without
+  `CRITSECT_SOUND_PLAYBACK_ALLOC`; `GlassRenderer::Update` returns with the lock held if
+  `CG_GetLocalClientGlobals` gives null (it never does).
+- Not ordering, found in passing: `FxBoltAndSortOrder` (fxprimitives.h) declares
+  `temporalBits:2, boneIndex:8`, but the IDA code (the `#if 0` copies of `FX_SpawnRunner`,
+  `FX_UpdateEffectBolt` and `FX_SpawnEffect`'s bolt setup) uses 1 temporal bit at bit 19 and a
+  9-bit bone index at bit 20 (0x1FF: no bone); the live code uses the struct. The audit expects runners of
+  unbolted effects to spawn their children as bolted to dobj 255; not checked in game.
+
 Seen in session 21 (the physics crash, Decisions session 21):
 - Only the broad phase's environment queries were checked for objects published under a lock
   and read without it on the job-queue workers; the GJK cache, the auto rigid bodies and the
-  bpei database's own map take read locks (full barriers). Other worker code is unaudited.
+  bpei database's own map take read locks (full barriers). The other workers were audited in
+  session 22.
 - A body that wakes a dynent (auto-activation) creates its physics object on the worker
   (`DynEntCl_CreatePhysObj`, which calls `CScr_NotifyNum`): safe only because the main thread
   waits in the physics flush meanwhile, as in the original.
@@ -775,6 +816,90 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 22)
+
+An audit of the code on the job-queue workers for session 21's pattern: data written with plain
+stores, then a pointer, flag or count stored plainly, read by another thread without a lock or an
+acquire. Fixes are `std::atomic_thread_fence` release before the publishing store and acquire after
+the unlocked read that found it (no code on x86), commented once per file.
+
+- **The primitives are full barriers** (disassembly of build_macos): `_InterlockedCompareExchange`,
+  `_InterlockedExchangeAdd` and `InterlockedExchange` (`__sync_lock_test_and_set`, documented as
+  acquire only) compile to LSE `casal`, `ldaddal` and `swpal`, both acquire and release; so
+  `tlAtomicMutex::Unlock`'s exchange on a local before its plain `ThreadId = 0` is a release, and
+  the minspec, tlAtomic and tlAtomicReadWrite mutexes are sound. A plain store that releases a
+  hand-rolled lock is not (`DObjUnlock` was `str wzr`).
+- **Clean**: the job queue (queue nodes under tlAtomicMutex, interlocked counts, session 5's fences
+  in `jqPoll`/`jqFlush`, which also end `jqAssistWithBatches`' waits; conditional batches are never
+  used). Physics: the phases are separated by `IW_task_manager_flush` (= `jqFlush`), and inside a
+  phase the env-query prolog merges under a mutex, the cluster list, pair lists, contact lists and
+  wheel list are CAS pops/pushes, the transient and slot-pool allocators CAS (tagged stack), the
+  GJK cache, bpei database and auto rigid bodies take read/write locks, auto-activation is
+  double-checked under `g_bp_auto_activate_mutex` (the unlocked test only skips work), the
+  constraint solver works per island (shared static bodies copied into per-solver temps). Streaming
+  (r_stream's IO-thread fences complete; update batches serialised by the executing count; the
+  static-model/surface modules are never submitted), sound (the worker's queues, streams under
+  per-stream locks, the OpenAL backend under its lock, the occlusion thread under
+  `CRITSEC_SOUND_OCCLUSION`), demo save (`demo_save_smp` 0: synchronous), cinematic (Bink stub),
+  dpvs static/dynmodel/dynbrush, r_model_skin, r_skin_cached_staticmodel, dyn_smodel_drawstate,
+  water (try-lock).
+- **Scene-entity bounds** (r_model_pose.cpp `R_UpdateSceneEntBounds`): the thread that wins the
+  0->1 CAS on `cull.state` (a dobj_skel/dobj_skin/r_dpvs_entity/r_spot_shadow_ent batch or the main
+  thread) computes the pose (`skel.mat`, bones), `cull.lods`, mins/maxs and the radius, then stores
+  `cull.state = 2` plainly; the others spin on it and skin with `I_dmaGetDObjSkel(obj)`. A stale
+  `skel.mat` (last frame's, or 0) or half-written bones went to the skinner. Release before the
+  store, acquire after the spin; acquire in the two unlocked readers of the bounds
+  (`R_InitialEntityCulling` in r_dpvs.cpp, the sceneent batch in r_dpvs_sceneent.cpp).
+- **`DObjUnlock`** (dobj_utils.cpp): `locked = 0` releases the CAS spinlock that the bounds threads
+  (`CG_DObjCalcPose`), FX bolt workers and main-thread traces take on a DObj; the next owner could
+  see the skeleton's `timeStamp` and bone bits current with the bones not written. Release fence.
+- **Glass renderer lock** (glass_renderer.cpp): the six live `rendererLock.lock = 0` (Reset,
+  RemoveGlassShards, Update, GenerateVerts, DoMaintenance x2) are plain; fx_draw's
+  `GlassCl_GenerateVerts` (Update, GenerateVerts, DoMaintenance: `smpGlass` 0) and the main
+  thread's `RemoveGlassShards` (snapshot parsing) contend for it over std::list shard groups.
+  Release fences.
+- **Effects** (EffectsCore):
+  - The exclusive iterator (`FX_RunGarbageCollectionAndPrioritySort`, `FX_SortEffects`) ends with
+    plain `firstActiveEffect`/`iteratorCount = 0` stores after rewriting `allEffectHandles` and
+    freeing effects (`def = 0`); the last cooperative iterator runs the GC on its own thread (often
+    a worker) and `FX_SortEffects` runs in the ppu job, so the next iterator could read a stale
+    handle list and draw a freed effect. Release fences (3).
+  - `FX_SpawnEffect` takes the handle the GC wrote into a freed slot before advancing
+    `firstActiveEffect`: acquire before reading it (only a nearly full ring reaches those slots).
+  - A spawner (any thread) fills the effect, then CASes `firstNewEffect`; every loop over
+    [`firstActiveEffect`, `firstNewEffect`) read the effect's `def`/`owner`/status ordered only by a
+    control dependency (arm64 may satisfy them first). Acquire at the top of each loop body
+    (draw, sort, stop/kill, stale-attached, rewind, profile) and after the GC's and
+    `FX_RunPrioritySorting`'s snapshots: the GC read a just-published effect's reference count, and
+    a stale 0 would have freed a live effect. `FX_Update`'s snapshot is read before its Begin CAS
+    (a full barrier) and needs none.
+  - Elements and trails are linked into an effect with plain stores and the drawers walk them
+    without the effect's lock (the updaters take it): release before `firstElemHandle`
+    (`FX_SpawnElem`) and `firstTrailHandle` (`FX_SpawnEffect_AllocTrails`), acquire in
+    `FX_DrawNonSpriteEffect`, `FX_DrawSpriteEffect` and `FX_DrawTrailsForEffect`. The trail head was
+    published before the trail's own fields (wrong on x86 too); it is now stored last.
+  - The spot light's count was incremented before its handle was stored (effect and element; wrong
+    on x86 too: a reader could see the count and the old handle): handle first, then the
+    interlocked increment, and acquire where a count check is followed by the handle
+    (`FX_DrawSpotLight`, `FX_UpdateSpotLight`, `FX_UpdateSpotLightEffectPartial`,
+    `FX_FreeSpotLightElem`).
+- **`SND_CommandPush`** (snd_public_async_q.cpp, session 4's fences): the acquire fence sat before
+  the tail compare it pairs with, so the slot test in the following assert could read a stale
+  command; moved after the compare, as `SND_NotifyPush` has it.
+- **Not fixed, benign or unreachable**: `FX_ImpactMarkWithinRange` reads `camera.origin` after
+  `isValid` (the writer orders them with an interlocked exchange; a stale origin moves one
+  mark-range test by a frame); `g_loadingAssets`/`g_zoneNames[].loaded` (readers then take the
+  DBHASH or stream locks; ui_viewer only); `g_snd.init` read by the stream thread (first
+  `SND_Init` only); the lost-device rendezvous (`g_isRecoveringLostDevice`/`g_mayRecoverLostAssets`,
+  plain flags spun on both ways) is unreachable, no backend returns `D3DERR_DEVICELOST`.
+- **Testing**: none of these was reproduced (nothing stresses them like `KB_PHYS_STRESS` does the
+  broad phase). Release client, 7 managed bots, scripted player sprint-firing: `KB_PHYS_STRESS=2500`
+  300 s (mp_nuked, then mp_array after a 3-minute TDM) and 330 s of 1-minute TDM (mp_nuked,
+  mp_array, mp_cracked, mp_crisis): no crash, assert or `[mtl] BUG`. fps (bench_views.py --bots,
+  mp_nuked's 8 views, HEAD and new alternating, geometric means): HEAD 633.8, 646.5, 631.0; new
+  620.9, 642.2, 649.1. check_file.py natively and `--i386`: the 11 files clean;
+  audit_splitlocals.py: 0. Races that are races on x86 too are under Open items.
 
 ## Decisions (session 21)
 
