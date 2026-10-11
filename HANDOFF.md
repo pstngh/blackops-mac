@@ -246,14 +246,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   lock (plain-store unlocks), and the effects system's ring, element, trail and spot-light
   hand-offs (a drawer could see a freed effect); the job queue, physics, streaming, sound, demo
   and cinematic workers were clean. None was reproduced; regression and fps checks passed
-  (Decisions session 22). The game folder's copy does not have it yet (make_portable.sh).
+  (Decisions session 22). The game folder's copy has it.
 - **Effect bolts** (session 23): `FxBoltAndSortOrder` had the bone index 8 bits wide, so "no bone"
   (511) became bone 255. Runner sub-effects of unbolted effects and impacts were bolted to entity
   255 or the world and killed on their first update (grenade explosions' flash and smoke, impacts'
   dust, sparks, falling snow, waves, stars), and effects on an entity without a tag (silenced
   muzzle flashes, glass hits, grenade and tomahawk trails) stopped at once. Fixed with the IDA
   widths, plus effects on dynents (stored as DObj bolts); checked in game, before and after
-  (Decisions session 23). The game folder's copy does not have it yet.
+  (Decisions session 23). The game folder's copy has it (make_portable.sh, which also collected
+  the shaders into `codbo/kb_shaders/bytecode`: 16140; the library still waits for the toolchain).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
