@@ -304,6 +304,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   too"): `kb_noDualWield`, archived, default 1. A class's Dual Wield pick comes as the single gun with
   its other attachments, bots never roll one, any other dual-wield give comes as the single gun, and
   Create a Class reports no Dual Wield option (Decisions session 26; the menu itself not seen yet).
+  The game folder's copy has it (make_portable.sh at 7358f629, the user's request; the DLC weapons'
+  zone isn't in the game folder yet: stage 3).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
