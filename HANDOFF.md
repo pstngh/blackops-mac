@@ -477,18 +477,27 @@ are in 0's list.
      the map's first frame waits 1.0-1.2 s on mp_nuked with bots (was 2.6-3.2 s), the startup
      ~0.2 s, for batches still compiling (~165 M instructions, 10-17 ms of a P core, a shader;
      ~3,200 a map, ~12% of them drawn). **The user chose Apple's way** (end of session 19,
-     after both were explained): every shader compiled ahead of time into a .metallib
-     (`xcrun metal`/`metallib`, the Metal Toolchain download: confirm its size and ask once
-     before downloading), built from the game's own shaders on the user's Mac by
-     make_portable.sh, loaded at startup; a shader missing from it compiles at run time with
-     a log line. Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
+     after both were explained): every shader the game has (8,864, plus the per-sample
+     variants transparency AA uses, so no setting compiles at run time) compiled ahead of time
+     into one .metallib in the game folder (`xcrun metal`/`metallib`; the Metal Toolchain
+     download: confirm its size and ask once before downloading). make_portable.sh builds it
+     from the game's own shaders and rebuilds it by itself whenever the shader translation
+     changes (a stamp of it), and stops with the download command when the toolchain is
+     missing (it is per Xcode version). The game loads it at startup; a function is keyed so
+     a stale file can't be used for a changed translation, and a shader missing from it
+     compiles at run time with a log line. AIR is chip-independent; the user needs only M4
+     (no pre-M4 support). Not the shader list (a session-19 prototype of it gave 0.36 s). MTLBinaryArchive keeps only backend binaries, not the MSL
      front end. `KB_MTL_BATCH=<n>` gives a cold cache to measure with, `KB_MTL_SHADERLOG` the
      timeline. Also every load waits 0.2-0.4 s for a missing asset, `python_speed_snub_mp`
      (`Error: Waited ... msec for missing asset`), in every build: not looked at.
    - **Warm-cache hitches: the user said yes to a cache file** (session 19): a Metal binary
-     archive (MTLBinaryArchive, Apple's documented way: harvest the pipelines a game uses) in
-     the game folder (`players/`, under fs_h? decide and say), saved after a map, so later
-     runs reuse specialized functions (`MTLFunctionDescriptor.binaryArchives`) and pipelines.
+     archive (MTLBinaryArchive) the game fills by itself as it plays, in the game folder
+     (`players/`, under fs_h, so test runs with a scratch fs_h never touch the user's), saved
+     after a map and at quit, so later runs reuse specialized functions
+     (`MTLFunctionDescriptor.binaryArchives`) and pipelines. Not pre-built: the user chose
+     the self-filling file (no recording runs, no per-chip builds); it holds M4 code (the
+     user needs only M4), works on another M4 Mac with the same macOS, and refills itself,
+     with a log line, after a macOS update or on another chip.
      Today a few frames a match take 25-65 ms when 20-54 pipelines are first used at once:
      ~1.2 ms of specialization each (a request to the compiler service) plus 3-20 ms of backend
      compile when the shared system cache has dropped it, which varies run to run. Measure that
@@ -775,7 +784,9 @@ checks at the end of this section are not all done.
   load (a shader list) and the offline metallib (the toolchain download) they asked for the
   "by the book" way of each to be explained first: Apple's way is the offline .metallib (and a
   binary archive for pipelines); the list is a workaround that only reorders runtime compiles.
-  They then chose Apple's way: the offline .metallib, not the list.
+  They then chose Apple's way: the offline .metallib, not the list, built and kept up to date
+  by make_portable.sh with the transparency-AA variants in it; and the stutter cache filled by
+  the game itself (not pre-built). They need only M4 support.
 - **Diagnostic**: `KB_MTL_SHADERLOG=<file>` (CLAUDE.md) logs each shader's creation and batch,
   batch submits and completions, a draw's waits, first uses and frames over 15 ms.
 - **Checked**: the validation layer (API and shader) on mp_nuked, 7 bots, every view, cold:
