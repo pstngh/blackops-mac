@@ -25,11 +25,45 @@
 #include <csignal>
 #include <execinfo.h>
 #include <cstdlib>
+#include <dlfcn.h>
+#if defined(__linux__) && !defined(__APPLE__)
+#include <ucontext.h>
+#endif
 
 // Crash backtrace — the engine's asserts trap via __debugbreak (SIGILL); print where.
-static void CrashHandler(int sig) {
+// On macOS arm64 backtrace() resumes after _sigtramp at the interrupted link register,
+// not the faulting pc, so a fault inside a frameless leaf shows only its caller: the
+// signal's context gives the pc, lr, fp and sp first, and the image's load address
+// for atos (looked up when the handler is installed: dladdr isn't async-signal-safe).
+static Dl_info crashImage;
+
+static void CrashHandler(int sig, siginfo_t *info, void *context) {
+    const char *name = sig == SIGSEGV ? "SIGSEGV" : sig == SIGBUS ? "SIGBUS" : sig == SIGILL ? "SIGILL"
+                     : sig == SIGTRAP ? "SIGTRAP" : sig == SIGABRT ? "SIGABRT" : "?";
+    fprintf(stderr, "\n*** caught signal %d (%s, code %d), fault address %p ***\n", sig, name, info->si_code, info->si_addr);
+#if defined(__APPLE__) && defined(__aarch64__)
+    const auto &ss = ((ucontext_t *)context)->uc_mcontext->__ss;
+    void *pc = (void *)ss.__pc, *lr = (void *)ss.__lr, *fp = (void *)ss.__fp, *sp = (void *)ss.__sp;
+#elif defined(__linux__) && defined(__i386__) && !defined(__APPLE__)
+    const greg_t *gregs = ((ucontext_t *)context)->uc_mcontext.gregs;
+    void *pc = (void *)gregs[REG_EIP], *lr = nullptr, *fp = (void *)gregs[REG_EBP], *sp = (void *)gregs[REG_ESP];
+#else
+    void *pc = nullptr, *lr = nullptr, *fp = nullptr, *sp = nullptr;
+#endif
+    if (pc) {
+        fprintf(stderr, "pc %p  lr %p  fp %p  sp %p\n", pc, lr, fp, sp);
+        fprintf(stderr, "pc: "); backtrace_symbols_fd(&pc, 1, 2);
+        if (lr) { fprintf(stderr, "lr: "); backtrace_symbols_fd(&lr, 1, 2); }
+    }
+    if (crashImage.dli_fbase) {
+#ifdef __APPLE__
+        fprintf(stderr, "atos -o %s -l %p %p %p\n", crashImage.dli_fname, crashImage.dli_fbase, pc, lr);
+#else
+        fprintf(stderr, "image %s at %p\n", crashImage.dli_fname, crashImage.dli_fbase);
+#endif
+    }
     void *bt[40]; int n = backtrace(bt, 40);
-    fprintf(stderr, "\n*** caught signal %d — backtrace (%d frames) ***\n", sig, n);
+    fprintf(stderr, "backtrace (%d frames):\n", n);
     backtrace_symbols_fd(bt, n, 2);
     fflush(stderr); _exit(128 + sig);
 }
@@ -163,9 +197,13 @@ int main(int argc, char **argv) {
         snprintf(cmdline + n, sizeof(cmdline) - n, "%s%s", argv[i], i + 1 < argc ? " " : "");
     }
     fprintf(stderr, "[KisakBlack] boot: cmdline=\"%s\"\n", cmdline);
-    signal(SIGILL, CrashHandler); signal(SIGSEGV, CrashHandler); signal(SIGABRT, CrashHandler);
-    signal(SIGBUS, CrashHandler);   // macOS reports some bad accesses as SIGBUS
-    signal(SIGTRAP, CrashHandler);  // arm64 brk: __debugbreak, and clang's trap on reaching unreachable code
+    Dl_info image;
+    if (dladdr((void *)CrashHandler, &image)) crashImage = image;
+    struct sigaction sa = {};
+    sa.sa_sigaction = CrashHandler; sa.sa_flags = SA_SIGINFO; sigemptyset(&sa.sa_mask);
+    sigaction(SIGILL, &sa, nullptr); sigaction(SIGSEGV, &sa, nullptr); sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGBUS, &sa, nullptr);   // macOS reports some bad accesses as SIGBUS
+    sigaction(SIGTRAP, &sa, nullptr);  // arm64 brk: __debugbreak, and clang's trap on reaching unreachable code
 
     Sys_InitializeCriticalSections();
     Sys_InitMainThread();

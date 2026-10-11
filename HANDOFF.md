@@ -638,8 +638,6 @@ Seen in session 21 (the physics crash, Decisions session 21):
   only by `iassert`, which RelWithDebInfo compiles out, like every `iassert`.
 - The natural trigger, an object whose box spans the map (session 20's bench run: a 12-body
   ragdoll flung across 15,000 units, "about to freakout"), still happens; it no longer crashes.
-- The crash handler's backtrace starts at the interrupted link register, not the faulting pc
-  (CLAUDE.md); printing the ucontext's pc, lr and fault address would place such crashes directly.
 
 Seen in session 14 (the split-locals scan, Decisions session 14):
 - `CG_SP_trigger_multiple`/`_radius` (cg_spawn.cpp) pass a `char` parameter as `int *`
@@ -831,6 +829,18 @@ The physics crash seen once in session 20 (Decisions session 20, "Found, not fix
   before copying; now `I_strncpyz` into its own buffer). With both fixed, the ASan client with that
   option over 330 s of 1-minute TDM (mp_nuked, mp_array, mp_cracked, mp_crisis): no report.
 - check_file.py natively and `--i386`: the five files clean; audit_splitlocals.py: 0.
+- **The crash handler** (linux_main.cpp, after the above): installed with `sigaction` and
+  `SA_SIGINFO`, it prints the signal, its code and fault address (`si_addr`), the interrupted
+  pc, lr, fp and sp from the context (pc and lr symbolized by `backtrace_symbols_fd`), and an
+  `atos -o <exe> -l <load address> <pc> <lr>` line, before the backtrace (CLAUDE.md). The load
+  address is looked up with `dladdr` when the handler is installed (not async-signal-safe).
+  Linux i386 prints eip, ebp and esp from `uc_mcontext.gregs` and the image's path and base;
+  that branch has never been compiled (the `--i386` check defines `__APPLE__` and skips it).
+  Checked on the dedicated server: `+crash` (`Com_Crash_f` is a frameless `brk`) shows
+  `Com_Crash_f + 0` as the pc while the backtrace starts at its caller; a temporary write to 0x10
+  in it gives SIGSEGV, fault address 0x10 and its pc, and the printed atos line resolves both to
+  file and line; `kill -SEGV` on a running match gives the main thread's pc in
+  `__semwait_signal`.
 
 ## Decisions (session 20)
 

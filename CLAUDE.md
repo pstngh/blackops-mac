@@ -36,11 +36,12 @@ be moved; rerun it after rebuilding. The user's game folder has such a copy
 
 macOS has no `timeout`; use `perl -e 'alarm shift; exec @ARGV' 60 <cmd>`, or
 `perl tools/run_sampled.pl <seconds> <log> <cmd...>` to run, capture every
-thread's stack (macOS `sample`) into `<log>.sample`, and kill it. Crash
-backtraces print from the signal handler, starting at the interrupted link register, not the
-faulting pc (a crash inside a frameless leaf shows only its caller); `atos -o build_macos/blackops <addr>`
-symbolizes after subtracting the slide (compare `nm` of CrashHandler with its
-printed address). `lldb --batch -o run -k "bt" -k "frame variable" -- <cmd>`
+thread's stack (macOS `sample`) into `<log>.sample`, and kill it. The crash
+handler prints the signal, its fault address and the interrupted pc, lr, fp and sp (pc and lr
+symbolized), an `atos -o <exe> -l <load address> <pc> <lr>` line to run for files and lines,
+then the backtrace, which on arm64 starts at the link register, not the pc: a crash inside a
+frameless leaf is only in the pc line. Other printed addresses go to that atos command in
+place of pc and lr. `lldb --batch -o run -k "bt" -k "frame variable" -- <cmd>`
 works; if a launch under lldb hangs in dyld `open`, kill leftover blackops
 processes first. lldb turns ASLR off (image at 0x100000000), which hides bugs
 that depend on the image address: reproduce outside it too.
