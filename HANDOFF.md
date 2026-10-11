@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-10, session 19)
+## Status (2026-10-11, session 20)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -205,14 +205,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   AA's, and leaning no longer slows the player or ends a sprint. Dvar `kb_aaLean` (default 1,
   archived); verified in play against AA's formulas (Decisions session 18); the game folder's
   copy has it. With it the user's list of 10 changes is done.
-- **Metal leftovers, cold shader cache** (session 19, work in progress: committed, not yet
-  verified on every map, Decisions session 19): with the system shader cache cold, mp_nuked's
+- **Metal leftovers, cold shader cache** (session 19, verified on every map in session 20:
+  Decisions sessions 19 and 20): with the system shader cache cold, mp_nuked's
   first frame (7 bots) waited 2.6-3.2 s, now 1.0-1.2 s, and the startup 0.33-0.41 s, now
   0.18-0.24 s. The draws' function specializations had queued behind Metal's own compile
   queue; the backend now hands Metal at most cores - 2 shader batches. Shadow maps compare
   in hardware (`sample_compare` on a `depth2d`, the samplers found by name in the shaders'
-  constant tables): 21% less compile work, same images on mp_nuked. The game folder's copy
-  doesn't have it yet.
+  constant tables): 21% less compile work, same images on every map. The game folder's copy has
+  it (session 20).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -469,10 +469,8 @@ are in 0's list.
    Leftovers (session 15 did the default, the display rate and the spawn stall: Decisions
    session 15; session 19 the compile queue and hardware shadow compares: Decisions session 19).
    The user's answers at the end of session 19 (to plain questions; their numbers there):
-   - **First: finish verifying session 19's commit** (its Decisions list what's checked and
-     what isn't: every map's overview against HEAD~1 in default mode and against GL in
-     `KB_MTL_GLCOMPAT=1`, the validation layer on other maps, the ASan client, fps pairs), then
-     rerun make_portable.sh.
+   - **Done (session 20): session 19's commit verified** on every map (Decisions session 20),
+     make_portable.sh rerun.
    - Load time with a cold system shader cache (common: it keeps about one map's batches):
      the map's first frame waits 1.0-1.2 s on mp_nuked with bots (was 2.6-3.2 s), the startup
      ~0.2 s, for batches still compiling (~165 M instructions, 10-17 ms of a P core, a shader;
@@ -719,6 +717,34 @@ Pre-existing (wrong on every build):
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
 
+## Decisions (session 20)
+
+Stage 1 of the session-19 plan: session 19's commit (8794ab5c) verified.
+
+- **Screenshots, default mode**: bench_views.py --map all --shots, 78d18742 (a worktree build) twice
+  and the new build once, the screen awake (`caffeinate -u` every 50 s): 26 of 33 images within
+  the two reference runs' noise (pixels over 24); the other 7 traced to what varies between runs,
+  not to rendering: the team emblem (`autoassign`), the fps counter, the objective text, and the
+  match clock. The new build reaches the map ~2 s sooner, so at the screenshot its match clock
+  is 2 s further (9:51 against the references' 9:53): mp_cracked's drifting smoke (1.6% with the
+  HUD masked), mp_stadium's flag, mp_kowloon's rain. mp_area51's one wall swaps between a
+  blurred and a sharp, seamed version from run to run: texture streaming; four more runs with
+  30 s at the view (two per build) put the sharp one in the reference runs this time.
+- **Screenshots, `KB_MTL_GLCOMPAT=1` against two GL runs**: the differences over the GL-vs-GL noise
+  are the HUD (emblem, fps counter, score box) and particles, which step per frame (Metal 300-750
+  fps, GL 80-120): 0.1-1.8% with the HUD masked (mp_mountain's gondola 1.8%).
+- **The validation layer** (`MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`): mp_array, mp_kowloon and
+  mp_villa with 7 bots, mp_cosmodrome, mp_radiation and mp_zoo: no message, no `[mtl] BUG`.
+- **ASan client** (`MTL_DEBUG_LAYER=1`, 7 managed bots, the scripted player sprint-firing and
+  meleeing, 1-minute TDM): 330 s, mp_nuked -> mp_array -> mp_cracked -> mp_crisis: no report, no
+  BUG, no assert.
+- **fps** (bench_views.py --bots, mp_nuked's views A-F, sky, overview; reference and new
+  alternating, the display state the same in all four, presented = shown): reference
+  521/677/695/744/648/704/740/415 and 520/651/701/719/655/685/682/415, new
+  524/651/650/704/657/605/681/405 and 520/664/691/724/651/686/725/418: the same. Default-mode
+  screenshot runs, every view's geometric mean: reference 496 and 507, new 506.
+- make_portable.sh rerun (the game folder's copy and launcher).
+
 ## Decisions (session 19)
 
 Metal leftover 1, the load with a cold system shader cache. Committed as work in progress: the
@@ -795,7 +821,7 @@ checks at the end of this section are not all done.
   within this machine's noise (7 bots, alternating, last pair HEAD 473/597/643/681/563/563/623/
   402, new 482/597/645/654/599/618/631/416). check_file.py natively for the changed files,
   `--i386` for sm3.cpp and mtl_msl.cpp (the .mm files are macOS-only); audit_splitlocals.py 0.
-- **Not checked yet** (next session): every map's overview against HEAD~1 (default) and
+- **Not checked yet** (done in session 20, Decisions session 20): every map's overview against HEAD~1 (default) and
   against GL (compat; GL's own noise as the tolerance), the validation layer on a few other
   maps, the ASan client (`MTL_DEBUG_LAYER=1`, bots, the scripted player, map rotations), fps
   pairs in the normal display state; then make_portable.sh. A run of all 26 maps was started
