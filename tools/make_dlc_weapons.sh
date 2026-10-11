@@ -2,20 +2,26 @@
 # Write kb_dlc_weapons.ff: the DLC weapons (Rezurrection's WWII guns from the remade World at War
 # zombie maps and the MP40; no Pack-a-Punch versions or wonder weapons, the user's choice)
 # under multiplayer names, extracted from the game's zombie zones by the zone writer (HANDOFF,
-# Decisions sessions 25-26). The zone holds what the weapons need that multiplayer lacks and refers
-# to the rest.
+# Decisions sessions 25-27). The zone holds what the weapons need that multiplayer lacks and refers
+# to the rest; the game loads it at startup (kb_dlcWeapons; make_portable.sh puts it in the game
+# folder's zone/Common).
 #
 # usage: tools/make_dlc_weapons.sh [--no-parents] <game dir> <out .ff> [build dir, default build_macos]
 #
-# Each weapon's parentWeaponName is its statsTable reference; the client stops with "Parent weapon
-# ... not found" for a weapon whose reference the table lacks. --no-parents leaves them empty, to
-# try the weapons (loadzone, give) without the rows.
+# Each weapon's parentWeaponName is its statsTable reference (the zone's copy of the table has the
+# rows); the client stops with "Parent weapon ... not found" for a weapon whose reference the table
+# lacks. --no-parents leaves them empty (session 26's tests, before the rows).
 #
 # A dedicated server (the build's) runs from a folder of its own (links to the game's data, its own
 # zone/Common for the zones it writes, a scratch profile): one zone per map (the map's patch zone
 # first, as it overrides the map's assets, then the map and common_zombie: at most 3 source zones
 # fit in memory), then merges of those, 3 at a time (`writezone ... all`; a name in several zones
-# is written once).
+# is written once). The last merge also gives each gun the damage of a multiplayer gun, puts the
+# guns' rows into copies of mp/statsTable.csv (tools/dlc_weapons_stats.csv) and
+# mp/attributesTable.csv (tools/dlc_weapons_attributes.csv, Create a Class's bars) and
+# mp/weaponOptions.csv (tools/dlc_weapons_options.csv, camo; the zone replaces the tables when it
+# loads) and adds their descriptions (tools/dlc_weapons_strings.txt): Create a
+# Class, the weapon table and the bots read the tables (HANDOFF, Decisions session 27).
 set -euo pipefail
 
 noparents=0
@@ -40,7 +46,8 @@ for d in "$game"/zone/*; do
     [ "$(basename "$d")" = Common ] || ln -s "$d" "$work/game/zone/$(basename "$d")"
 done
 for f in "$game"/zone/Common/*; do
-    ln -s "$f" "$work/game/zone/Common/$(basename "$f")"
+    # Not a zone this script wrote (make_portable.sh puts it in the game folder).
+    [ "$(basename "$f")" = kb_dlc_weapons.ff ] || ln -s "$f" "$work/game/zone/Common/$(basename "$f")"
 done
 zones="$work/game/zone/Common"
 
@@ -60,6 +67,15 @@ maps=(
  kar98k_scoped_zombie=scopedkar98k_mp"
 "zombie_cod5_sumpf_patch,zombie_cod5_sumpf,common_zombie kb_dlc_sumpf
  zombie_type99_rifle=type99_mp"
+)
+
+# The multiplayer gun whose damage each gun takes (the closest: kind, fire mode and rate).
+damage=(
+ thompson_mp=mp5k_mp type100_mp=ak74u_mp mp40_mp=mp5k_mp
+ stg44_mp=ak47_mp m1garand_mp=m14_mp gewehr43_mp=fnfal_mp m1carbine_mp=fnfal_mp
+ fg42_mp=stoner63_mp bar_mp=m60_mp bipodbar_mp=m60_mp
+ kar98k_mp=l96a1_mp scopedkar98k_mp=l96a1_mp type99_mp=l96a1_mp
+ trenchgun_mp=ithaca_mp doublebarrel_mp=rottweil72_mp sawedoff_mp=rottweil72_mp
 )
 
 cfg="$work/home/main/kb_dlc_weapons.cfg"
@@ -88,19 +104,29 @@ while [ $i -lt ${#written[@]} ]; do
     [ $((i + 1)) -lt ${#written[@]} ] && sources="$sources,${written[$((i + 1))]}"
     i=$((i + 2))
     [ $i -ge ${#written[@]} ] && next=kb_dlc_weapons
-    echo "writezone $zones/$next.ff $sources all" >> "$cfg"
+    line="writezone $zones/$next.ff $sources all"
+    if [ $next = kb_dlc_weapons ]; then
+        for d in "${damage[@]}"; do
+            line="$line damage $d"
+        done
+        line="$line rows \"mp/statsTable.csv=$root/tools/dlc_weapons_stats.csv\""
+        line="$line addrows \"mp/attributesTable.csv=$root/tools/dlc_weapons_attributes.csv\""
+        line="$line addrows \"mp/weaponOptions.csv=$root/tools/dlc_weapons_options.csv\""
+        line="$line strings \"$root/tools/dlc_weapons_strings.txt\""
+    fi
+    echo "$line" >> "$cfg"
     merged=$next
     n=$((n + 1))
 done
 echo "quit" >> "$cfg"
 
 log="$work/writezone.log"
-( cd "$work/game" && "$exe" +set dedicated 1 +set fs_h "$work/home" +exec kb_dlc_weapons.cfg > "$log" 2>&1 ) || true
+( cd "$work/game" && "$exe" +set dedicated 1 +set fs_h "$work/home" +set kb_dlcWeapons 0 +exec kb_dlc_weapons.cfg > "$log" 2>&1 ) || true
 if grep -a -q "^Error: writezone:" "$log" || ! grep -a -q "^writezone: wrote '$zones/kb_dlc_weapons.ff'" "$log"; then
     grep -a "^writezone: wrote\|^Error: writezone:" "$log" >&2 || true
     echo "writing the zone failed; see $log" >&2
     exit 1
 fi
-grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset" "$log" || true
+grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset\|takes the damage\|rows from" "$log" || true
 cp "$zones/kb_dlc_weapons.ff" "$out"
 echo "wrote $out"

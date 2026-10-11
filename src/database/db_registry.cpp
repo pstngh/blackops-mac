@@ -4979,6 +4979,7 @@ void __cdecl DB_AddUserMapDir(char *zoneName)
 void __cdecl DB_LoadFastFilesForPC()
 {
     XZoneInfo zoneInfo[6]; // [esp+0h] [ebp-50h] BYREF
+    bool dlcWeapons;
 
     int zone = 0;
 
@@ -5008,6 +5009,11 @@ void __cdecl DB_LoadFastFilesForPC()
     zoneInfo[zone].freeFlags = 0;
     zone++;
 
+    // The DLC weapons (kb_dlcWeapons), after common_mp.
+    dlcWeapons = Com_KbAddDlcWeaponsZone(&zoneInfo[zone]);
+    if (dlcWeapons)
+        zone++;
+
     if (!IsDedicatedServer())
     {
         zoneInfo[zone].name = "ui_viewer_mp";
@@ -5017,6 +5023,8 @@ void __cdecl DB_LoadFastFilesForPC()
     }
 
     DB_LoadXAssets(zoneInfo, zone, 0);
+    if (dlcWeapons)
+        Com_KbDlcWeaponsLoaded();
 }
 
 void __cdecl DB_LoadGraphicsAssetsForPC()

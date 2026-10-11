@@ -1268,6 +1268,26 @@ int BG_UnlockablesSetProfessionalIndex()
     return result;
 }
 
+// kb_noDualWield: the menus' attachment lists (the attachment numbers of an attach point's list,
+// BG_UnlockablesGetNumItemAttachmentsWithAttachPoint) leave Dual Wield out. The item's list keeps it:
+// classes store positions in it, and the weapon table registers the variants.
+static bool BG_UnlockablesKbHidesAttachment(const itemInfo_t *itemInfo, int attachmentNum)
+{
+    return kb_noDualWield && kb_noDualWield->current.enabled && itemInfo->attachments[attachmentNum] == ATTACHMENT_DW;
+}
+
+static bool BG_UnlockablesKbHidesAnAttachment(const itemInfo_t *itemInfo)
+{
+    int attachment;
+
+    for ( attachment = 1; attachment < itemInfo->numAttachments[0]; ++attachment )
+    {
+        if ( BG_UnlockablesKbHidesAttachment(itemInfo, attachment) )
+            return 1;
+    }
+    return 0;
+}
+
 int __cdecl BG_UnlockablesGetItemAttachmentNumWithAttachPoint(int itemIndex, int attachmentNum, int attachmentPoint)
 {
     int currentAttachment; // [esp+0h] [ebp-8h]
@@ -1276,11 +1296,13 @@ int __cdecl BG_UnlockablesGetItemAttachmentNumWithAttachPoint(int itemIndex, int
     itemInfo = BG_UnlockablesGetItemInfo(itemIndex);
     if ( !itemInfo || !attachmentNum )
         return 0;
-    if ( !attachmentPoint && attachmentNum < itemInfo->numAttachments[0] )
+    if ( !attachmentPoint && attachmentNum < itemInfo->numAttachments[0] && !BG_UnlockablesKbHidesAnAttachment(itemInfo) )
         return attachmentNum;
     for ( currentAttachment = 1; currentAttachment < itemInfo->numAttachments[0]; ++currentAttachment )
     {
-        if ( BG_GetAttachmentPointIndexFromAttachment(itemInfo->attachments[currentAttachment]) == attachmentPoint
+        if ( (!attachmentPoint
+              || BG_GetAttachmentPointIndexFromAttachment(itemInfo->attachments[currentAttachment]) == attachmentPoint)
+            && !BG_UnlockablesKbHidesAttachment(itemInfo, currentAttachment)
             && --attachmentNum <= 0 )
         {
             return currentAttachment;
@@ -1466,12 +1488,22 @@ const char *__cdecl BG_UnlockablesGetItemDesc(int itemIndex)
 int __cdecl BG_UnlockablesGetNumItemAttachmentsWithAttachPoint(int itemIndex, int attachPoint)
 {
     itemInfo_t *itemInfo; // [esp+0h] [ebp-4h]
+    int count;
+    int attachment;
 
     itemInfo = BG_UnlockablesGetItemInfo(itemIndex);
-    if ( itemInfo )
-        return itemInfo->numAttachments[attachPoint];
-    else
+    if ( !itemInfo )
         return 0;
+    count = itemInfo->numAttachments[attachPoint];
+    for ( attachment = 1; attachment < itemInfo->numAttachments[0]; ++attachment )
+    {
+        if ( BG_UnlockablesKbHidesAttachment(itemInfo, attachment)
+            && (!attachPoint || BG_GetAttachmentPointIndexFromAttachment(itemInfo->attachments[attachment]) == attachPoint) )
+        {
+            --count;
+        }
+    }
+    return count;
 }
 
 int __cdecl BG_UnlockablesGetNumItemAttachments(int itemIndex)
@@ -3934,6 +3966,23 @@ void __cdecl BG_UnlockableItemsInit()
                                             0,
                                             "Associate the body type with the primary weapon (perk1 if false)");
     BG_LoadWeaponAttachmentTable();
+    memcpy(itemsInSlot, s_unlockableItems.itemsInSlot, sizeof(itemsInSlot));
+    numItemsInSlot = s_unlockableItems.numItemsInSlot;
+    numPurchasedItemsInSlot = s_unlockableItems.numPurchasedItemsInSlot;
+    BG_InitUnlockables();
+    memcpy(s_unlockableItems.itemsInSlot, itemsInSlot, sizeof(s_unlockableItems.itemsInSlot));
+    s_unlockableItems.numItemsInSlot = numItemsInSlot;
+    s_unlockableItems.numPurchasedItemsInSlot = numPurchasedItemsInSlot;
+}
+
+// The items again after a zone replaced mp/statsTable.csv (kb_dlcWeapons, Com_KbDlcWeaponsLoaded),
+// as BG_UnlockableItemsInit reads them, keeping the menus' item list.
+void BG_UnlockablesReloadItems()
+{
+    int numPurchasedItemsInSlot;
+    itemInfo_t *itemsInSlot[256];
+    int numItemsInSlot;
+
     memcpy(itemsInSlot, s_unlockableItems.itemsInSlot, sizeof(itemsInSlot));
     numItemsInSlot = s_unlockableItems.numItemsInSlot;
     numPurchasedItemsInSlot = s_unlockableItems.numPurchasedItemsInSlot;

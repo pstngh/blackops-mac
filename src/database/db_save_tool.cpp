@@ -10,8 +10,11 @@
 #include <qcommon/threads.h>
 #include <sound/snd_bank.h>
 #include <sound/snd_utils.h>
+#include <stringed/stringed_hooks.h>
+#include <ui/ui_shared.h>
 #include <universal/com_memory.h>
 #include <universal/com_stringtable.h>
+#include <universal/com_stringtable_obj.h>
 #include <universal/q_shared.h>
 #include <zlib/zlib.h>
 
@@ -20,6 +23,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <stdio.h>
 #include <string.h>
 
 // Tool mode: the writezone command loads source zones with their assets kept
@@ -72,6 +76,8 @@ static std::set<std::string> s_wantedLocalize;
 static std::set<std::string> s_multiplayerAliases;
 static std::map<std::string, std::string> s_weaponRenames;
 static std::map<std::string, std::string> s_weaponParents;
+static std::map<std::string, std::string> s_weaponDamage;
+static std::set<const void *> s_fullAssets;
 
 extern const char *g_defaultAssetName[43];
 
@@ -107,6 +113,8 @@ static void DB_SaveTool_FreeAll()
     s_wantedLocalize.clear();
     s_weaponRenames.clear();
     s_weaponParents.clear();
+    s_weaponDamage.clear();
+    s_fullAssets.clear();
 }
 
 static bool DB_SaveTool_IsWorldType(XAssetType type)
@@ -298,8 +306,9 @@ static const void *DB_SaveTool_Resolve(XAssetType type, const void *header)
     DBSaveToolAsset *real;
     const char *name;
 
-    // The cut bank and sound patches are never shared.
-    if (type == ASSET_TYPE_SOUND || type == ASSET_TYPE_SOUND_PATCH)
+    // The cut bank and sound patches are never shared; a replacement of a
+    // multiplayer asset (rows) is written whole.
+    if (type == ASSET_TYPE_SOUND || type == ASSET_TYPE_SOUND_PATCH || s_fullAssets.count(header))
         return header;
     name = DB_SaveTool_AssetName(type, header);
     if (*name == ',')
@@ -504,6 +513,310 @@ static bool DB_SaveTool_RenameWeapons(XAsset *roots, int rootCount)
     return true;
 }
 
+// damage <weapon>=<multiplayer weapon>: the zone's weapon (by its new name)
+// takes what a bullet of the multiplayer weapon does: the damage and its ranges
+// (Bullet_CalcDamageRange), the hit location multipliers, melee damage,
+// penetration and, between two shotguns, the pellet count. Fire rate, clip,
+// recoil and spread stay the weapon's own. The zombie maps' guns are tuned for
+// zombies (100-300 a bullet), multiplayer's for 100 health.
+static bool DB_SaveTool_MatchDamage(XAsset *roots, int rootCount)
+{
+    std::map<std::string, std::string>::const_iterator it;
+    WeaponDef *def;
+    const WeaponDef *mpDef;
+    int i;
+
+    for (it = s_weaponDamage.begin(); it != s_weaponDamage.end(); ++it)
+    {
+        for (i = 0; i < rootCount; ++i)
+        {
+            if (roots[i].type == ASSET_TYPE_WEAPON && !I_stricmp(roots[i].header.weapon->szInternalName, it->first.c_str()))
+                break;
+        }
+        if (i == rootCount)
+        {
+            Com_PrintError(16, "writezone: damage: no weapon '%s' in the zone\n", it->first.c_str());
+            return false;
+        }
+        if (!DB_SaveTool_MultiplayerHas(ASSET_TYPE_WEAPON, it->second.c_str()))
+        {
+            Com_PrintError(16, "writezone: damage: multiplayer has no weapon '%s'\n", it->second.c_str());
+            return false;
+        }
+        def = roots[i].header.weapon->weapDef;
+        mpDef = DB_FindXAssetHeader(ASSET_TYPE_WEAPON, (char *)it->second.c_str(), 1, -1).weapon->weapDef;
+        def->damage = mpDef->damage;
+        def->minDamage = mpDef->minDamage;
+        def->playerDamage = mpDef->playerDamage;
+        def->minPlayerDamage = mpDef->minPlayerDamage;
+        def->fMaxDamageRange = mpDef->fMaxDamageRange;
+        def->fMinDamageRange = mpDef->fMinDamageRange;
+        def->locationDamageMultipliers = mpDef->locationDamageMultipliers;
+        def->iMeleeDamage = mpDef->iMeleeDamage;
+        def->penetrateType = mpDef->penetrateType;
+        if (def->weapClass == WEAPCLASS_SPREAD && mpDef->weapClass == WEAPCLASS_SPREAD)
+            def->shotCount = mpDef->shotCount;
+        Com_Printf(0, "writezone: %s takes the damage of %s: %i-%i, range %g-%g, %i pellets\n",
+                   (const char *)roots[i].header.weapon->szInternalName, it->second.c_str(), def->damage,
+                   def->minDamage, def->fMaxDamageRange, def->fMinDamageRange, def->shotCount);
+    }
+    return true;
+}
+
+// The root of the header's type and name becomes the header (a replacement of
+// a source zone's asset), or the header is added.
+static bool DB_SaveTool_SetRoot(XAssetType type, XAssetHeader header, XAsset *roots, int *rootCount)
+{
+    XAsset asset;
+    const char *name;
+    int i;
+
+    asset.type = type;
+    asset.header = header;
+    name = DB_GetXAssetName(&asset);
+    for (i = 0; i < *rootCount; ++i)
+    {
+        if (roots[i].type == type && !I_stricmp(DB_GetXAssetName(&roots[i]), name))
+        {
+            roots[i].header = header;
+            return true;
+        }
+    }
+    return DB_SaveTool_AddRoot(type, header, roots, rootCount, DB_SAVE_MAX_ROOTS);
+}
+
+// A text file's lines without their line ends; empty lines and lines starting
+// with '#' are left out.
+static bool DB_SaveTool_ReadLines(const char *path, std::vector<std::string> *lines)
+{
+    FILE *f;
+    char line[4096];
+    size_t len;
+
+    f = fopen(path, "rb");
+    if (!f)
+    {
+        Com_PrintError(16, "writezone: can't open '%s'\n", path);
+        return false;
+    }
+    while (fgets(line, sizeof(line), f))
+    {
+        len = strlen(line);
+        while (len && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+            line[--len] = 0;
+        if (len && line[0] != '#')
+            lines->push_back(line);
+    }
+    fclose(f);
+    return true;
+}
+
+static const char *DB_SaveTool_Cell(const StringTable *table, int row, int column)
+{
+    const char *s;
+
+    s = table->values[row * table->columnCount + column].string;
+    return s ? s : "";
+}
+
+// rows <string table>=<file>: a copy of the table (a source zone's, else
+// multiplayer's) whose rows with the file's indices (column 0) hold the file's
+// cells (comma-separated, a row a line, the table's column count). Only an
+// empty row (no cell but the index) or one already holding the same cells
+// takes a row. addrows <string table>=<file> adds the file's rows at the end
+// instead (a row the table already has is left out). The copy is written
+// whole: a zone loaded after the one holding the table replaces it (string
+// tables have a default asset, so the zone of higher priority overrides,
+// DB_LinkXAssetEntry). How the DLC weapons get their rows in mp/statsTable.csv
+// and mp/attributesTable.csv (HANDOFF, Decisions session 27).
+static bool DB_SaveTool_AddTableRows(const char *tableName, const char *path, bool append, XAsset *roots, int *rootCount)
+{
+    std::vector<std::string> lines;
+    std::vector<std::vector<std::string>> rows;
+    std::vector<int> rowIndex;
+    std::vector<__int16> order;
+    const StringTable *base;
+    DBSaveToolAsset *asset;
+    StringTable *table;
+    StringTableCell *values;
+    const char *start;
+    const char *end;
+    bool empty;
+    bool same;
+    int cellCount;
+    int rowCount;
+    int row;
+    int column;
+    unsigned int i;
+
+    asset = DB_SaveTool_Find(ASSET_TYPE_STRINGTABLE, tableName);
+    if (asset)
+        base = asset->header.stringTable;
+    else if (DB_SaveTool_MultiplayerHas(ASSET_TYPE_STRINGTABLE, tableName))
+        base = DB_FindXAssetHeader(ASSET_TYPE_STRINGTABLE, (char *)tableName, 1, -1).stringTable;
+    else
+    {
+        Com_PrintError(16, "writezone: rows: no string table '%s'\n", tableName);
+        return false;
+    }
+    if (!DB_SaveTool_ReadLines(path, &lines))
+        return false;
+    rowCount = base->rowCount;
+    for (i = 0; i < lines.size(); ++i)
+    {
+        rows.push_back(std::vector<std::string>());
+        for (start = lines[i].c_str(); ; start = end + 1)
+        {
+            end = strchr(start, ',');
+            rows.back().push_back(end ? std::string(start, end - start) : std::string(start));
+            if (!end)
+                break;
+        }
+        if ((int)rows.back().size() != base->columnCount)
+        {
+            Com_PrintError(16, "writezone: rows: '%s' has %i cells, '%s' %i columns\n", lines[i].c_str(),
+                           (int)rows.back().size(), tableName, base->columnCount);
+            return false;
+        }
+        if (append)
+        {
+            for (row = 0; row < base->rowCount; ++row)
+            {
+                for (column = 0; column < base->columnCount; ++column)
+                {
+                    if (strcmp(DB_SaveTool_Cell(base, row, column), rows.back()[column].c_str()))
+                        break;
+                }
+                if (column == base->columnCount)
+                    break;
+            }
+            rowIndex.push_back(row < base->rowCount ? row : rowCount++);
+            continue;
+        }
+        row = StringTable_LookupRowNumForValue(base, 0, rows.back()[0].c_str());
+        if (row < 0)
+        {
+            Com_PrintError(16, "writezone: rows: '%s' has no row %s\n", tableName, rows.back()[0].c_str());
+            return false;
+        }
+        empty = true;
+        same = true;
+        for (column = 1; column < base->columnCount; ++column)
+        {
+            if (*DB_SaveTool_Cell(base, row, column))
+                empty = false;
+            if (strcmp(DB_SaveTool_Cell(base, row, column), rows.back()[column].c_str()))
+                same = false;
+        }
+        if (!empty && !same)
+        {
+            Com_PrintError(16, "writezone: rows: row %s of '%s' is in use\n", rows.back()[0].c_str(), tableName);
+            return false;
+        }
+        rowIndex.push_back(row);
+    }
+    cellCount = rowCount * base->columnCount;
+    // cellIndex holds 16-bit cell numbers.
+    if (cellCount > 0x7FFF)
+    {
+        Com_PrintError(16, "writezone: rows: '%s' would have %i cells\n", tableName, cellCount);
+        return false;
+    }
+    table = (StringTable *)DB_SaveTool_Alloc(sizeof(StringTable));
+    memcpy(table, base, sizeof(StringTable));
+    table->rowCount = rowCount;
+    values = (StringTableCell *)DB_SaveTool_Alloc(cellCount * (int)sizeof(StringTableCell));
+    memcpy(values, (const StringTableCell *)base->values, base->rowCount * base->columnCount * sizeof(StringTableCell));
+    table->values = values;
+    for (i = 0; i < rows.size(); ++i)
+    {
+        for (column = 0; column < base->columnCount; ++column)
+        {
+            values[rowIndex[i] * base->columnCount + column].string = DB_SaveTool_CopyString(rows[i][column].c_str());
+            values[rowIndex[i] * base->columnCount + column].hash = StringTable_HashString(rows[i][column].c_str());
+        }
+    }
+    // The lookup index: the cells by hash, then column (StringTable_FirstHashIndex
+    // searches it).
+    order.resize(cellCount);
+    for (column = 0; column < cellCount; ++column)
+        order[column] = (__int16)column;
+    std::stable_sort(order.begin(), order.end(), [values, table](__int16 a, __int16 b) {
+        if (values[a].hash != values[b].hash)
+            return values[a].hash < values[b].hash;
+        return a % table->columnCount < b % table->columnCount;
+    });
+    table->cellIndex = (__int16 *)DB_SaveTool_Alloc(cellCount * (int)sizeof(__int16));
+    memcpy((__int16 *)table->cellIndex, order.data(), cellCount * sizeof(__int16));
+    s_fullAssets.insert(table);
+    Com_Printf(0, "writezone: '%s' with %i rows from '%s' (%i rows)\n", tableName, (int)rows.size(), path, rowCount);
+    return DB_SaveTool_SetRoot(ASSET_TYPE_STRINGTABLE, XAssetHeader(table), roots, rootCount);
+}
+
+// strings <file>: localized strings, a line each: the name, a space and the
+// text (the DLC weapons' descriptions in Create a Class). A source zone's
+// string of the name takes the text; multiplayer's can't be replaced.
+static bool DB_SaveTool_AddStrings(const char *path, XAsset *roots, int *rootCount)
+{
+    std::vector<std::string> lines;
+    std::string name;
+    DBSaveToolAsset *asset;
+    LocalizeEntry *entry;
+    size_t space;
+    unsigned int i;
+
+    if (!DB_SaveTool_ReadLines(path, &lines))
+        return false;
+    for (i = 0; i < lines.size(); ++i)
+    {
+        space = lines[i].find(' ');
+        if (space == std::string::npos)
+        {
+            Com_PrintError(16, "writezone: strings: '%s' has no text\n", lines[i].c_str());
+            return false;
+        }
+        name = lines[i].substr(0, space);
+        if (DB_SaveTool_MultiplayerHas(ASSET_TYPE_LOCALIZE_ENTRY, name.c_str()))
+        {
+            Com_PrintError(16, "writezone: strings: multiplayer has '%s'\n", name.c_str());
+            return false;
+        }
+        asset = DB_SaveTool_Find(ASSET_TYPE_LOCALIZE_ENTRY, name.c_str());
+        if (asset)
+        {
+            entry = asset->header.localize;
+        }
+        else
+        {
+            entry = (LocalizeEntry *)DB_SaveTool_Alloc(sizeof(LocalizeEntry));
+            entry->name = DB_SaveTool_CopyString(name.c_str());
+        }
+        entry->value = DB_SaveTool_CopyString(lines[i].c_str() + space + 1);
+        if (!DB_SaveTool_SetRoot(ASSET_TYPE_LOCALIZE_ENTRY, XAssetHeader(entry), roots, rootCount))
+            return false;
+    }
+    return true;
+}
+
+// A source zone's table differs from multiplayer's (a replacement, rows).
+static bool DB_SaveTool_TableDiffers(const StringTable *a, const StringTable *b)
+{
+    int row;
+    int column;
+
+    if (a->rowCount != b->rowCount || a->columnCount != b->columnCount)
+        return true;
+    for (row = 0; row < a->rowCount; ++row)
+    {
+        for (column = 0; column < a->columnCount; ++column)
+        {
+            if (strcmp(DB_SaveTool_Cell(a, row, column), DB_SaveTool_Cell(b, row, column)))
+                return true;
+        }
+    }
+    return false;
+}
+
 static bool DB_SaveTool_RootBefore(const XAsset &a, const XAsset &b)
 {
     if (a.type != b.type)
@@ -512,11 +825,13 @@ static bool DB_SaveTool_RootBefore(const XAsset &a, const XAsset &b)
 }
 
 // The writer's coverage test: every asset of the source zones but the sound
-// banks (the cut bank holds what the zone names) and what multiplayer has, in
-// a fixed order, so writing the written zone again gives the same file.
+// banks (the cut bank holds what the zone names) and what multiplayer has (but
+// a string table replacing multiplayer's, rows), in a fixed order, so writing
+// the written zone again gives the same file.
 static void DB_SaveTool_AddAllRoots(XAsset *roots, int *rootCount)
 {
     std::map<std::string, unsigned int>::const_iterator it;
+    XAssetHeader header;
     int type;
 
     for (type = 0; type < ASSET_TYPE_COUNT; ++type)
@@ -525,8 +840,18 @@ static void DB_SaveTool_AddAllRoots(XAsset *roots, int *rootCount)
             continue;
         for (it = s_toolAssetIndex[type].begin(); it != s_toolAssetIndex[type].end(); ++it)
         {
+            header = s_toolAssets[it->second].header;
             if (!DB_SaveTool_MultiplayerHas((XAssetType)type, it->first.c_str()))
-                DB_SaveTool_AddRoot((XAssetType)type, s_toolAssets[it->second].header, roots, rootCount, DB_SAVE_MAX_ROOTS);
+            {
+                DB_SaveTool_AddRoot((XAssetType)type, header, roots, rootCount, DB_SAVE_MAX_ROOTS);
+            }
+            else if (type == ASSET_TYPE_STRINGTABLE
+                     && DB_SaveTool_TableDiffers(header.stringTable,
+                                                 DB_FindXAssetHeader(ASSET_TYPE_STRINGTABLE, (char *)it->first.c_str(), 1, -1).stringTable))
+            {
+                s_fullAssets.insert((const void *)header.data);
+                DB_SaveTool_AddRoot((XAssetType)type, header, roots, rootCount, DB_SAVE_MAX_ROOTS);
+            }
         }
     }
     std::sort(roots, roots + *rootCount, DB_SaveTool_RootBefore);
@@ -837,15 +1162,19 @@ static void DB_SaveTool_PrintZone(const char *path, const DBSaveStats *stats, in
                          it->c_str());
 }
 
-// writezone <output .ff> <source zone>[,<zone>...] <type> <name> [<type> <name> ...]
+// writezone <output .ff> <source zone>[,<zone>...] [all] <type> <name> [<type> <name> ...]
 // Loads the source zones (up to 3, with their localized zones) in tool mode,
 // writes the named assets with everything they reach into a new zone file,
 // and unloads them. Types are the asset type names (weapon, xmodel, xanim,
 // material, fx, ...); a weapon brings its animations and the weapons it names
 // (alt, dual wield, spawned grenade). A weapon given as <old>=<new>[:<parent>]
 // is renamed (DB_SaveTool_RenameWeapons); then every weapon of the zone needs
-// a new name. "all" in place of the assets writes every asset of the source
-// zones (the writer's coverage test, and merging written zones).
+// a new name. "all" first writes every asset of the source zones (the writer's
+// coverage test, and merging written zones). Not asset types:
+//   damage <weapon>=<multiplayer weapon>  the weapon's damage (DB_SaveTool_MatchDamage)
+//   rows <string table>=<file>            rows put in a string table (DB_SaveTool_AddTableRows)
+//   addrows <string table>=<file>         rows added to a string table (likewise)
+//   strings <file>                        localized strings (DB_SaveTool_AddStrings)
 static void DB_SaveTool_WriteZone_f()
 {
     DBSaveStats stats;
@@ -858,13 +1187,15 @@ static void DB_SaveTool_WriteZone_f()
     const char *base;
     int rootCount;
     int argIndex;
+    int firstPair;
     int type;
     bool ok;
 
-    if (Cmd_Argc() != 4 && (Cmd_Argc() < 5 || (Cmd_Argc() & 1) == 0))
+    firstPair = Cmd_Argc() > 3 && !I_stricmp(Cmd_Argv(3), "all") ? 4 : 3;
+    if (Cmd_Argc() < 4 || ((Cmd_Argc() - firstPair) & 1))
     {
-        Com_Printf(0, "usage: writezone <output .ff> <source zone>[,<zone>...] <type> <name> [<type> <name> ...]\n");
-        Com_Printf(0, "       writezone <output .ff> <source zone>[,<zone>...] all\n");
+        Com_Printf(0, "usage: writezone <output .ff> <source zone>[,<zone>...] [all] <type> <name> [<type> <name> ...]\n");
+        Com_Printf(0, "       (types: asset types, damage <weapon>=<mp weapon>, rows/addrows <table>=<file>, strings <file>)\n");
         return;
     }
     // A client would create the source zones' shaders and world vertex buffers.
@@ -894,10 +1225,33 @@ static void DB_SaveTool_WriteZone_f()
                (int)s_toolAliases.size());
 
     rootCount = 0;
-    if (ok && Cmd_Argc() == 4 && !I_stricmp(Cmd_Argv(3), "all"))
+    if (ok && firstPair == 4)
         DB_SaveTool_AddAllRoots(s_roots, &rootCount);
-    for (argIndex = 3; ok && argIndex + 1 < Cmd_Argc(); argIndex += 2)
+    for (argIndex = firstPair; ok && argIndex + 1 < Cmd_Argc(); argIndex += 2)
     {
+        I_strncpyz(name, Cmd_Argv(argIndex + 1), sizeof(name));
+        newName = strchr(name, '=');
+        if (newName)
+            *newName++ = 0;
+        if (!I_stricmp(Cmd_Argv(argIndex), "damage") || !I_stricmp(Cmd_Argv(argIndex), "rows")
+            || !I_stricmp(Cmd_Argv(argIndex), "addrows"))
+        {
+            if (!newName)
+            {
+                Com_PrintError(16, "writezone: %s %s: no '='\n", Cmd_Argv(argIndex), name);
+                ok = false;
+            }
+            else if (!I_stricmp(Cmd_Argv(argIndex), "damage"))
+                s_weaponDamage[DB_SaveTool_Key(name)] = newName;
+            else
+                ok = DB_SaveTool_AddTableRows(name, newName, !I_stricmp(Cmd_Argv(argIndex), "addrows"), s_roots, &rootCount);
+            continue;
+        }
+        if (!I_stricmp(Cmd_Argv(argIndex), "strings"))
+        {
+            ok = DB_SaveTool_AddStrings(Cmd_Argv(argIndex + 1), s_roots, &rootCount);
+            continue;
+        }
         type = DB_SaveTool_TypeForName(Cmd_Argv(argIndex));
         if (type < 0)
         {
@@ -930,7 +1284,8 @@ static void DB_SaveTool_WriteZone_f()
     }
 
     if (ok)
-        ok = DB_SaveTool_AddLinkedWeapons(s_roots, &rootCount) && DB_SaveTool_RenameWeapons(s_roots, rootCount);
+        ok = DB_SaveTool_AddLinkedWeapons(s_roots, &rootCount) && DB_SaveTool_RenameWeapons(s_roots, rootCount)
+             && DB_SaveTool_MatchDamage(s_roots, rootCount);
     if (ok)
     {
         memset(&stats, 0, sizeof(stats));
@@ -965,6 +1320,16 @@ static void DB_SaveTool_PrintWeapon(const WeaponVariantDef *weapon)
                DB_SaveTool_String(def->szOverlayName), def->weapType, def->weapClass, def->inventoryType,
                weapon->iClipSize, def->iMaxAmmo, DB_SaveTool_String(weapon->szAltWeaponName),
                DB_SaveTool_String(def->szDualWieldWeaponName), DB_SaveTool_String(def->parentWeaponName));
+    // What a bullet does (Bullet_CalcDamageRange, G_GetWeaponHitLocationMultiplier), by hit location
+    // (hitLocation_t order: none, helmet, head, neck, torso upper, torso lower, arms, hands, legs,
+    // feet, gun).
+    notes[0] = 0;
+    for (i = 0; def->locationDamageMultipliers && i < HITLOC_NUM; ++i)
+        I_strncat(notes, sizeof(notes), va(" %g", def->locationDamageMultipliers[i]));
+    Com_Printf(0, "listzone:   damage %i-%i range %g-%g player %i-%i melee %i pellets %i penetrate %i firetime %i hitloc%s\n",
+               def->damage, def->minDamage, def->fMaxDamageRange, def->fMinDamageRange, def->playerDamage,
+               def->minPlayerDamage, def->iMeleeDamage, def->shotCount, def->penetrateType, def->iFireTime,
+               notes[0] ? notes : " -");
     Com_Printf(0, "listzone:   ammo %s clip %s sharedcap %s spawned %s gun %s world %s projectile %s\n",
                DB_SaveTool_String(weapon->szAmmoName), DB_SaveTool_String(weapon->szClipName),
                DB_SaveTool_String(def->szSharedAmmoCapName), DB_SaveTool_String(def->szSpawnedGrenadeWeaponName),
@@ -1011,9 +1376,94 @@ static void DB_SaveTool_PrintStringTable(const StringTable *table)
     }
 }
 
+static void DB_SaveTool_PrintEventScripts(const char *who, const char *event, const GenericEventScript *script)
+{
+    for (; script; script = script->next)
+    {
+        if (script->action)
+            Com_Printf(0, "listzone:   %s %s: %s\n", who, event, (const char *)script->action);
+    }
+}
+
+static void DB_SaveTool_PrintHandlers(const char *who, const GenericEventHandler *handler, const ItemKeyHandler *key)
+{
+    for (; handler; handler = handler->next)
+        DB_SaveTool_PrintEventScripts(who, DB_SaveTool_String(handler->name), handler->eventScript);
+    for (; key; key = key->next)
+        DB_SaveTool_PrintEventScripts(who, va("key %i", key->key), key->keyScript);
+}
+
+// The focus part of an item (Load_itemDefData_t, Load_textDefData_t: by item type).
+static const focusItemDef_s *DB_SaveTool_FocusDef(const itemDef_s *item)
+{
+    if (item->type == 0x13 || item->type == 0x15)
+        return item->typeData.blankButtonDef;
+    switch (item->type)
+    {
+    case 3: case 4: case 5: case 7: case 8: case 9: case 10: case 11: case 12: case 13: case 14: case 16:
+    case 20: case 22:
+        return item->typeData.textDef ? (const focusItemDef_s *)item->typeData.textDef->textTypeData.focusItemDef : NULL;
+    default:
+        return NULL;
+    }
+}
+
+static const char *DB_SaveTool_ItemText(const itemDef_s *item)
+{
+    switch (item->type)
+    {
+    case 1: case 3: case 4: case 5: case 7: case 8: case 9: case 10: case 11: case 12: case 13: case 14: case 15:
+    case 16: case 18: case 20: case 22:
+        return item->typeData.textDef ? DB_SaveTool_String(item->typeData.textDef->text) : "-";
+    default:
+        return "-";
+    }
+}
+
+// A menu's items and the scripts its events, keys and items run (for driving
+// the menus from the console: openmenu, setlocalvar*, focusitem, ...).
+static void DB_SaveTool_PrintMenu(const menuDef_t *menu)
+{
+    const itemDef_s *item;
+    const focusItemDef_s *focus;
+    char who[64];
+    int i;
+
+    Com_Printf(0, "listzone: menu %s, %i items\n", (const char *)menu->window.name, menu->itemCount);
+    DB_SaveTool_PrintHandlers("menu", menu->onEvent, menu->onKey);
+    for (i = 0; i < menu->itemCount; ++i)
+    {
+        item = menu->items[i];
+        Com_Printf(0, "listzone:  item %i %s type %i dvar %s text \"%s\"\n", i, DB_SaveTool_String(item->window.name),
+                   item->type, DB_SaveTool_String(item->dvar), DB_SaveTool_ItemText(item));
+        Com_sprintf(who, sizeof(who), "item %i", i);
+        focus = DB_SaveTool_FocusDef(item);
+        DB_SaveTool_PrintHandlers(who, item->onEvent, focus ? (const ItemKeyHandler *)focus->onKey : NULL);
+        if (focus && focus->mouseEnter)
+            Com_Printf(0, "listzone:   %s mouseEnter: %s\n", who, (const char *)focus->mouseEnter);
+        for (int state = 0; item->animInfo && state < item->animInfo->animStateCount; ++state)
+        {
+            Com_sprintf(who, sizeof(who), "item %i anim %s", i, DB_SaveTool_String(item->animInfo->animStates[state]->name));
+            DB_SaveTool_PrintHandlers(who, item->animInfo->animStates[state]->onEvent, NULL);
+        }
+    }
+}
+
 static void DB_SaveTool_PrintMultiplayerWeapon(XAssetHeader header, void *data)
 {
     DB_SaveTool_PrintWeapon(header.weapon);
+}
+
+static void DB_SaveTool_PrintLocalize(const LocalizeEntry *entry)
+{
+    Com_Printf(0, "listzone: localize %s \"%s\"\n", (const char *)entry->name, DB_SaveTool_String(entry->value));
+}
+
+// Multiplayer's localized strings whose names start with the prefix.
+static void DB_SaveTool_PrintMultiplayerLocalize(XAssetHeader header, void *data)
+{
+    if (!I_strnicmp(header.localize->name, (const char *)data, (int)strlen((const char *)data)))
+        DB_SaveTool_PrintLocalize(header.localize);
 }
 
 // Scripts are packed: the length, the packed length and zlib data
@@ -1056,8 +1506,10 @@ static void DB_SaveTool_PrintRawFile(const RawFile *rawFile)
 // Loads the source zones in tool mode and lists their assets of a type (with
 // the fields that name other assets for weapons), or the count of each type.
 // A string table's name prints its cells (multiplayer's if no source has it);
-// "listzone - weapon" lists multiplayer's weapons, "listzone - rawfile <name>"
-// prints one of its raw files (scripts).
+// localized strings print their text, a menu's name its items and scripts
+// (DB_SaveTool_PrintMenu). "listzone - weapon" lists multiplayer's
+// weapons, "listzone - localize [<prefix>]" its localized strings,
+// "listzone - rawfile <name>" prints one of its raw files (scripts).
 static void DB_SaveTool_ListZone_f()
 {
     char zones[256];
@@ -1098,6 +1550,9 @@ static void DB_SaveTool_ListZone_f()
     {
         if (type == ASSET_TYPE_WEAPON)
             DB_EnumXAssets(ASSET_TYPE_WEAPON, DB_SaveTool_PrintMultiplayerWeapon, NULL, 0);
+        else if (type == ASSET_TYPE_LOCALIZE_ENTRY)
+            DB_EnumXAssets(ASSET_TYPE_LOCALIZE_ENTRY, DB_SaveTool_PrintMultiplayerLocalize,
+                           (void *)(Cmd_Argc() == 4 ? Cmd_Argv(3) : ""), 0);
         else if (Cmd_Argc() == 4 && (type == ASSET_TYPE_STRINGTABLE || type == ASSET_TYPE_RAWFILE)
                  && DB_SaveTool_MultiplayerHas((XAssetType)type, Cmd_Argv(3)))
         {
@@ -1111,6 +1566,16 @@ static void DB_SaveTool_ListZone_f()
     g_dbSaveToolMode = 1;
     DB_SaveTool_LoadZones(zones);
     g_dbSaveToolMode = 0;
+    if (Cmd_Argc() == 4 && type == ASSET_TYPE_MENU)
+    {
+        DB_SaveTool_IndexAssets();
+        asset = DB_SaveTool_Find(ASSET_TYPE_MENU, Cmd_Argv(3));
+        if (asset)
+            DB_SaveTool_PrintMenu(asset->header.menu);
+        else
+            Com_PrintError(16, "listzone: no menu '%s'\n", Cmd_Argv(3));
+        type = -1;
+    }
     if (Cmd_Argc() == 4 && type == ASSET_TYPE_STRINGTABLE)
     {
         DB_SaveTool_IndexAssets();
@@ -1132,6 +1597,11 @@ static void DB_SaveTool_ListZone_f()
         if (type == ASSET_TYPE_WEAPON)
         {
             DB_SaveTool_PrintWeapon(s_toolAssets[i].header.weapon);
+            continue;
+        }
+        if (type == ASSET_TYPE_LOCALIZE_ENTRY)
+        {
+            DB_SaveTool_PrintLocalize(s_toolAssets[i].header.localize);
             continue;
         }
         name = DB_SaveTool_AssetName(s_toolAssets[i].type, (const void *)s_toolAssets[i].header.data);

@@ -345,6 +345,7 @@ bool __cdecl SV_CACValidate_IsItemDualWieldPurchased(unsigned __int8 *cacbuffer,
 char __cdecl SV_CACValidate_CheckIfEquippedItemsArePurchased(unsigned __int8 *cacBuffer, int pLevel, int rank);
 void __cdecl SV_SetClanTagFeatureNewForClient(char *buffer, int clientRank, int clientPrestige, unsigned int index);
 void __cdecl BG_UnlockableItemsInit();
+void BG_UnlockablesReloadItems();
 void __cdecl BG_UnlockablesPurchaseClanTagFeatureCmd();
 void __cdecl BG_UnlockablesPurchaseCurrentItemAttachmentCmd();
 void __cdecl BG_UnlockablesPurchaseItemAttachmentPointCmd();

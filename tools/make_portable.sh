@@ -6,6 +6,7 @@
 # config, stats and logs inside the folder (the base path is the executable's
 # directory when main/ and zone/ are next to it), whatever directory it is
 # started from. The folder can be moved or copied to another Apple Silicon Mac.
+# It also builds the launcher, the shader library and the DLC weapons' zone (below).
 #
 # usage: tools/make_portable.sh <game dir> [build dir, default build_macos]
 set -euo pipefail
@@ -87,3 +88,9 @@ fi
 # a window for ~10 minutes); without Xcode's Metal Toolchain it says how to get it, and the
 # game compiles its shaders at run time until then.
 "$(dirname "$0")/make_shaderlib.sh" "$game" "$build" || echo "(no shader library: see above)"
+
+# The DLC weapons (tools/make_dlc_weapons.sh; the kb_dlcWeapons dvar): zone/Common/kb_dlc_weapons.ff,
+# written from the game's zombie maps by this build in ~10 s, every time (the writer or the rows may
+# have changed). The script copies the zone in only when it was written, so a failure leaves the old one.
+"$(dirname "$0")/make_dlc_weapons.sh" "$game" "$game/zone/Common/kb_dlc_weapons.ff" "$build" \
+    || echo "(no DLC weapons zone: see above)"

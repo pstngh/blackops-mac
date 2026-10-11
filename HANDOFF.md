@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 26)
+## Status (2026-10-11, session 27)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -303,9 +303,25 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **No dual wield** (session 26, the user's request: "remove ANY and ALL dual wields, from stock game
   too"): `kb_noDualWield`, archived, default 1. A class's Dual Wield pick comes as the single gun with
   its other attachments, bots never roll one, any other dual-wield give comes as the single gun, and
-  Create a Class reports no Dual Wield option (Decisions session 26; the menu itself not seen yet).
-  The game folder's copy has it (make_portable.sh at 7358f629, the user's request; the DLC weapons'
-  zone isn't in the game folder yet: stage 3).
+  Create a Class reports no Dual Wield option (Decisions session 26). Session 27 saw the menu: the
+  attachment lists still offered Dual Wield; fixed (Decisions session 27). The game folder's copy has
+  session 26's part (make_portable.sh at 7358f629, the user's request); session 27's isn't in the game
+  folder yet (make_portable.sh not run).
+- **DLC weapons, stage 3: Create a Class** (session 27): the 16 guns are in Create a Class, in custom
+  classes and with the bots, behind `kb_dlcWeapons` (archived, default 1, read at startup: a change takes
+  effect at the next start). kb_dlc_weapons.ff now also carries copies of mp/statsTable.csv (the guns' rows in
+  16 empty rows below 99), mp/attributesTable.csv (Create a Class's stat bars) and mp/weaponOptions.csv,
+  their descriptions, and multiplayer damage (each gun the closest multiplayer gun's: Thompson and MP40
+  the MP5K's, STG-44 the AK47's, the bolt-actions the L96A1's, ...); the game loads it at startup right
+  after common_mp (flag 1024) and reads the items again, so the weapon table registers the guns with
+  multiplayer's (1654 -> 1670 weapons). Create a Class lists them after multiplayer's guns in each group
+  (SMG: Thompson, Type 100, MP40; assault: STG-44, M1 Garand, Gewehr 43, M1 Carbine; LMG: FG42, BAR,
+  Deployable BAR; sniper: Kar98k, Scoped Kar98k, Arisaka; shotguns: M1897 Trench Gun, Double-Barreled
+  Shotgun, Sawed-Off Shotgun) with their HUD icons, names and bars; a custom class with one spawns with
+  it; bots take them (16 of ~44 primaries in a 2-minute match) and kill with them at multiplayer
+  damage. The Dual Wield option is now gone from the attachment lists (session 26's change missed
+  them). make_portable.sh writes the zone into the game folder (not run: the user's call). Checks in
+  Decisions session 27.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -494,8 +510,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**First: DLC weapons in Create a Class** (the user's request, session 24; facts and the reasons for the
-design in Decisions sessions 24-26). The user's answers: the 12 WWII guns (Thompson, Type 100, STG-44,
+**DLC weapons in Create a Class: done (sessions 25-27)** (the user's request, session 24; facts and the
+reasons for the design in Decisions sessions 24-27; what is left is optional, below). The user's answers: the 12 WWII guns (Thompson, Type 100, STG-44,
 FG42, BAR, M1 Garand, Gewehr 43, M1 Carbine, Kar98k, Type 99, M1897 Trench Gun, double-barrel) plus
 the scoped Kar98k, sawed-off and bipod BAR, and the MP40: 16 guns. Session 26 dropped, at the user's
 word, the wonder weapons ("i dont want any ray guns (or wonder weapons?) nor any crossbows either":
@@ -522,25 +538,18 @@ Stages, each handed off per the protocol in 0 (update HANDOFF, commit, task card
   not (alias prefixes such as PhysPreset::sndAliasPrefix; projectile and impact effects of the wonder
   weapons; the HUD and menu icons Create a Class needs). The zone must hold no asset of a type without a
   default (DestructibleDef, ...) that a map also has (Com_Error "Attempting to override asset").
-- **Stage 3, Create a Class** (next): statsTable rows (the zone can carry a replacement
-  `mp/statsTable.csv`, or patch it at load), loading the zone at startup, damage, bots, `kb_dlcWeapons`,
-  make_portable.sh running the extraction (as it runs make_shaderlib.sh: `tools/make_dlc_weapons.sh
-  <game dir> <game dir>/zone/Common/kb_dlc_weapons.ff`, or a folder of its own), checks: cac_main/
-  cac_weapon screenshots, a custom class spawned with KB_CMDS, bots using them, every map loading, ASan.
-  What stage 2 found for it (Decisions session 26): the 16 references are `thompson type100 stg44 fg42
-  bar bipodbar m1garand gewehr43 m1carbine kar98k scopedkar98k type99 trenchgun doublebarrel sawedoff
-  mp40`, each weapon's parentWeaponName already (the client Com_Errors "Parent weapon '<ref>' not
-  found" for a registered weapon whose reference the table lacks); 21 empty rows below 99 (11, 25, 36,
-  41, 46, 52, 58-61, 66, 72, 79-87) hold all 16 with primary/side-arm types; column 6 can be the HUD
-  icon materials in the zone (`hud_icon_thompson`, ... `hud_mp40`: 128x32 or 128x64, from iw_38.iwd and
-  iw_04.iwd); the effects pool is 1024 now (Decisions session 26: 500 left little room); the
-  Create-a-Class Dual Wield option should be gone with `kb_noDualWield` (`ItemHasDualWield` 0):
-  screenshot it with the rest. The zone's flags: `loadzone`'s
-  0x400000 dies at every map start (Com_LoadLevelFastFiles frees 0x200000-0x4000000); it needs a low
-  flag loaded after common_mp (1024 is unused, but DB_LoadXAssets gives its localized partner 2048, the
-  client's ui_viewer_mp, and 1024's free flags unload 2048: Decisions session 25). Loaded at startup, the
-  models get their buffers at each map's start (CL_FinishLoadingModels) and the weapons register through
-  the weapon table, not late (`give` hits cg_servercmds_mp.cpp:811's ignored assert).
+- **Stage 3, Create a Class: done (session 27)** (Status, Decisions session 27): the zone carries
+  copies of mp/statsTable.csv, mp/attributesTable.csv and mp/weaponOptions.csv with the guns' rows
+  (tools/dlc_weapons_*), their descriptions and multiplayer damage; the game loads it at startup after
+  common_mp (flag 1024, `kb_dlcWeapons`, read at startup); Create a Class, custom classes, the weapon table
+  and the bots have the guns; the Dual Wield option is gone from the attachment lists;
+  make_portable.sh writes the zone into the game folder.
+- **Left, optional** (ask the user before any of it): run make_portable.sh on the game folder (the
+  user's call: it puts the build and the zone in /Users/pstn/Documents/Games/codbo; until then the
+  game folder's copy has no DLC weapons); Create a Class shows the WWII guns with their white HUD
+  silhouettes where multiplayer's guns have colour pictures (`menu_mp_weapons_*`, none exist for the
+  WWII guns: rendering new ones would be a project of its own); camo leaves the WWII guns as they are
+  (their models have none of multiplayer's camo textures); they have no attachments.
 
 The user's own gameplay changes (queued 2026-10-09 for after the performance work) are done:
 stages A, B and C (sessions 16-18) cover all 10. **Next: the Metal leftovers in 0** (the user's
@@ -752,6 +761,12 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 27: a client that joins a separate dedicated server (two processes, no online service)
+and picks a custom class spawns with only the knife, whatever the class holds (Custom 1 with a DLC gun,
+Custom 2 with multiplayer's); a default class works. Most likely the server has no stats for a remote
+player (`getdstat` reads zeroes: weapon 0 is weapon_null); a listen server's own player is fine. Not
+looked into; the launcher's matches are listen servers.
+
 Seen in session 25: the `screenshot` command writes the 1024x768 back buffer into the top-left corner of
 a 1920x1080 TGA (the rest black), at the scratch profile's default settings; not looked at.
 
@@ -927,6 +942,124 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 27)
+
+**DLC weapons, stage 3: Create a Class** (Next steps, first item; stages 1-2 in Decisions sessions 25-26).
+- **The tables live in the zone**: kb_dlc_weapons.ff carries whole copies of three multiplayer string
+  tables with the guns' rows: `mp/statsTable.csv` (the items: Create a Class, the weapon table, the
+  class scripts, the bots), `mp/attributesTable.csv` (Create a Class's damage/range/accuracy/mobility/
+  fire-rate bars, looked up by reference in column 1) and `mp/weaponOptions.csv` (the client looks
+  a weapon's parent up for its camo textures; missing, it printed "Couldn't find weapon parent ..." once
+  per gun). String tables have a default asset, so a zone of higher priority replaces one
+  (DB_LinkXAssetEntry: the delayed clone, "Redundant asset: 'stringtable','mp/statstable.csv'" in the
+  log, then DB_SwapXAsset): flag 1024's priority is 60, code_post_gfx_mp's (1) 51, patch_mp's 59. Off
+  (or without the file) the original tables are untouched. Patching the table at load in the engine
+  would have tied the rows to code instead of the zone that holds the weapons; the menus' and scripts'
+  `tableLookup`s read the asset, so the rows must be in it either way.
+- **The writer, new** (db_save_tool.cpp; make_dlc_weapons.sh's last merge passes them):
+  `damage <weapon>=<multiplayer weapon>` (DB_SaveTool_MatchDamage: damage, minDamage, playerDamage,
+  minPlayerDamage, fMaxDamageRange, fMinDamageRange, the 19 hit location multipliers, iMeleeDamage,
+  penetrateType and, between two shotguns, shotCount; fire rate, clip, recoil, spread stay the gun's),
+  `rows <table>=<file>` (rows by index into empty rows: refuses a row in use), `addrows <table>=<file>`
+  (rows appended; one the table has is left out), `strings <file>` (localized strings, `NAME text`; a
+  source zone's string of the name takes the text). The replaced table is written whole although
+  multiplayer has the name (`s_fullAssets`, skipped by DB_SaveTool_Resolve's stubbing); `all` keeps a
+  source zone's string table that differs from multiplayer's, so the finished zone written again from
+  itself is still the same bytes (under the same file name: the cut bank is named after the file). The
+  cell index (`cellIndex`) is rebuilt sorted by hash then column, as StringTable_FirstHashIndex's binary
+  search reads it; 16-bit cell numbers, so a table stays under 32768 cells. `listzone` prints a weapon's
+  damage fields, localized strings' text (`listzone - localize [prefix]`) and a menu's items with the
+  scripts its events, keys, items and animation states run (`listzone ui_mp menu cac_weapon`): how the
+  Create-a-Class screens were driven from the console below.
+- **The data** (tools/): `dlc_weapons_stats.csv` (16 rows in empty rows below 99: thompson 25, type100
+  58, mp40 59 (SMG); stg44 36, m1garand 60, gewehr43 61, m1carbine 79 (assault); fg42 41, bar 80,
+  bipodbar 81 (LMG); kar98k 46, scopedkar98k 82, type99 83 (sniper); trenchgun 52, doublebarrel 11,
+  sawedoff 84 (shotgun, `weapon_cqb`); sort keys after multiplayer's guns of the group, cost 2000, slot
+  primary, image the HUD icon, name the weapon's display name, description our KB_DLC_*_DESC; unlock
+  level the matched gun's, the FG42's 20 (the Stoner63 is classified)). Groups follow World at War where
+  Black Ops has the group (SMG, LMG, shotgun, bolt-action as sniper) and put WaW's semi-automatic rifles
+  with Black Ops' semi-automatics (M14, FN FAL: assault). `dlc_weapons_attributes.csv` (the matched gun's
+  bar values, the gun's own magazine and fire mode; the slow MP40 and BAR get a lower fire-rate bar),
+  `dlc_weapons_options.csv` (the launchers' neutral camo rows: the WWII models have none of
+  multiplayer's camo textures, so camo leaves them as they are; bots pick a random camo, no effect),
+  `dlc_weapons_strings.txt` (16 descriptions in multiplayer's style; the sawed-off's name shortened to
+  "Sawed-Off Shotgun", the WaW "Sawed-Off Double-Barreled Shotgun w/ Grip" was cut off in the lists).
+- **Damage** (the closest multiplayer gun by kind, fire mode and rate; make_dlc_weapons.sh's list):
+  Thompson, MP40 -> MP5K (40-20); Type 100 -> AK74u (35-20); STG-44 -> AK47 (40-30); M1 Garand -> M14
+  (50-40, head x1.5); Gewehr 43, M1 Carbine -> FN FAL (50-40); FG42 -> Stoner63 (40-40, same 64 ms);
+  BAR, bipod BAR -> M60 (50-40); Kar98k, scoped Kar98k, Type 99 -> L96A1 (70, x1.5 upper body);
+  trench gun -> Stakeout (8 pellets 40-10); double-barrel, sawed-off -> Olympia. The zombie values were
+  100-300 a bullet with 2.7-10x head multipliers.
+- **Loading** (common.cpp Com_KbAddDlcWeaponsZone, Com_KbDlcWeaponsLoaded): `kb_dlcWeapons` (archived;
+  read when the common zones load, so a change takes effect at the next start; not latched: a latched
+  dvar changed from the console is not saved, Dvar_SetVariant marks no archive change for it) is
+  registered where the common zones load: DB_LoadFastFilesForPC (startup, client and
+  dedicated: common_mp 64, then kb_dlc_weapons 1024, then the client's ui_viewer_mp 2048) and
+  Com_LoadCommonFastFile (when a level load finds common_mp unloaded, 256). Loading flag 1024 frees the
+  low zones >= 1024 (ui_viewer_mp), so it must come before ui_viewer_mp in the same call; its localized
+  partner (2048, `en_kb_dlc_weapons`) doesn't exist (a warning line). The unlockable items are parsed
+  in LiveStats_Init, before the common zones load: after the load the database is synced and
+  BG_UnlockablesReloadItems parses them again (BG_UnlockableItemsInit's BG_InitUnlockables, keeping the
+  menus' list). itemInfo keeps pointers into the table, which is why the zone never unloads while the
+  game runs (nothing frees flag 64 or lower but shutdown).
+- **No dual wield, the menu** (bg_unlockable_items.cpp): session 26's `ItemHasDualWield` 0 did not
+  remove the option: the CZ75's attachment list (feeder 57) still offered Dual Wield. The menus count
+  and map an item's attachments through BG_UnlockablesGetNumItemAttachmentsWithAttachPoint and
+  BG_UnlockablesGetItemAttachmentNumWithAttachPoint; with `kb_noDualWield` both skip `dw` (the list's
+  numbers stay the item's own; the weapon table's BG_UnlockablesGetNumItemAttachmentsAtPoint is
+  unchanged, so the variants still register). The ASP (only `dw`) has no attachments to choose now.
+- **Engine facts found**: Create a Class (cac_main, menu_cac_custom, cac_weapon) is driven by dvars
+  (`ui_custom_name`, `selected_loadout_slot`, `selected_group`, `ui_inside_popup`,
+  `cac_weapon_current_list`), `setCurrentItemIndex`, `buildItemListForSlotName(AndGroup)`,
+  `setlocalvarint ui_weaponButton` and the anim_controller item's `ui_animate ... OpenDropDownList /
+  CloseDropDownList` states; KB_MENU_CMDS can run all of them (the sequences are in the checks below).
+  The bots skip a weapon row without an unlock level (they take it for a dual wield,
+  bot_weapon_dual_wield_unlocked). _class.gsc falls back to the M1911 for a primary whose row is gone
+  (`kb_dlcWeapons 0` with a DLC gun in a class).
+- **Checked** (scratch game folder: links to the game's data plus the new zone as
+  zone/Common/kb_dlc_weapons.ff; scratch profiles):
+  - The zone: two extractions give the same bytes; the finished zone written again from itself under
+    the same name gives the same bytes; `listzone kb_dlc_weapons stringtable mp/statsTable.csv` shows
+    the 16 rows, `listzone kb_dlc_weapons weapon` the matched damage. 4,260,413 bytes, 466 roots.
+  - Dedicated server, mp_nuked: the weapon table has 1670 weapons (1654 with `+set kb_dlcWeapons 0`);
+    a saved `seta kb_dlcWeapons "0"` in the game folder's players/config_mp.cfg skips the zone at
+    startup, "1" loads it (the config runs before the common zones load).
+  - Create a Class (the client, KB_MENU_CMDS; screenshots): Custom 1 with the Thompson (icon, name),
+    cac_weapon with the Type 100 (bars filled from its attributes row), the group list, the five groups'
+    weapon lists with the 16 guns after multiplayer's; the CZ75's attachment list without Dual Wield
+    (before the fix: with it, as with `kb_noDualWield 0`). The console sequences: `openmenu cac_main`,
+    `equipClassItem customclass1 <row>`, `openmenu menu_cac_custom`; the Primary button:
+    `setCurrentItemIndex <row>;set selected_loadout_slot primary;buildItemListForSlotName primary;set
+    ui_menu_selection_title @MPUI_PRIMARY_WEAPON;set uiViewer_equipWeapon primary;closemenu
+    menu_cac_custom;openmenu cac_weapon`; the group list: `set ui_inside_popup select_weapon_group;set
+    cac_weapon_current_list weapon_group_list;setlocalvarint ui_weaponButton 1;ui_animate cac_weapon
+    anim_controller OpenDropDownList 0`; a group's weapons: `ui_animate cac_weapon anim_controller
+    CloseDropDownList 0;set selected_group weapon_smg;set cac_weapon_current_list weapon_list;
+    buildItemListForSlotNameAndGroup primary weapon_smg;set cac_weapon_feeder_count 12;set
+    ui_next_inside_popup select_weapon`; attachments (secondary slot): `set ui_inside_popup attachments;
+    set cac_weapon_current_list attachments_list;set cac_weapon_feeder_count 5;setlocalvarint
+    ui_weaponButton 2;ui_animate cac_weapon anim_controller OpenDropDownList 0`.
+  - A listen match, mp_nuked TDM, 7 managed bots, 2 minutes (temporary logging of every script
+    `giveWeapon` and `finishPlayerDamage`, removed): the scripted player's Custom 1 (`equipClassItem
+    customclass1 25`) spawned with the Thompson (firing, 20-round magazine, 13/180 in the screenshot);
+    the bots were given 16 DLC guns of ~44 primaries (Type 100, STG-44, sawed-off, M1 Garand and FG42
+    twice; Thompson, MP40, M1 Carbine, Arisaka, Scoped Kar98k, Deployable BAR) and hit with them at
+    multiplayer damage (Thompson and MP40 40, 55 to the head; STG-44 40/55; M1 Garand 50, 75 to the
+    head; BAR 50; FG42 40; sawed-off 40 a pellet; Arisaka 75 to the lower torso, as the L96A1 in the
+    same match); the kill feed shows their icons. `kb_dlcWeapons 0` with that class: the M1911
+    (_class.gsc's fallback), no error.
+  - Every map (tools/bench_views.py --map all --bots --views overview): all 26 load the zone and
+    draw (250-590 fps at the overviews with 7 bots); no pool limit, weapon mismatch or missing parent
+    (the effects pool is 1024 since session 26); bots took DLC guns 85 times over the 26 matches.
+  - A dedicated server and a client as two processes: both load the zone, the client stays in the
+    match for a minute next to bots using DLC guns, no "Weapon index mismatch".
+  - ASan client (build_asan): the Create-a-Class screens above, `vid_restart`, then a listen match
+    (mp_nuked, TDM, 7 managed bots, `scr_tdm_timelimit 1`, Custom 1 with the MP40) through three match
+    ends and rotations (mp_array, mp_cracked, mp_crisis): the player spawned with the MP40 on each map,
+    the bots were given DLC guns 36 times; no report. The zone stays loaded across maps.
+  - check_file.py natively and `--i386` on every changed .cpp, audit_splitlocals.py 0, gen_db_save.py
+    `--check`.
 
 ## Decisions (session 26)
 

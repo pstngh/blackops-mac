@@ -57,6 +57,7 @@
 #include <live/live_win.h>
 #include <ui/ui_playlists.h>
 #include <bgame/bg_emblems.h>
+#include <bgame/bg_unlockable_items.h>
 #include <demo/demo_files.h>
 #include <mjpeg/mjpeg.h>
 #include <game_mp/pregame.h>
@@ -2623,9 +2624,50 @@ char *__cdecl Com_GetLevelSharedFastFile(char *mapName)
     return 0;
 }
 
+// The DLC weapons (kb_dlcWeapons; HANDOFF, Decisions session 27): kb_dlc_weapons.ff, written by
+// tools/make_dlc_weapons.sh, loads right after common_mp, whose assets it refers to by name, with
+// the low flag 1024 (unused, so it stays loaded across maps; ui_viewer_mp's 2048 loads after it).
+// Its copies of mp/statsTable.csv, mp/attributesTable.csv and mp/weaponOptions.csv, with the guns'
+// rows, replace the multiplayer zones' (a zone of higher priority overrides a string table), so the
+// weapon table (BG_LoadWeaponTable), Create a Class, the class scripts and the bots see the guns. Read when the common zones load, at startup: off is the
+// original game from the next start. (Not latched: a latched change from the console is not saved,
+// Dvar_SetVariant marks no archive change for it.)
+const dvar_t *kb_dlcWeapons;
+
+bool Com_KbAddDlcWeaponsZone(XZoneInfo *zoneInfo)
+{
+    if ( !kb_dlcWeapons )
+        kb_dlcWeapons = _Dvar_RegisterBool(
+            "kb_dlcWeapons",
+            1,
+            1u,
+            "The DLC weapons (the World at War guns of the zombie maps and the MP40) in Create a Class and for the bots, from kb_dlc_weapons.ff (read at startup)");
+    if ( !kb_dlcWeapons->current.enabled || DB_IsZoneLoaded("kb_dlc_weapons") )
+        return false;
+    if ( !DB_FileExists("kb_dlc_weapons", FFD_DEFAULT) )
+    {
+        Com_PrintWarning(10, "kb_dlcWeapons: no zone/Common/kb_dlc_weapons.ff (tools/make_dlc_weapons.sh writes it)\n");
+        return false;
+    }
+    zoneInfo->name = "kb_dlc_weapons";
+    zoneInfo->allocFlags = 1024;
+    zoneInfo->freeFlags = 0;
+    return true;
+}
+
+// After the load: the unlockable items again, from the new table (BG_UnlockableItemsInit read
+// them before the common zones loaded).
+void Com_KbDlcWeaponsLoaded()
+{
+    DB_SyncXAssets();
+    if ( DB_IsZoneLoaded("kb_dlc_weapons") )
+        BG_UnlockablesReloadItems();
+}
+
 void Com_LoadCommonFastFile()
 {
-    XZoneInfo zoneInfo[1]; // [esp+4h] [ebp-10h] BYREF
+    XZoneInfo zoneInfo[2]; // [esp+4h] [ebp-10h] BYREF
+    bool dlcWeapons;
     int zoneCount; // [esp+10h] [ebp-4h]
 
     zoneCount = 0;
@@ -2662,8 +2704,13 @@ void Com_LoadCommonFastFile()
         zoneInfo[zoneCount].allocFlags = 256;
         zoneInfo[zoneCount++].freeFlags = 0;
     }
+    dlcWeapons = zoneCount && !zombiemode->current.enabled && Com_KbAddDlcWeaponsZone(&zoneInfo[zoneCount]);
+    if ( dlcWeapons )
+        ++zoneCount;
     if ( zoneCount )
         DB_LoadXAssets(zoneInfo, zoneCount, 0);
+    if ( dlcWeapons )
+        Com_KbDlcWeaponsLoaded();
 }
 
 void __cdecl Com_LoadFrontEnd()

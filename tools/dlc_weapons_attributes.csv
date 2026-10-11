@@ -1,0 +1,22 @@
+# The DLC weapons' rows of mp/attributesTable.csv: the bars Create a Class draws for a weapon
+# (UI_DrawWeaponAttributeBar looks the reference up in column 1). tools/make_dlc_weapons.sh adds
+# them to kb_dlc_weapons.ff's copy of the table (writezone's "addrows"; HANDOFF, Decisions session 27).
+# Columns as the table's: group, reference, then the bars' values (columns 2-6, out of 100: the
+# multiplayer gun's whose damage the weapon takes, column 5 lower for the slow MP40 and BAR), the
+# magazine (the gun's own), the fire mode text and the parent (attachments only).
+weapon_smg,thompson,50,60,60,50,100,20,MPUI_FULL_AUTO,
+weapon_smg,type100,70,70,80,60,100,30,MPUI_FULL_AUTO,
+weapon_smg,mp40,50,60,60,30,100,32,MPUI_FULL_AUTO,
+weapon_assault,stg44,60,70,80,70,90,30,MPUI_FULL_AUTO,
+weapon_assault,m1garand,60,80,80,10,90,8,MPUI_SEMI_AUTO,
+weapon_assault,gewehr43,80,80,80,10,90,10,MPUI_SEMI_AUTO,
+weapon_assault,m1carbine,80,80,80,10,90,15,MPUI_SEMI_AUTO,
+weapon_lmg,fg42,80,60,70,90,80,32,MPUI_FULL_AUTO,
+weapon_lmg,bar,50,70,60,30,80,20,MPUI_FULL_AUTO,
+weapon_lmg,bipodbar,50,70,60,30,80,20,MPUI_FULL_AUTO,
+weapon_sniper,kar98k,60,95,90,30,90,5,MPUI_BOLT_ACTION,
+weapon_sniper,scopedkar98k,60,95,90,30,90,5,MPUI_BOLT_ACTION,
+weapon_sniper,type99,60,95,90,30,90,5,MPUI_BOLT_ACTION,
+weapon_cqb,trenchgun,70,80,20,20,100,6,MPUI_PUMP,
+weapon_cqb,doublebarrel,80,80,40,15,100,2,MPUI_DOUBLE_BARREL,
+weapon_cqb,sawedoff,80,80,40,15,100,2,MPUI_DOUBLE_BARREL,

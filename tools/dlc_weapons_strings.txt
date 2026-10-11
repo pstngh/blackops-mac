@@ -1,0 +1,20 @@
+# The DLC weapons' descriptions in Create a Class (tools/make_dlc_weapons.sh: writezone's
+# "strings"; the name, a space, the English text), in the style of multiplayer's.
+KB_DLC_THOMPSON_DESC Fully automatic World War II submachine gun. Effective at close range.
+KB_DLC_TYPE100_DESC Fully automatic Japanese submachine gun. Effective at close range.
+KB_DLC_MP40_DESC Fully automatic German submachine gun. Effective at close range.
+KB_DLC_STG44_DESC Fully automatic German assault rifle. Effective at medium range.
+KB_DLC_M1GARAND_DESC Semi-automatic battle rifle. Effective at medium to long range.
+KB_DLC_GEWEHR43_DESC Semi-automatic German battle rifle. Effective at medium to long range.
+KB_DLC_M1CARBINE_DESC Semi-automatic light carbine. Effective at medium range.
+KB_DLC_FG42_DESC Fully automatic with high rate of fire. Effective at medium range.
+KB_DLC_BAR_DESC Fully automatic with high power. Effective at medium to long range.
+KB_DLC_BIPODBAR_DESC Fully automatic with a deployable bipod. Effective at medium to long range.
+KB_DLC_KAR98K_DESC Bolt-action rifle with iron sights. Effective at long range.
+KB_DLC_SCOPEDKAR98K_DESC Bolt-action sniper rifle. Effective at long range.
+KB_DLC_TYPE99_DESC Bolt-action Japanese rifle. Effective at long range.
+KB_DLC_TRENCHGUN_DESC Pump-action shotgun. Effective at close range.
+KB_DLC_DOUBLEBARREL_DESC Double-barreled shotgun. Effective at close range.
+KB_DLC_SAWEDOFF_DESC Sawed-off double-barreled shotgun. Effective at close range.
+# The sawed-off's name was "Sawed-Off Double-Barreled Shotgun w/ Grip" (too long for the lists).
+WAW_WEAPON_SHOTGUN_DOUBLE_BARRELED_SAWED_GRIP Sawed-Off Shotgun

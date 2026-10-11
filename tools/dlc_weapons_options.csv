@@ -1,0 +1,21 @@
+# The DLC weapons' rows of mp/weaponOptions.csv (tools/make_dlc_weapons.sh adds them: writezone's
+# "addrows"; HANDOFF, Decisions session 27). The client looks a weapon's parent up here for the
+# textures camo replaces and the gold/black materials; the WWII guns' models have none of multiplayer's
+# camo textures, so their rows are the neutral ones the launchers have: camo leaves them as they are.
+# Columns as the table's: index, "weapon", reference, the two camo base textures, then materials.
+54,weapon,thompson,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+55,weapon,type100,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+56,weapon,mp40,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+57,weapon,stg44,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+58,weapon,m1garand,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+59,weapon,gewehr43,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+60,weapon,m1carbine,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+61,weapon,fg42,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+62,weapon,bar,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+63,weapon,bipodbar,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+64,weapon,kar98k,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+65,weapon,scopedkar98k,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+66,weapon,type99,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+67,weapon,trenchgun,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+68,weapon,doublebarrel,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,
+69,weapon,sawedoff,weapon_camo_neutral,weapon_camo_neutral,,,,,,,,,,,,,,,,,,,

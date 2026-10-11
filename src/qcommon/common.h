@@ -189,6 +189,8 @@ void __cdecl Com_UnloadLevelFastFiles();
 void __cdecl Com_LoadLevelFastFiles(char *mapName);
 char *__cdecl Com_GetLevelSharedFastFile(char *mapName);
 void Com_LoadCommonFastFile();
+bool Com_KbAddDlcWeaponsZone(struct XZoneInfo *zoneInfo);
+void Com_KbDlcWeaponsLoaded();
 void __cdecl Com_LoadFrontEnd();
 void __cdecl Com_UnloadFrontEnd();
 void __cdecl Com_AssetLoadUI();

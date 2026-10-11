@@ -87,9 +87,11 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23 and 26): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26 and 27): `kb_godMode` (human players take no damage), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
+`kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
+read at startup: a change takes effect at the next start),
 `kb_noDeathCam` (respawn 0.1 s after dying), `kb_noMusic`, `kb_noAnnouncer`,
 `kb_infiniteReserve`, `kb_staticCrosshair` (the user's Counter-Strike crosshair, CS:GO's classic
 static one, in screen pixels; its look is `kb_crosshairSize`/`Gap`/`Thickness`/`Color`/`UseAlpha`/
@@ -157,23 +159,29 @@ bench_views.py times its commands by the game's clock (`KB_CMDS_GAMETIME=1`), bu
 match clock, script movers and `autoassign`'s team still vary between runs: compare a
 candidate with the closer of two reference runs.
 
-Writing zones (HANDOFF, Decisions sessions 25-26): a dedicated server's `+writezone <out.ff>
-<zone>[,<zone>,<zone>] weapon <name> [<type> <name> ...]` (or `all`) loads the source zones without
+Writing zones (HANDOFF, Decisions sessions 25-27): a dedicated server's `+writezone <out.ff>
+<zone>[,<zone>,<zone>] [all] weapon <name> [<type> <name> ...]` loads the source zones without
 linking their assets and writes the named assets with everything they reach (stubs for what
 multiplayer has, a cut sound bank, localized names); write to a scratch dir. `weapon <old>=<new>[:<ref>]`
 renames (the statsTable reference, parentWeaponName, defaults to `<new>` without `_mp`; `:` alone
-leaves none). Source zones load by name from `zone/` of the install path, so a written zone is a
-source only from a scratch game folder. `listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's
-assets (weapons with the names they hold), `listzone - weapon` multiplayer's weapons, `listzone -
+leaves none); `damage <weapon>=<mp weapon>` copies a multiplayer gun's damage, `rows`/`addrows
+<table>=<file>` put rows into a copy of a string table (into its empty rows by index / at the end),
+`strings <file>` adds localized strings (`NAME text` lines). Source zones load by name from `zone/`
+of the install path, so a written zone is a source only from a scratch game folder; tool runs pass
+`+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
+`listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold
+and their damage, localized strings with their text, `menu <name>` a menu's items and scripts),
+`listzone - weapon` multiplayer's weapons, `listzone - localize [prefix]` its strings, `listzone -
 rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a table. Commands too long
 for the command line (1 KB) go in a cfg under `<fs_h>/main` (`+exec`).
-`tools/make_dlc_weapons.sh [--no-parents] <game dir> <out.ff>` writes the DLC weapons' zone,
-kb_dlc_weapons.ff (16 WWII guns, ~10 s, from build_macos/dlc_weapons). Try a zone from a scratch
-game folder (links to `main`, `zone/English` and every `zone/Common` file, plus the new zone) with
-`loadzone <name>` in a match, then `give`: until the statsTable has the weapons' references, a zone
-written without `--no-parents` stops the match ("Parent weapon ... not found"), and only one weapon
-outside the weapon table can be given per map (a second: "Weapon index mismatch"), so test one per
-map load (`map mp_nuked` at the end of KB_CMDS: the list reruns on each map). `src/database/db_save.cpp`
+`tools/make_dlc_weapons.sh <game dir> <out.ff>` writes the DLC weapons' zone, kb_dlc_weapons.ff (16
+WWII guns with multiplayer damage and their rows of mp/statsTable.csv, mp/attributesTable.csv and
+mp/weaponOptions.csv from tools/dlc_weapons_*; ~10 s, in build_macos/dlc_weapons); make_portable.sh
+runs it into the game folder's zone/Common. The game loads it at startup after common_mp; to try a
+new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (links to `main`,
+`zone/English` and every `zone/Common` file). Create a Class from KB_MENU_CMDS: HANDOFF, Decisions
+session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then
+`give`) allows one such weapon per map load (a second: "Weapon index mismatch"). `src/database/db_save.cpp`
 is generated: rerun `tools/gen_db_save.py` after changing db_load.cpp. `tools/ff_info.py <zone.ff>`
 prints a zone's header.
 

@@ -1,0 +1,24 @@
+# The DLC weapons' rows of mp/statsTable.csv (tools/make_dlc_weapons.sh writes them into
+# kb_dlc_weapons.ff's copy of the table: writezone's "rows"; HANDOFF, Decisions session 27).
+# Columns as the table's: index, passive, group, name, reference, count, image, description,
+# attachments, sort key, unlock level, default classes, cost, loadout slot, unlock prestige,
+# unclassify at. Rows that are empty in multiplayer's table, below 99 (_class.gsc registers
+# primary weapons only there). Sort keys after multiplayer's guns of the group; unlock level the
+# level of the multiplayer gun whose damage the weapon takes (the FG42's, the Stoner63's, is
+# classified: the M60's 20); bots skip a row without an unlock level (they take it for a dual wield).
+25,,weapon_smg,WAW_WEAPON_THOMPSON,thompson,,hud_icon_thompson,KB_DLC_THOMPSON_DESC,,14,3,,2000,primary,,
+58,,weapon_smg,WAW_WEAPON_TYPE100_SMG,type100,,hud_icon_type_100_smg,KB_DLC_TYPE100_DESC,,15,16,,2000,primary,,
+59,,weapon_smg,WEAPON_MP40,mp40,,hud_mp40,KB_DLC_MP40_DESC,,16,3,,2000,primary,,
+36,,weapon_assault,WAW_WEAPON_STG-44,stg44,,hud_icon_stg44,KB_DLC_STG44_DESC,,11,37,,2000,primary,,
+60,,weapon_assault,WAW_WEAPON_M1GARAND,m1garand,,hud_icon_m1garand,KB_DLC_M1GARAND_DESC,,12,8,,2000,primary,,
+61,,weapon_assault,WAW_WEAPON_GEWEHR43,gewehr43,,hud_icon_gewehr43,KB_DLC_GEWEHR43_DESC,,13,31,,2000,primary,,
+79,,weapon_assault,WAW_WEAPON_M1A1CARBINE,m1carbine,,hud_icon_m1carbine,KB_DLC_M1CARBINE_DESC,,14,31,,2000,primary,,
+41,,weapon_lmg,WAW_WEAPON_FG42,fg42,,hud_icon_fg42,KB_DLC_FG42_DESC,,5,20,,2000,primary,,
+80,,weapon_lmg,WAW_WEAPON_BAR,bar,,hud_icon_bar,KB_DLC_BAR_DESC,,6,20,,2000,primary,,
+81,,weapon_lmg,WAW_WEAPON_BAR_BIPOD,bipodbar,,hud_icon_bar,KB_DLC_BIPODBAR_DESC,,7,20,,2000,primary,,
+46,,weapon_sniper,WAW_WEAPON_KAR98K,kar98k,,hud_icon_kar98k,KB_DLC_KAR98K_DESC,,5,26,,2000,primary,,
+82,,weapon_sniper,WAW_WEAPON_KAR98K_SCOPED_SP,scopedkar98k,,hud_icon_kar98k,KB_DLC_SCOPEDKAR98K_DESC,,6,26,,2000,primary,,
+83,,weapon_sniper,WAW_WEAPON_TYPE99_RIFLE,type99,,hud_icon_type_99_rifle,KB_DLC_TYPE99_DESC,,7,26,,2000,primary,,
+52,,weapon_cqb,WAW_WEAPON_SHOTGUN,trenchgun,,hud_icon_shotgun,KB_DLC_TRENCHGUN_DESC,,5,7,,2000,primary,,
+11,,weapon_cqb,WAW_WEAPON_SHOTGUN_DOUBLE_BARRELED,doublebarrel,,hud_icon_double_barrel,KB_DLC_DOUBLEBARREL_DESC,,6,3,,2000,primary,,
+84,,weapon_cqb,WAW_WEAPON_SHOTGUN_DOUBLE_BARRELED_SAWED_GRIP,sawedoff,,hud_icon_double_barrel,KB_DLC_SAWEDOFF_DESC,,7,3,,2000,primary,,
