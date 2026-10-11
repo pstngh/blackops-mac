@@ -349,7 +349,9 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   spawn perk list, damage and grenade indicators, chat, or objective markers in the world. Kept: the user's
   own FPS counter (`cg_drawFPS`, their setting), menus (team, class, Esc), the scoreboard, the
   round's/match's outcome ("VICTORY, Time limit reached", the scores, the match bonus) and the After
-  Action Report. Checked in play (Decisions session 29). Not yet in the game folder.
+  Action Report. Checked in play (Decisions session 29). The game folder has it (make_portable.sh at
+  1c9ef755 plus the launcher fix below, the user's request; the DLC zone came out the same bytes, the shader
+  library step still stops at the missing Metal Toolchain).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1017,6 +1019,15 @@ Pre-existing (wrong on every build):
   limit reached / 1400 300 / Match Bonus 280 XP" showed, then the After Action Report, the next map and the
   class menu. A round-based mode's round outcome (S&D) is from the code, not tried. check_file.py natively and
   `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**The launcher's signing** (tools/launcher/build.sh): installing session 29's build stopped after the
+binary, at `codesign` (its error was sent to /dev/null, and `set -e` skipped the shader-library and DLC-zone
+steps): the game folder's new `Black Ops Launcher.app` already carried `com.apple.FinderInfo` (frFlags
+0x2000, kHasBundle) and `com.apple.fileprovider.fpfs#P` (~/Documents is under a File Provider), and
+codesign refuses Finder info ("resource fork, Finder information, or similar detritus not allowed").
+build.sh now deletes FinderInfo/ResourceFork just before signing and prints codesign's error if it still
+fails. The flag comes back right after (so `codesign --verify --strict` complains later; plain `--verify`
+passes, and a local app without quarantine launches with it).
 
 **Disk cleanup** (the user's request): the disk was 96% full. At the user's word, the Black Ops leftovers went
 to the Trash and the user emptied it (68 GB: old sessions' scratchpads, 13-15 GB of logs in one, Instruments

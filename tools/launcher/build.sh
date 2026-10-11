@@ -38,5 +38,12 @@ cat > "$app/Contents/Info.plist" <<'EOF'
 </dict>
 </plist>
 EOF
-codesign --force --sign - "$app" 2>/dev/null
+# Finder or iCloud Drive (a Documents folder that syncs) can tag the new bundle with Finder info,
+# which codesign refuses ("resource fork, Finder information, or similar detritus not allowed").
+xattr -rd com.apple.FinderInfo "$app" 2>/dev/null || true
+xattr -rd com.apple.ResourceFork "$app" 2>/dev/null || true
+if ! err=$(codesign --force --sign - "$app" 2>&1); then
+    echo "$err" >&2
+    exit 1
+fi
 echo "installed $app"
