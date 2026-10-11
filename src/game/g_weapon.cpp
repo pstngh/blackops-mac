@@ -23,6 +23,7 @@
 #include <bgame/bg_weapons_ammo.h>
 #include <server_mp/sv_main_mp.h>
 #include <bgame/bg_weapons_def.h>
+#include <bgame/bg_unlockable_items.h>
 #include <flame/flame_system.h>
 
 const float traceOffsets[9][2] =
@@ -1758,6 +1759,40 @@ bool __cdecl G_KbNoLauncherWeapon(unsigned int weaponIndex)
     return 1;
 }
 
+// kb_noDualWield: no dual-wield weapon (either hand) is given, to anyone. The class and bot
+// scripts ask for the single gun (Scr_KbPatchSource); PlayerCmd_giveWeapon and
+// PlayerCmd_setSpawnWeapon take any other dual-wield name as its single gun.
+bool __cdecl G_KbNoDualWieldWeapon(unsigned int weaponIndex)
+{
+    if ( !kb_noDualWield->current.enabled || !weaponIndex )
+        return 0;
+    return BG_GetWeaponDef(weaponIndex)->bDualWield;
+}
+
+// The single gun of a dual wield: its statsTable reference (parentWeaponName) + "_mp",
+// cz75dw_mp -> cz75_mp; 0 for a left hand without one. Other weapons stay as they are.
+unsigned int __cdecl G_KbSingleForDualWield(unsigned int weaponIndex)
+{
+    static unsigned char reported[ARRAY_COUNT(bg_weaponVariantDefs) / 8];
+    const WeaponDef *weapDef;
+    unsigned int singleIndex;
+
+    if ( !G_KbNoDualWieldWeapon(weaponIndex) )
+        return weaponIndex;
+    weapDef = BG_GetWeaponDef(weaponIndex);
+    singleIndex = 0;
+    if ( weapDef->parentWeaponName && *weapDef->parentWeaponName )
+        singleIndex = G_GetWeaponIndexForName(va("%s_mp", (const char *)weapDef->parentWeaponName));
+    if ( G_KbNoDualWieldWeapon(singleIndex) )
+        singleIndex = 0;
+    if ( weaponIndex < ARRAY_COUNT(bg_weaponVariantDefs) && (reported[weaponIndex >> 3] & (1 << (weaponIndex & 7))) == 0 )
+    {
+        reported[weaponIndex >> 3] |= 1 << (weaponIndex & 7);
+        Com_DPrintf(17, "kb_noDualWield: %s comes as %s\n", BG_WeaponName(weaponIndex), singleIndex ? BG_WeaponName(singleIndex) : "nothing");
+    }
+    return singleIndex;
+}
+
 int __cdecl G_GivePlayerWeapon(
                 playerState_s *pPS,
                 int iWeaponIndex,
@@ -1784,7 +1819,7 @@ int __cdecl G_GivePlayerWeapon(
         return 0;
     if ( !weapDef->gunXModel[altModelIndex] )
         return 0;
-    if ( G_KbNoGrenadeWeapon(iWeaponIndex) || G_KbNoLauncherWeapon(iWeaponIndex) )
+    if ( G_KbNoGrenadeWeapon(iWeaponIndex) || G_KbNoLauncherWeapon(iWeaponIndex) || G_KbNoDualWieldWeapon(iWeaponIndex) )
         return 0;
     if ( level.clientIsSpawning )
     {

@@ -416,3 +416,4 @@ extern const dvar_t *allItemsPurchased;
 extern const dvar_t *itemSellFactor;
 extern const dvar_t *ui_currentWeaponOptionGroup;
 extern const dvar_t *bodyTypeFromGun;
+extern const dvar_t *kb_noDualWield;

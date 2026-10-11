@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 25)
+## Status (2026-10-11, session 26)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -287,6 +287,23 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   Thompson's and all 1760 of zombie_cod5_prototype's assets, 16 MB), the client loads the latter
   without an error, and ASan (tool and client) is quiet (Decisions session 25). Not done yet: every
   weapon, MP names, Create a Class (stages 2 and 3).
+- **DLC weapons, stage 2: every weapon in one zone** (session 26; the user narrowed the list this
+  session: no wonder weapons, no Pack-a-Punch versions): `tools/make_dlc_weapons.sh <game dir> <out.ff>`
+  writes kb_dlc_weapons.ff in ~10 s: per map (factory, asylum, prototype, sumpf, each with its patch
+  zone and common_zombie) the guns under MP names, then merges. 16 weapons: thompson_mp, type100_mp,
+  stg44_mp, fg42_mp, bar_mp, bipodbar_mp, m1garand_mp, gewehr43_mp, m1carbine_mp, kar98k_mp,
+  scopedkar98k_mp, type99_mp, trenchgun_mp, doublebarrel_mp, sawedoff_mp, mp40_mp. 4,220,062 bytes
+  (stream 7.79 MB: virtual 6.01 MB, physical 1.96 MB), 447 root assets; written: 205 xanims, 33 models,
+  63 materials, 12 techsets, 101 images, 26 effects, 20 localized strings, 1 physics preset, 16 weapons
+  and one bank of 211 sound aliases. Each gun raises, fires (its own fire sound, -1 to -7 dBFS, alone
+  under `snd_solo_alias_substring`) and reloads (animation, magazine sounds) in an mp_nuked listen
+  match; HUD icons and display names are in the zone. Two runs give the same bytes, re-writing the
+  zone gives the same bytes, ASan (tool and client) is quiet (Decisions session 26). Create a Class,
+  damage, bots and loading at startup are stage 3.
+- **No dual wield** (session 26, the user's request: "remove ANY and ALL dual wields, from stock game
+  too"): `kb_noDualWield`, archived, default 1. A class's Dual Wield pick comes as the single gun with
+  its other attachments, bots never roll one, any other dual-wield give comes as the single gun, and
+  Create a Class reports no Dual Wield option (Decisions session 26; the menu itself not seen yet).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -476,18 +493,20 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **First: DLC weapons in Create a Class** (the user's request, session 24; facts and the reasons for the
-design in Decisions session 24). The user's answers: all of them: the 12 WWII guns (Thompson, Type
-100, STG-44, FG42, BAR, M1 Garand, Gewehr 43, M1 Carbine, Kar98k, Type 99, M1897 Trench Gun,
-double-barrel) plus the scoped Kar98k, sawed-off and bipod BAR, their Pack-a-Punch versions, the MP40
-and the wonder weapons (Ray Gun, Wunderwaffe DG-2, Thundergun, Winter's Howl, V-R11, Scavenger, 31-79
-JGb215, Zap Guns); the DLC throwables (Gersh device, Matryoshka dolls, QED, monkey bomb, spikemore) stay
-blocked by `kb_noGrenades`. Damage matched to the closest MP gun. Bots get them too. A `kb_*` dvar,
-archived, default 1 (`kb_dlcWeapons`), like the other changes. Stages, each handed off per the protocol
-in 0 (update HANDOFF, commit, task card):
+design in Decisions sessions 24-26). The user's answers: the 12 WWII guns (Thompson, Type 100, STG-44,
+FG42, BAR, M1 Garand, Gewehr 43, M1 Carbine, Kar98k, Type 99, M1897 Trench Gun, double-barrel) plus
+the scoped Kar98k, sawed-off and bipod BAR, and the MP40: 16 guns. Session 26 dropped, at the user's
+word, the wonder weapons ("i dont want any ray guns (or wonder weapons?) nor any crossbows either":
+all of them) and then the Pack-a-Punch versions ("drop the pack a punch versions too"); the DLC
+throwables stay blocked by `kb_noGrenades`, the MP crossbow too. Damage matched to the closest MP
+gun. Bots get them too. A `kb_*` dvar, archived, default 1 (`kb_dlcWeapons`), like the other changes.
+Stages, each handed off per the protocol in 0 (update HANDOFF, commit, task card):
 - **Stage 1, the fastfile writer and the extraction tool: done (session 25)** (Status, Decisions session
   25): `tools/gen_db_save.py` -> `src/database/db_save.cpp`, db_save_stream.cpp, db_save_tool.cpp, the
   `writezone` command; the Thompson works in an MP match from a written zone (`loadzone`, `give`).
-- **Stage 2, every weapon** (next; what stage 1 learned is in Decisions session 25): one zone with all
+- **Stage 2, every weapon: done (session 26)** (Status, Decisions session 26): `tools/make_dlc_weapons.sh`
+  writes kb_dlc_weapons.ff, the 16 guns under MP names; each works in a match (`loadzone`, `give`).
+  What follows is the plan stage 2 started from, kept for its facts: one zone with all
   of them. `writezone` loads at most 3 source zones at once (flag pairs; physical memory: common_mp ~107
   MB + common_zombie ~80 + factory ~102 of 328 MiB), so extract per map (`<map>,common_zombie`, plus the
   map's `_patch` zone if it changes the weapons: zombie_cod5_prototype_patch has 1 weapon, 5 models, 3
@@ -501,10 +520,20 @@ in 0 (update HANDOFF, commit, task card):
   not (alias prefixes such as PhysPreset::sndAliasPrefix; projectile and impact effects of the wonder
   weapons; the HUD and menu icons Create a Class needs). The zone must hold no asset of a type without a
   default (DestructibleDef, ...) that a map also has (Com_Error "Attempting to override asset").
-- **Stage 3, Create a Class**: statsTable rows (the zone can carry a replacement `mp/statsTable.csv`, or
-  patch it at load), loading the zone at startup, damage, bots, `kb_dlcWeapons`, make_portable.sh running
-  the extraction (as it runs make_shaderlib.sh), checks: cac_main/cac_weapon screenshots, a custom class
-  spawned with KB_CMDS, bots using them, every map loading, ASan. The zone's flags: `loadzone`'s
+- **Stage 3, Create a Class** (next): statsTable rows (the zone can carry a replacement
+  `mp/statsTable.csv`, or patch it at load), loading the zone at startup, damage, bots, `kb_dlcWeapons`,
+  make_portable.sh running the extraction (as it runs make_shaderlib.sh: `tools/make_dlc_weapons.sh
+  <game dir> <game dir>/zone/Common/kb_dlc_weapons.ff`, or a folder of its own), checks: cac_main/
+  cac_weapon screenshots, a custom class spawned with KB_CMDS, bots using them, every map loading, ASan.
+  What stage 2 found for it (Decisions session 26): the 16 references are `thompson type100 stg44 fg42
+  bar bipodbar m1garand gewehr43 m1carbine kar98k scopedkar98k type99 trenchgun doublebarrel sawedoff
+  mp40`, each weapon's parentWeaponName already (the client Com_Errors "Parent weapon '<ref>' not
+  found" for a registered weapon whose reference the table lacks); 21 empty rows below 99 (11, 25, 36,
+  41, 46, 52, 58-61, 66, 72, 79-87) hold all 16 with primary/side-arm types; column 6 can be the HUD
+  icon materials in the zone (`hud_icon_thompson`, ... `hud_mp40`: 128x32 or 128x64, from iw_38.iwd and
+  iw_04.iwd); the effects pool is 1024 now (Decisions session 26: 500 left little room); the
+  Create-a-Class Dual Wield option should be gone with `kb_noDualWield` (`ItemHasDualWield` 0):
+  screenshot it with the rest. The zone's flags: `loadzone`'s
   0x400000 dies at every map start (Com_LoadLevelFastFiles frees 0x200000-0x4000000); it needs a low
   flag loaded after common_mp (1024 is unused, but DB_LoadXAssets gives its localized partner 2048, the
   client's ui_viewer_mp, and 1024's free flags unload 2048: Decisions session 25). Loaded at startup, the
@@ -896,6 +925,120 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 26)
+
+**DLC weapons, stage 2: every weapon in one zone** (Next steps, first item).
+- **The scope, changed by the user during the session**: first all of session 24's list (WWII guns,
+  their Pack-a-Punch versions, the MP40, the wonder weapons); then "i dont want any ray guns (or
+  wonder weapons?) nor any crossbows either" (asked: all wonder weapons go) and "drop the pack a punch
+  versions too". Left: the 12 WWII guns, the scoped Kar98k, sawed-off, bipod BAR and the MP40.
+- **Where they are** (`listzone <map>_patch,<map> weapon`): prototype: Thompson, BAR, trench gun
+  (`zombie_shotgun`), double-barrel and sawed-off, Kar98k and scoped, M1 Carbine; asylum: + bipod BAR,
+  Gewehr 43, STG-44, M1 Garand; sumpf: + Type 100, Type 99, `_upgraded` versions of most; factory: + FG42
+  and the 9 `_upgraded` ones; common_zombie: `mp40_zm`, `ray_gun_zm` (+ upgraded) and BO's guns as
+  `*_zm`. Wonder weapons, for the record: tesla_gun_zm (sumpf, factory, coast), thundergun_zm
+  (prototype, theater, cosmodrome), freezegun_zm (asylum, pentagon), humangun_zm and sniper_explosive_zm
+  with its bolt (coast), shrink_ray_zm (temple), microwavegundw_zm with its left hand and the
+  microwavegun_zm alt mode (moon). The FG42 is only in factory, the Type 99 only in sumpf, the scoped
+  Kar98k only in prototype, the bipod BAR only in asylum: 4 map runs. Sources chosen: factory for the
+  Thompson, Type 100, STG-44, FG42, Gewehr 43, Kar98k, M1 Carbine, trench gun, double-barrel (and the
+  MP40 from common_zombie); asylum for the BAR, bipod BAR, M1 Garand, sawed-off; prototype for the
+  scoped Kar98k; sumpf for the Type 99. Each run loads `<map>_patch,<map>,common_zombie`, patch first
+  (the first zone's asset wins, as the patch overrides in the game).
+- **Names**: `<ref>_mp`; the references are no prefix of one another, of any of the 194 statsTable
+  references or of any of the 1717 MP weapon names, and none of those is a prefix of ours (checked
+  with a script: `scavenger` would have hit `scavenger_item_mp`, the perk's item, back when the
+  Scavenger was in). parentWeaponName is the reference, as MP's weapons have it (`ak47_mp` -> `ak47`,
+  `cz75dw_mp` -> `cz75`, bolts -> the launcher's); the client's CG_SetBaseWeaponForStats Com_Errors on a
+  registered weapon whose parent the table lacks, so `--no-parents` writes them empty for tests before
+  stage 3's rows exist. The zombie weapons' ammo and clip names are empty (each has its own ammo).
+- **The writer, new**: `weapon <old>=<new>[:<ref>]` (DB_SaveTool_RenameWeapons: the internal name, the
+  alt, dual-wield and spawned-grenade names a weapon holds, parentWeaponName; every weapon of the zone
+  needs a name once one is renamed); the weapons a weapon names come along as roots
+  (DB_SaveTool_AddLinkedWeapons); an asset name in several source zones is written once, the first
+  zone's (DB_SaveTool_Resolve), stubs too (they were written once per source zone); effects named by
+  effects load before the effects naming them (the writer records each name with the root it was
+  written under, DB_SaveNameRef; DB_SaveTool_OrderRoots: sorted, then each root's named roots first,
+  so the order settles, cycles or not). Before, an effect named by one earlier in the zone got a
+  default entry that the real one then overwrote ("Redundant asset", DB_DelayedCloneXAsset): it worked,
+  but the loader's own zones don't do that. A written asset of a type without a default (Com_Error
+  "Attempting to override asset" if a later zone has the name) prints a warning: none in this zone.
+- **Sound notetracks** (`sndnt#<alias>`): Black Ops' viewmodel animations name sounds as notetracks
+  that CG_PlayClientSoundNoteTracks plays without the 6-character prefix (WaW's guns use plain alias
+  names or the weapon's notetrack sound map). The writer saw the notetrack strings but matched them
+  whole: the MP40's and factory STG-44's magazine sounds (`fly_mp40_*`, `fly_mp44_*`) were missing, the
+  reloads silent (-34 and -50 dBFS under the `_plr` solo). DB_SaveTool_WantString strips the prefix
+  now; every `sndnt#` name of the zone is in its bank. The other prefix the plan named,
+  PhysPreset::sndAliasPrefix, is never read by the MP executable (Ragdoll zeroes it); weapon bounce
+  sounds are full names (`bounceSound[surface]`), impact sounds MP's own tables.
+- **Merging**: the map zones (0.4-5 MB) merge 3 at a time (`all`: every asset but the banks, sorted;
+  the bank is cut again from what the zone names), the flag pairs being 3. More pairs exist
+  (0x40000/0x10000/0x4000, localized 0x80000/0x20000/0x8000), but the unload frees the low ones in the
+  order 0x40000, 0x10000, 0x4000 and each `DB_LoadXAssets` frees low flags >= its own: they would have
+  to load in the order 0x4000, 0x10000, 0x40000 after the high ones; not needed. Source zones load by
+  name from `<install path>/zone`, so the script makes a game folder of its own (links to the game's
+  `main` and zone files, its own `zone/Common` for the zones it writes, a scratch fs_h) and runs the
+  build's dedicated server there with `+exec` (the command line is 2 KB and a startup command 1 KB; a
+  cfg line may be 8 KB and 512 tokens). The extraction takes ~10 s.
+- **Tools**: `listzone` (db_save_tool.cpp; tool mode, dedicated server): a zone's asset counts, a
+  type's assets (weapons with variant count, display name, type/class, alt/dual/parent, ammo, models,
+  icons, fire and reload sounds, the notetrack sound map), a string table's cells or a script (packed:
+  length, packed length, zlib), with `-` multiplayer's loaded ones.
+- **The effects pool** (POOLSIZE_FX, db_registry.cpp): 500 in the original; `listassetpool` counts on a
+  dedicated server: mp_nuked 360, mp_stadium 418, mp_cracked 420; the mp_nuked client used 381 before
+  the zone. The wonder weapons' 102 effects overflowed it ("Exceeded limit of 500 'fx' assets", a
+  Sys_Error); the 16 guns' 26 would leave little room on the busiest maps. 1024 now (a few KB).
+  Others on the mp_nuked client with the first zone (48 weapons, wonder weapons included): xanim 3737
+  of 5100, image 4005 of 4608, material 2839 of 4096, xmodel 691 of 1000, weapon 1770 of 2048, asset
+  entries 24561 of 32768; the dedicated server's busiest map had 4098 images (mp_stadium) and 3372 materials
+  (mp_cracked): images are the next pool to watch (STREAM_MAX_IMAGES must match it).
+- **Late weapons** (`give` of a weapon outside the weapon table, `loadzone`d): one per map. The second
+  ends the match with "Weapon index mismatch for '<an MP weapon>'" (CG_SetupWeaponConfigString; the
+  engine asserts "We do not support modified weapon files" on that path); the weapons' own data was
+  checked (variant count 0, no name-hash collision with the 1717 MP names). Stage 3 registers them
+  through the weapon table.
+- **Seen in passing**: the zone fills 7 assets that loaded zones referenced but no MP zone holds
+  (`mc_unlitdecalblend_add`, `fxt_env_dust_mote_pcloud_2`, `fxt_env_water_droplets` and their
+  materials, `gfx_fxt_smk_def_1_z120`, `gfx_fxt_smk_gen_add`): "Redundant asset" as the defaults get
+  the real assets. `kb_noGrenades` blocks any projectile weapon with a bolt explosion (it would have
+  blocked the Scavenger).
+- **Checked** (scratch game folder, mp_nuked listen match, `+set kb_godMode 1`; the `--no-parents` zone;
+  one gun per map load, KB_CMDS: team, class, `loadzone kb_dlc_weapons`, `give` (a `w<N>` dvar chain
+  run with `vstr`, which also sets `snd_solo_alias_substring` to the gun's player fire alias), fire 0.5
+  s, solo `_plr`, reload, `map mp_nuked`; screenshots 2/s, OpenAL Soft's wave writer): all 16 raise,
+  fire (ammo counter, muzzle flash) and play their reload animations (contact sheets); fire peaks -1.2
+  to -6.9 dBFS after -60 to -67 dBFS of solo'd silence, reload windows -0.3 to -6.6 dBFS (MP40 and
+  STG-44 after the `sndnt#` fix: two magazine peaks each, -4 to -7). No error, `[mtl] BUG` or missing
+  asset from the zone. The extraction twice: identical bytes; the zone written again from itself: identical
+  bytes; ASan: the extraction (same bytes as the release build) and the client (two guns, two map
+  loads) report nothing. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py
+  `--check`.
+
+**No dual wield** (the user, mid-session: "also remove ANY and ALL dual weilds", "from stock game
+too"). `kb_noDualWield`, archived, default 1, like the other changes. Multiplayer has 10 (ASP, CZ75,
+M1911, Makarov, Python, Kiparis, MAC11, PM63, Skorpion, HS10), each `<ref>dw_mp` with a `<ref>lh_mp`
+left hand; their parentWeaponName is the single gun's reference.
+- **Classes**: `_class.gsc`'s getFullWeaponName makes `<ref>dw_...mp` when the bottom attachment is
+  "dw"; a script patch (Scr_KbPatchSource) makes `is_attachment_excluded` count "dw" as excluded, as a
+  custom game's `attachment_exclusion_<n>` dvars do, so the class gets the single gun with its other
+  attachments. Bots: `_bot.gsc`'s `bot_weapon_dual_wield_unlocked` (a 20% roll on the DW rows) returns
+  false.
+- **Server**: G_GivePlayerWeapon refuses a dual-wield weapon (either hand); PlayerCmd_giveWeapon and
+  PlayerCmd_setSpawnWeapon take one as its single gun (G_KbSingleForDualWield: parentWeaponName +
+  `_mp`, with the class's camo and options; the developer console prints "kb_noDualWield: X comes as
+  Y" once per weapon), for a class that stores the DW item itself (row 7, CZ75 DW) and any other path.
+- **Menus**: the dvar is registered in BG_UnlockableItemsInit (startup: the menus run before any map),
+  and BG_UnlockablesItemHasDualWield (the menus' `ItemHasDualWield`) answers 0. The Create-a-Class
+  attachment screens weren't reached: whether the Dual Wield option is gone is for stage 3's
+  screenshots. The item's attachment list keeps "dw": classes store attachment positions in it.
+- **Checked** (mp_nuked listen match): a custom class with PM63 + Dual Wield and CZ75 + Dual Wield
+  (`statWriteDDL cacLoadouts customclass1 primaryattachmentbottom 3`, ...) is given `pm63_mp` and
+  `cz75_mp` (one gun in the hand, 20/60 and 12/36) with the dvar, `pm63dw_mp` and `cz75dw_mp` (two
+  guns) without; a class storing the CZ75 DW item gets `cz75_mp` ("cz75dw_mp comes as cz75_mp"); 7
+  managed bots for 90 s were given 12 dual wields without the dvar (ASP, CZ75 x3, Kiparis, M1911 x2,
+  Makarov, PM63, Python x3) and none of 205 weapons with it (temporary logging of every script
+  `giveWeapon`, removed). No script patch warning.
 
 ## Decisions (session 25)
 

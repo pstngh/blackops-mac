@@ -1140,6 +1140,20 @@ static const ScrKbPatch scrKbPatches[] =
         "if( getDvarInt( \"custom_killstreak_mode\" ) == 1 )",
         "if( getDvarInt( \"custom_killstreak_mode\" ) == 1 || GetDvarInt( \"kb_noKillstreaks\" ) )"
     },
+    // kb_noDualWield: a class's Dual Wield is left out as a custom game's excluded attachments
+    // are (getAttachmentString), so the class's weapon is the single gun with its other
+    // attachments...
+    {
+        "maps/mp/gametypes/_class.gsc",
+        "numExclusions = level.attachmentExclusions.size;",
+        "if ( attachment == \"dw\" && GetDvarInt( \"kb_noDualWield\" ) ) return true; numExclusions = level.attachmentExclusions.size;"
+    },
+    // ...and the bots never roll a dual-wield weapon
+    {
+        "maps/mp/gametypes/_bot.gsc",
+        "if ( RandomInt( 100 ) > 20 )",
+        "if ( GetDvarInt( \"kb_noDualWield\" ) || RandomInt( 100 ) > 20 )"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)

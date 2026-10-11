@@ -390,6 +390,15 @@ void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
         weaponOptions.i = 0;
         hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
     }
+    // kb_noDualWield: a dual wield comes as its single gun, with its camo and options
+    if ( G_KbNoDualWieldWeapon(weaponIndex) )
+    {
+        weaponIndex = G_KbSingleForDualWield(weaponIndex);
+        if ( !weaponIndex )
+            return;
+        weaponModel = 0;
+        hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
+    }
     if ( G_GivePlayerWeapon(&pSelf->client->ps, weaponIndex, weaponModel, weaponOptions) )
     {
         _snprintf(svcmd, 0x40u, "%c \"%i\"", 74, 1);
@@ -3356,6 +3365,8 @@ void __cdecl PlayerCmd_setSpawnWeapon(scr_entref_t entref)
     }
     pszWeaponName = Scr_GetString(0, SCRIPTINSTANCE_SERVER);
     iWeaponIndex = G_GetWeaponIndexForName(pszWeaponName);
+    // kb_noDualWield: the single gun giveWeapon gave in a dual wield's place
+    iWeaponIndex = G_KbSingleForDualWield(iWeaponIndex);
     if ( BG_IsWeaponValid(&pSelf->client->ps, iWeaponIndex) )
     {
         AssignToSmallerType<unsigned short>(&pSelf->client->ps.weapon, iWeaponIndex);

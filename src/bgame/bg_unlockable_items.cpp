@@ -169,6 +169,7 @@ const dvar_t *allItemsPurchased;
 const dvar_t *itemSellFactor;
 const dvar_t *ui_currentWeaponOptionGroup;
 const dvar_t *bodyTypeFromGun;
+const dvar_t *kb_noDualWield;
 
 unlockableItemsData s_unlockableItems;
 
@@ -1618,6 +1619,9 @@ bool __cdecl BG_UnlockablesItemHasDualWield(int itemIndex)
 {
     itemInfo_t *itemInfo; // [esp+0h] [ebp-4h]
 
+    // kb_noDualWield: the menus (ItemHasDualWield) offer no Dual Wield
+    if ( kb_noDualWield && kb_noDualWield->current.enabled )
+        return 0;
     itemInfo = BG_UnlockablesGetItemInfo(itemIndex);
     return itemInfo && itemInfo->dwIndex != -1;
 }
@@ -3910,6 +3914,13 @@ void __cdecl BG_UnlockableItemsInit()
                                          1.0,
                                          0,
                                          "Factor by which to multiply the item cost to get the item sell price.");
+    // The user's gameplay change (HANDOFF, Decisions session 26); 0 gives the original game.
+    // Registered here, at startup, as the Create-a-Class menus read it before any map.
+    kb_noDualWield = _Dvar_RegisterBool(
+        "kb_noDualWield",
+        1,
+        1u,
+        "No dual-wield weapons: Create a Class offers no Dual Wield, and a dual-wield pick comes as the single gun, for everyone");
     ui_currentWeaponOptionGroup = _Dvar_RegisterInt(
                                                                     "ui_currentWeaponOptionGroup",
                                                                     0,
