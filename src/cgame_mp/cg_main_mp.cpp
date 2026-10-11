@@ -170,6 +170,7 @@ const dvar_s *cg_drawVersion;
 const dvar_s *cg_drawVersionX;
 const dvar_s *cg_drawVersionY;
 const dvar_s *kb_noVersion;
+const dvar_s *kb_cleanHud;
 const dvar_s *cg_readTitleStorageLocally;
 const dvar_s *snd_drawInfo;
 const dvar_s *snd_drawSort;
@@ -609,6 +610,12 @@ void __cdecl CG_RegisterDvars()
         1,
         1u,
         "Hide the version text at the bottom right of the screen");
+    // The user's change (HANDOFF, Decisions session 29); 0 gives the original game.
+    kb_cleanHud = _Dvar_RegisterBool(
+        "kb_cleanHud",
+        1,
+        1u,
+        "Hide the HUD during play but the crosshair: minimap, score, ammo, kill feed, popups, names and markers");
     cg_readTitleStorageLocally = _Dvar_RegisterBool(
                                                                  "cg_readTitleStorageLocally",
                                                                  0,

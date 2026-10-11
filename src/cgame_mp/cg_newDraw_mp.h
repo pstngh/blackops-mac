@@ -27,6 +27,7 @@ struct Font_s;
 
 void __cdecl CG_AntiBurnInHUD_RegisterDvars();
 bool __cdecl CG_ShouldDrawHud(int localClientNum);
+bool __cdecl CG_KbHideHudElems(int localClientNum);
 double __cdecl CG_FadeHudMenu(int localClientNum, const dvar_s *fadeDvar, int displayStartTime, int duration);
 bool __cdecl CG_CheckPlayerForLowAmmoSpecific(const cg_s *cgameGlob, unsigned int weapIndex);
 bool __cdecl CG_CheckPlayerForLowAmmo(const cg_s *cgameGlob);

@@ -347,6 +347,8 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
     int isScoreboardVisible; // [esp+8h] [ebp-Ch]
     bool chatOverScoreboard; // [esp+Ch] [ebp-8h]
     const playerState_s *ps; // [esp+10h] [ebp-4h]
+    bool cleanHud;
+    bool hideHudElems;
 
     cgameGlob = CG_GetLocalClientGlobals(localClientNum);
     if ( cgameGlob->cubemapShot == CUBEMAPSHOT_NONE && cg_draw2D->current.enabled )
@@ -359,6 +361,13 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
         else if ( !net_showprofile->current.integer )
         {
             drawHud = CG_ShouldDrawHud(localClientNum);
+            // kb_cleanHud (the user's change, HANDOFF Decisions session 29): only the crosshair (and the
+            // debug overlays, cg_drawFPS among them) during play; no HUD menus (minimap, score, ammo,
+            // kill feed, player cards, hints), names, chat, vote or damage and grenade indicators, and
+            // no script hud elements, foreground ones (the spawn's perk list) too, until the round's
+            // outcome (CG_KbHideHudElems).
+            cleanHud = kb_cleanHud->current.enabled;
+            hideHudElems = CG_KbHideHudElems(localClientNum);
             ps = &cgameGlob->nextSnap->ps;
             if ( cgameGlob->nextSnap->ps.pm_type == 5 )
             {
@@ -376,12 +385,18 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
                     if ( drawHud )
                     {
                         CG_ScanForCrosshairEntity(localClientNum);
-                        CG_UpdatePlayerNames(localClientNum);
-                        if ( !chatOverScoreboard )
-                            CG_DrawChatMessages(localClientNum);
-                        CG_Draw2dHudElems(localClientNum, 0);
-                        Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
-                        CG_Draw2dHudElems(localClientNum, 1);
+                        if ( !cleanHud )
+                        {
+                            CG_UpdatePlayerNames(localClientNum);
+                            if ( !chatOverScoreboard )
+                                CG_DrawChatMessages(localClientNum);
+                        }
+                        if ( !hideHudElems )
+                            CG_Draw2dHudElems(localClientNum, 0);
+                        if ( !cleanHud )
+                            Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
+                        if ( !hideHudElems )
+                            CG_Draw2dHudElems(localClientNum, 1);
                     }
                 }
                 else
@@ -389,7 +404,7 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
                     CG_DrawNightVisionOverlay(localClientNum);
                     CG_ScanForCrosshairEntity(localClientNum);
                     CG_DrawCrosshair(localClientNum);
-                    if ( drawHud )
+                    if ( drawHud && !cleanHud )
                     {
                         if ( ps->pm_type < 9 || Demo_IsMovieCamera() )
                             CG_UpdatePlayerNames(localClientNum);
@@ -399,32 +414,40 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
                     CG_CheckTimedMenus(localClientNum);
                     if ( drawHud )
                     {
-                        CG_Draw2dHudElems(localClientNum, 0);
-                        Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
+                        if ( !hideHudElems )
+                            CG_Draw2dHudElems(localClientNum, 0);
+                        if ( !cleanHud )
+                            Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
                     }
-                    CG_Draw2dHudElems(localClientNum, 1);
+                    if ( !hideHudElems )
+                        CG_Draw2dHudElems(localClientNum, 1);
                 }
                 CG_DrawGenericOverlay(1, localClientNum);
                 isScoreboardVisible = CG_DrawScoreboard(localClientNum);
                 CG_DrawSay(localClientNum);
                 if ( drawHud )
                 {
-                    if ( chatOverScoreboard )
+                    if ( chatOverScoreboard && !cleanHud )
                         CG_DrawChatMessages(localClientNum);
                     if ( (ps->eFlags & 0x4000) == 0 || ps->vehicleType != 6 )
                     {
                         if ( !CG_KillCamEntityEnabled(localClientNum) )
                         {
                             CG_DrawFlashDamage(cgameGlob);
-                            CG_DrawDamageDirectionIndicators(localClientNum);
+                            if ( !cleanHud )
+                                CG_DrawDamageDirectionIndicators(localClientNum);
                         }
-                        CG_DrawGrenadeIndicators(localClientNum);
+                        if ( !cleanHud )
+                            CG_DrawGrenadeIndicators(localClientNum);
                         CG_ScreenBurn(localClientNum);
                         CG_ScreenElectrified(localClientNum);
                     }
-                    if ( !isScoreboardVisible && (cgameGlob->matchUIVisibilityFlags & 0x800) != 0 )
-                        CG_DrawSpectatorMessage(localClientNum);
-                    CG_DrawVote(localClientNum);
+                    if ( !cleanHud )
+                    {
+                        if ( !isScoreboardVisible && (cgameGlob->matchUIVisibilityFlags & 0x800) != 0 )
+                            CG_DrawSpectatorMessage(localClientNum);
+                        CG_DrawVote(localClientNum);
+                    }
                     CG_DrawLagometer(localClientNum);
                     CG_DrawEntityCount(localClientNum);
                     CG_DrawServerBandwidth(localClientNum);

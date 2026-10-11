@@ -2352,7 +2352,7 @@ void __cdecl CG_AddDrawSurfsFor3dHudElems(int localClientNum)
     int elemCount; // [esp+100h] [ebp-4h]
     int savedregs; // [esp+104h] [ebp+0h] BYREF
 
-    if ( !r_highRezWaypoints && CG_ShouldDrawHud(localClientNum) )
+    if ( !r_highRezWaypoints && CG_ShouldDrawHud(localClientNum) && !CG_KbHideHudElems(localClientNum) )
     {
         elemCount = GetSortedHudElems(localClientNum, elems);
         if ( (unsigned int)elemCount > 0x3E

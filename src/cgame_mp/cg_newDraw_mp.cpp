@@ -281,6 +281,15 @@ bool __cdecl CG_ShouldDrawHud(int localClientNum)
     return cgameGlob && cgameGlob->drawHud && CL_ShouldDisplayHud(localClientNum);
 }
 
+// kb_cleanHud (the user's change, HANDOFF Decisions session 29): the scripts' hud elements (+XP, medals,
+// challenges, objective texts and markers) stay hidden while a round is on. The scripts clear
+// cg_drawSpectatorMessages (0x800) at the end of a round and of the match, when the outcome shows.
+bool __cdecl CG_KbHideHudElems(int localClientNum)
+{
+    return kb_cleanHud->current.enabled
+        && (CG_GetLocalClientGlobals(localClientNum)->matchUIVisibilityFlags & 0x800) != 0;
+}
+
 double __cdecl CG_FadeHudMenu(int localClientNum, const dvar_s *fadeDvar, int displayStartTime, int duration)
 {
     cg_s *LocalClientGlobals; // eax

@@ -173,6 +173,7 @@ extern const dvar_s *cg_drawVersion;
 extern const dvar_s *cg_drawVersionX;
 extern const dvar_s *cg_drawVersionY;
 extern const dvar_s *kb_noVersion;
+extern const dvar_s *kb_cleanHud;
 extern const dvar_s *cg_readTitleStorageLocally;
 extern const dvar_s *snd_drawInfo;
 extern const dvar_s *snd_drawSort;

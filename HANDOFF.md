@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 28)
+## Status (2026-10-11, session 29)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -341,6 +341,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   survives a restart and spawns in a match with the MP5K, suppressor and Tiger camo. New test commands
   `kb_mouse` and `kb_key` click through menus (CLAUDE.md). The game folder has it (make_portable.sh at
   342765a3, the user's request).
+- **Only the crosshair on screen** (session 29, the user: "clean up the ingame hud? only keep crosshair, and
+  disable the achivement +XP pop ups, or the tags top left"): `kb_cleanHud`, archived, default 1. During play
+  the screen shows the crosshair and nothing else of the HUD: no minimap, score and timer, ammo and
+  killstreak wheel, kill feed, +XP numbers, medal and challenge popups ("Headshot", "First Blood", "The
+  Shortcut +250 XP"), player cards ("Killed ..."), objective text, weapon pickup hints, names over heads,
+  spawn perk list, damage and grenade indicators, chat, or objective markers in the world. Kept: the user's
+  own FPS counter (`cg_drawFPS`, their setting), menus (team, class, Esc), the scoreboard, the
+  round's/match's outcome ("VICTORY, Time limit reached", the scores, the match bonus) and the After
+  Action Report. Checked in play (Decisions session 29). Not yet in the game folder.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -977,6 +986,43 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 29)
+
+**Only the crosshair (`kb_cleanHud`)**, the user's request (Status).
+- **What the HUD is** (screenshots of a match with kills, `KB_SCREENSHOT`): the HUD menus that
+  `Menu_PaintAll(cgDC)` paints (minimap, score/timer/emblem, ammo and killstreak wheel, kill feed with the bots'
+  `[3arc]` clan tags, the victim's and the player's cards, the weapon pickup hint), the scripts' hud elements
+  (`+250` from _rank.gsc's `hud_rankscroreupdate`; medals and challenges through _hud_message.gsc's
+  notifyMessage at the top centre; the objective text; the spawn's perk list, which _hud_util.gsc's
+  createLoadoutIcon/Text put in the foreground layer; 3D waypoints, `CG_AddDrawSurfsFor3dHudElems`), names
+  over heads (`CG_UpdatePlayerNames`), chat, and the damage/grenade indicators. What the user meant by "the
+  tags top left" is not certain (the minimap's grid labels, the clan tags, the player card at the top right
+  of a 4:3 window?); everything but the crosshair is gone, so it is gone too.
+- **How** (CG_Draw2DInternal, cg_draw_mp.cpp): with the dvar on, the names, chat, `Menu_PaintAll`, damage and
+  grenade indicators, spectator message and vote are skipped; the crosshair, the flash-damage tint, screen
+  burn/electrified, the scoreboard and the debug overlays (`cg_drawFPS`, which the user's own config turns
+  on) still draw. The scripts' hud elements, both layers and the 3D waypoints, are skipped while a round is on
+  (`CG_KbHideHudElems`, cg_newDraw_mp.cpp): the match flag `cg_drawSpectatorMessages` (matchUIVisibilityFlags
+  0x800) is set by Callback_StartGameType and cleared by displayRoundEnd/displayGameEnd/endGame, so the
+  outcome texts show. The foreground layer (an audit of all 280 MP scripts) holds only the loadout icons, the
+  killcam captions, the pregame title, Copycat, the guided missile overlay and RC-XD/minigun/rocket HUDs,
+  powerups, tutorial tips and dev elements: hidden with the rest. The dvar is read each frame (cg_main_mp.cpp,
+  next to kb_noVersion); 0 gives the original HUD at once.
+- **Checked** (release client, listen server on mp_nuked, 4 test bots, `scr_playerwarp enemies_host` kills,
+  scratch profiles, KB_SCREENSHOT 3/s): with the dvar on, from the spawn on only the crosshair and the FPS
+  overlay through kills (no +XP, medal or challenge popups, cards, kill feed, hints, minimap, ammo); `set
+  kb_cleanHud 0` mid-match brought the full HUD back at once ("Assist", "Longshot", "Avenger" popups, +300,
+  cards, kill feed, minimap), `set kb_cleanHud 1` removed it again; at the 1-minute time limit "VICTORY / Time
+  limit reached / 1400 300 / Match Bonus 280 XP" showed, then the After Action Report, the next map and the
+  class menu. A round-based mode's round outcome (S&D) is from the code, not tried. check_file.py natively and
+  `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**Disk cleanup** (the user's request): the disk was 96% full. At the user's word, the Black Ops leftovers went
+to the Trash and the user emptied it (68 GB: old sessions' scratchpads, 13-15 GB of logs in one, Instruments
+traces from the gpu_trace runs, ~250 per-run `com.apple.gpuarchiver` caches with `kb_` shaders, the Metal
+shader-validation caches); Counter-Strike work of the user's other sessions was left alone. Keep test logs and
+screenshot sets small, and delete them once read.
 
 ## Decisions (session 28)
 
