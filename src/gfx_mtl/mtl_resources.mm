@@ -219,10 +219,17 @@ HRESULT MetalTexture::lockRect(UINT face, UINT level, D3DLOCKED_RECT *lr, const 
         if (p.face == face && p.level == level) { MTL_Bug("texture level locked twice"); return D3DERR_INVALIDCALL; }
     Pending p;
     p.face = face; p.level = level; p.locked = true;
-    p.data.resize(bytes);
-    if (!(flags & D3DLOCK_DISCARD)) fillLock(p, pitch, rows);
+    const size_t i = (size_t)face * levels_ + level;
+    if (i < kept_.size() && kept_[i].size() == bytes) {
+        p.inKept = true;
+        p.bytes = kept_[i].data();
+    } else {
+        p.data.resize(bytes);
+        if (!(flags & D3DLOCK_DISCARD)) fillLock(p, pitch, rows);
+        p.bytes = p.data.data();
+    }
     locks_.push_back(std::move(p));
-    lr->pBits = locks_.back().data.data();
+    lr->pBits = locks_.back().bytes;
     lr->Pitch = (INT)pitch;
     return D3D_OK;
 }
@@ -237,10 +244,16 @@ HRESULT MetalTexture::lockBox(UINT level, D3DLOCKED_BOX *lb, const D3DBOX *box, 
         if (p.level == level) { MTL_Bug("volume level locked twice"); return D3DERR_INVALIDCALL; }
     Pending p;
     p.level = level; p.locked = true;
-    p.data.resize(bytes);
-    if (!(flags & D3DLOCK_DISCARD)) fillLock(p, pitch, rows);
+    if (level < kept_.size() && kept_[level].size() == bytes) {
+        p.inKept = true;
+        p.bytes = kept_[level].data();
+    } else {
+        p.data.resize(bytes);
+        if (!(flags & D3DLOCK_DISCARD)) fillLock(p, pitch, rows);
+        p.bytes = p.data.data();
+    }
     locks_.push_back(std::move(p));
-    lb->pBits = locks_.back().data.data();
+    lb->pBits = locks_.back().bytes;
     lb->RowPitch = (INT)pitch;
     lb->SlicePitch = (INT)(pitch * rows);
     return D3D_OK;
@@ -280,18 +293,18 @@ void MetalTexture::fillLock(Pending &p, UINT pitch, UINT rows) {
 // the bytes are kept for the next lock.
 void MetalTexture::upload(Pending &p) {
     UINT pitch, rows;
-    levelBytes(p.level, &pitch, &rows);
+    const size_t bytes = levelBytes(p.level, &pitch, &rows);
     const MTLRegion r = MTLRegionMake3D(0, 0, 0, width(p.level), height(p.level), depthOf(p.level));
     const size_t i = (size_t)p.face * levels_ + p.level;
     ++g_kbUploads;
-    g_kbUploadBytes += p.data.size();
+    g_kbUploadBytes += bytes;
     {
         std::lock_guard<std::mutex> g(mu_);
         if (written_.size() <= i) written_.resize((size_t)levels_ * (kind_ == TEX_CUBE ? 6 : 1));
         written_[i] = true;
     }
     if (!used_.load()) {
-        [tex_ replaceRegion:r mipmapLevel:p.level slice:p.face withBytes:p.data.data() bytesPerRow:pitch
+        [tex_ replaceRegion:r mipmapLevel:p.level slice:p.face withBytes:p.bytes bytesPerRow:pitch
               bytesPerImage:pitch * rows];
         std::lock_guard<std::mutex> g(mu_);
         if (i < kept_.size()) kept_[i].clear();
@@ -299,11 +312,12 @@ void MetalTexture::upload(Pending &p) {
     }
     if (!dev_->onRenderThread()) {
         MTL_Bug("texture rewritten off the render thread after the GPU used it");
-        [tex_ replaceRegion:r mipmapLevel:p.level slice:p.face withBytes:p.data.data() bytesPerRow:pitch
+        [tex_ replaceRegion:r mipmapLevel:p.level slice:p.face withBytes:p.bytes bytesPerRow:pitch
               bytesPerImage:pitch * rows];
         return;
     }
-    dev_->copyToTexture(tex_, p.face, p.level, r.origin, r.size, p.data.data(), pitch, pitch * rows);
+    dev_->copyToTexture(tex_, p.face, p.level, r.origin, r.size, p.bytes, pitch, pitch * rows);
+    if (p.inKept) return;
     std::lock_guard<std::mutex> g(mu_);
     if (kept_.size() <= i) kept_.resize((size_t)levels_ * (kind_ == TEX_CUBE ? 6 : 1));
     kept_[i] = std::move(p.data);

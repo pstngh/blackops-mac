@@ -170,6 +170,12 @@ private:
     std::atomic<unsigned> ids_{0};
     MetalShaderCompiler compiler_;
     MetalPipelineCache pipelineCache_;
+    // copyToTexture's staging memory: a buffer per frame in flight, reused once that frame's
+    // command buffers have completed (the semaphore), instead of a new buffer per upload
+    // (the model lighting volume, 1 MB a frame).
+    id<MTLBuffer> staging_[kFramesInFlight] = {};
+    NSUInteger stagingUsed_ = 0;
+    unsigned frameCount_ = 0;
 
     // Back buffer (our own texture; Present draws it into the drawable) and the
     // device's automatic depth-stencil surface.

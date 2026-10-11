@@ -226,6 +226,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   frames per 2-minute match that stalled 20-390 ms building 10-100 pipelines at once are gone (one
   22 ms frame left in one run: a pipeline not seen before). It fills and refreshes itself (Decisions
   session 20), ~15 MB a map. The game folder's copy has it.
+- **Metal leftovers, CPU at view A** (session 20): the model lighting volume (1 MB, patched by the
+  engine every frame) is locked in place and uploaded through a reused per-frame staging buffer:
+  10% -> 2.4% of the render thread, +6% fps at mp_nuked's view A and overview with bots
+  (Decisions session 20). The game folder's copy has it.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -521,10 +525,15 @@ are in 0's list.
      GL's worst frame: 39 ms.
    - **Without vsync ~35% of the frames rendered are not shown: the user wants it looked at**
      (session 19; it is input latency): three drawables, the presenter thread waits in
-     `nextDrawable`; presented/s stays above the display's 240.
-   - **CPU at view A: the user wants it looked at** (session 19): occlusion-query polling (7%),
-     the model lighting volume's staging buffer and relock copy each frame (~5%), profiled at
-     the user's settings first. The engine's frame pacing caps lighter views at ~730 fps.
+     `nextDrawable`; presented/s stays above the display's 240. **Not measured yet (session 20)**:
+     measuring it needs the display showing frames, and from ~03:30 the screen was locked (the
+     user asleep; `CGSessionCopyCurrentDictionary` says CGSSessionScreenIsLocked; KB_FPS
+     "120 presented/s, 0 shown/s", presentedTime 0). Earlier that night, unlocked, the
+     tearing-flip state showed fewer drawables than frames: mp_nuked 490 fps -> 426 presented,
+     735 -> 577, 800 -> 594 (all presented frames shown). The plan for it (Decisions session 20).
+   - **Done (session 20): CPU at view A** (Decisions session 20): profiled at the user's
+     settings, the model lighting volume's relock and upload were 10% of the render thread (now
+     2.4%), +6% fps at view A and the overview; the occlusion-query polling is <0.1% there now.
    - The GL layer's deviations from D3D9 (Decisions session 13) stay for Linux: no
      mipmaps, raw-depth shadow maps, no stencil or separate alpha, dropped worker-thread
      vertex uploads (particle clouds), relative reads that miss `def`'d constants.
@@ -820,6 +829,44 @@ counterstrike one, as much as possible"):
   fps with bots: 518/687/703/743/664/711/727/444 and 515/673/696/724/658/711/744/422 (the
   same). ASan client (`MTL_DEBUG_LAYER=1`, bots, 250 s over three maps): no report. Every
   changed file through check_file.py natively and `--i386`; audit_splitlocals.py 0.
+
+Leftover 4 (CPU at view A):
+
+- **Profile** (bench_views.py --views a --sample 10, no bots, the user's settings: the game
+  folder's config, 1280x720 fullscreen, no AA, r_picmip 2, with r_vsync 0 and com_maxfps 0; two
+  runs): the render thread busy 98%; `RB_PatchModelLighting` 9.6-10.2% inclusive: the engine
+  locks the whole model lighting volume (256x256x4 A8R8G8B8, 1 MB) without DISCARD every frame
+  and rewrites a few 4x4x4 blocks; the lock allocated and zero-filled a 1 MB vector (`__bzero`
+  1.4%), copied the kept bytes into it (`lockBox` 3%), and the unlock copied it into a new
+  MTLBuffer (`newBufferWithBytes`, `copyToTexture` 6.2-6.9%). The occlusion-query polling
+  (`GetData`, `RB_HW_ReadOcclusionQuery`) was <0.1% at view A (session 13's 7% is gone; at the
+  light view D it is ~4% with `pthread_self` from `onRenderThread`, but there the render thread
+  waits 72% of the time: the engine's frame pacing), so it stays. The shader constants'
+  `setVertexBytes` copies (3.3%) are the D3D9 constant model's.
+- **The fix**: a lock of a level whose bytes are kept (last written through the GPU) returns the
+  kept buffer itself (no allocation, no copy in; the lock's data is uploaded from it at unlock),
+  and `copyToTexture` copies into a staging buffer per frame in flight (reused after the frame's
+  semaphore wait, grown as needed; a level over 4 MB, a streamed mip, gets its own buffer as
+  before) instead of a new MTLBuffer per upload. One 1 MB copy a frame is left (the GPU reads the
+  staging copy while the engine patches the next frame's).
+- **Measured**: `RB_PatchModelLighting` 2.4% (two runs), view A sampled 553/549 -> 577/582 fps.
+  bench_views.py --bots, alternating with 0a363601: reference 570/689/652/701/678/684/696/442 and
+  545/709/704/688/688/716/723/456, new 595/706/734/732/657/715/760/471 and
+  591/698/700/729/670/703/725/487 (view A +6%, overview +6%; the screen locked in all four).
+- **Checked**: screenshots of mp_nuked's views and the overviews of mp_array, mp_hanoi,
+  mp_kowloon, mp_villa, mp_radiation, mp_cracked and mp_mountain against two runs of 0a363601:
+  with the HUD masked the scene is the same (mp_hanoi and mp_cracked 0.00-0.03%; the rest the
+  score box and fps counter past the mask, mp_kowloon's rain, particles), so the lighting volume
+  is intact. `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`, mp_nuked's views with bots: no message.
+  ASan client (bots, the scripted player, 1-minute TDM over mp_nuked, mp_array, mp_cracked):
+  no report.
+
+Leftover 3 (frames not shown without vsync) is not measured: the screen was locked (above). To
+do with the screen unlocked and the user away: instrument (temporarily) the time from the input
+sample (`CL_CreateNewCommands`) through the frame's hand-off (`R_IssueRenderCommands`, per
+`s_backEndData` slot) and Present to the drawable's `presentedTime`, and count frames rendered
+without a drawable; then compare 3 drawables (now), 2, presenting from the render queue without
+the second queue's copy, and `com_maxfps` caps, and put the numbers to the user in plain words.
 
 Stage 3 (the pipeline cache):
 

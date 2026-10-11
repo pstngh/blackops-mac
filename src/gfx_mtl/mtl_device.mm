@@ -304,6 +304,8 @@ void MetalDevice::beginCommandBuffer() {
         // The one place a frame waits for the GPU: kFramesInFlight frames behind.
         dispatch_semaphore_wait(frameSem_, DISPATCH_TIME_FOREVER);
         frameOpen_ = true;
+        ++frameCount_;
+        stagingUsed_ = 0;
     }
     pool_ = objc_autoreleasePoolPush();
     cmd_ = [queue_ commandBuffer];
@@ -1128,11 +1130,28 @@ void MetalDevice::copyToTexture(id<MTLTexture> dst, UINT slice, UINT level, MTLO
                                 const void *bytes, UINT pitch, UINT imageBytes) {
     beginCommandBuffer();
     const NSUInteger len = (NSUInteger)imageBytes * size.depth;
-    id<MTLBuffer> staging = [mtl newBufferWithBytes:bytes length:len options:MTLResourceStorageModeShared];
+    // The frame's staging buffer (grown as needed: a replaced one lives on in the command
+    // buffers that read it); a level over 4 MB (streamed texture mips) gets its own.
+    static const NSUInteger kStagingMax = 4u << 20;
+    id<MTLBuffer> staging;
+    NSUInteger offset = 0;
+    if (len > kStagingMax) {
+        staging = [mtl newBufferWithBytes:bytes length:len options:MTLResourceStorageModeShared];
+    } else {
+        __strong id<MTLBuffer> &sb = staging_[frameCount_ % kFramesInFlight];
+        offset = (stagingUsed_ + 255) & ~(NSUInteger)255;
+        if (!sb || offset + len > sb.length) {
+            sb = [mtl newBufferWithLength:sb ? sb.length * 2 : kStagingMax options:MTLResourceStorageModeShared];
+            offset = 0;
+        }
+        staging = sb;
+        memcpy((unsigned char *)sb.contents + offset, bytes, len);
+        stagingUsed_ = offset + len;
+    }
     if (enc_) { [enc_ endEncoding]; enc_ = nil; }
     if (!blit_) blit_ = [cmd_ blitCommandEncoder];
-    [blit_ copyFromBuffer:staging sourceOffset:0 sourceBytesPerRow:pitch sourceBytesPerImage:imageBytes sourceSize:size
-                toTexture:dst destinationSlice:slice destinationLevel:level destinationOrigin:origin];
+    [blit_ copyFromBuffer:staging sourceOffset:offset sourceBytesPerRow:pitch sourceBytesPerImage:imageBytes
+               sourceSize:size toTexture:dst destinationSlice:slice destinationLevel:level destinationOrigin:origin];
 }
 
 // A textured rectangle from src into dst: StretchRect with scaling or a format change,

@@ -170,7 +170,13 @@ public:
     HRESULT unlockBox(UINT level);
     MetalSurface *surface(UINT face, UINT level);   // owned by the texture, counted with it
 private:
-    struct Pending { std::vector<unsigned char> data; UINT face = 0, level = 0; bool locked = false; };
+    // A lock's bytes: its own (data), or the level's kept bytes, locked in place (inKept).
+    struct Pending {
+        std::vector<unsigned char> data;
+        unsigned char *bytes = nullptr;
+        UINT face = 0, level = 0;
+        bool locked = false, inKept = false;
+    };
     MetalDevice *dev_;
     IUnknown *owner_;
     Kind kind_;
@@ -187,7 +193,8 @@ private:
     std::vector<MetalSurface *> surfaces_;    // created by surface(), released with the texture
     // A lock without DISCARD returns the level's contents (the engine patches part of the
     // model lighting volume every frame). Levels last written through the GPU keep their
-    // bytes here; others are read from the (shared) texture.
+    // bytes here, and a lock of one is that buffer itself (the 1 MB volume, each frame: no
+    // copy in, no new buffer); others are read from the (shared) texture.
     std::vector<std::vector<unsigned char>> kept_;   // [face * levels + level]
     std::vector<bool> written_;
     void upload(Pending &p);
