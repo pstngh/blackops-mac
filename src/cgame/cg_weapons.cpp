@@ -3783,6 +3783,45 @@ void __cdecl CalculateWeaponPostion_PositionToADS(cg_s *cgameGlob, playerState_s
     }
 }
 
+// kb_gunPlacement: first-person guns whose own animations hold them farther from the eye than the rest of their
+// kind (HANDOFF, Decisions session 32). The WWII Thompson's grip (tag_weapon) sits 14.2 units ahead of the eye,
+// 4.6 right and 5.8 down at idle, the MP40's 12.2, 3.7 and 4.5 (STG-44 and Type 100 alike), so the Thompson
+// looked ~15% smaller; it moves to the MP40's place, then 0.5 closer and 1 lower so its back end leaves the
+// screen (the user's pick of three). The offsets are in the view model's local axes (forward, left, up), added
+// before CG_CalculateWeaponMovement_LocalToWorld, and fade into the sights like cg_gun_fovcomp.
+static const struct
+{
+    const char *name;
+    float ofs[3];
+} cg_kbGunPlacement[] =
+{
+    { "thompson", { -2.5f, 0.9f, 0.3f } },
+};
+
+static void CG_KbGunPlacement(const cg_s *cgameGlob, float *origin)
+{
+    const char *name;
+    size_t nameLen;
+    float frac;
+    unsigned int i;
+
+    if ( !kb_gunPlacement->current.enabled )
+        return;
+    name = BG_GetWeaponVariantDef(BG_GetViewmodelWeaponIndex(&cgameGlob->predictedPlayerState))->szInternalName;
+    nameLen = strcspn(name, "_");
+    for ( i = 0; i < ARRAY_COUNT(cg_kbGunPlacement); ++i )
+    {
+        if ( strlen(cg_kbGunPlacement[i].name) == nameLen && !strncmp(name, cg_kbGunPlacement[i].name, nameLen) )
+        {
+            frac = 1.0f - cgameGlob->predictedPlayerState.fWeaponPosFrac;
+            origin[0] += cg_kbGunPlacement[i].ofs[0] * frac;
+            origin[1] += cg_kbGunPlacement[i].ofs[1] * frac;
+            origin[2] += cg_kbGunPlacement[i].ofs[2] * frac;
+            return;
+        }
+    }
+}
+
 void __cdecl CG_CalculateWeaponMovement_ClientSpecific(cg_s *cgameGlob, GfxScaledPlacement *placement, float *angles)
 {
     if ( !placement
@@ -3790,6 +3829,7 @@ void __cdecl CG_CalculateWeaponMovement_ClientSpecific(cg_s *cgameGlob, GfxScale
     {
         __debugbreak();
     }
+    CG_KbGunPlacement(cgameGlob, placement->base.origin);
     CG_CalculateWeaponMovement_LocalToWorld(cgameGlob, placement->base.origin);
     CG_CalculateWeaponMovement_Landing(cgameGlob, placement->base.origin);
     CG_CalculateWeaponMovement_SaveOrigin(cgameGlob, placement->base.origin);

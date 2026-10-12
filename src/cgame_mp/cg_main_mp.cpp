@@ -171,6 +171,7 @@ const dvar_s *cg_drawVersionX;
 const dvar_s *cg_drawVersionY;
 const dvar_s *kb_noVersion;
 const dvar_s *kb_cleanHud;
+const dvar_s *kb_gunPlacement;
 const dvar_s *cg_readTitleStorageLocally;
 const dvar_s *snd_drawInfo;
 const dvar_s *snd_drawSort;
@@ -616,6 +617,12 @@ void __cdecl CG_RegisterDvars()
         1,
         1u,
         "Hide the HUD during play but the crosshair: minimap, score, ammo, kill feed, popups, names and markers");
+    // The user's change (HANDOFF, Decisions session 32); 0 gives the original game.
+    kb_gunPlacement = _Dvar_RegisterBool(
+        "kb_gunPlacement",
+        1,
+        1u,
+        "The first-person WWII Thompson sits where the MP40 does (its animations hold it farther away)");
     cg_readTitleStorageLocally = _Dvar_RegisterBool(
                                                                  "cg_readTitleStorageLocally",
                                                                  0,

@@ -387,6 +387,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   them; body, arms and legs 1x. Everyone's guns, the bots' too; shotguns, the knife, explosives and killstreak or
   vehicle guns keep Black Ops' damage; walls still take their share. Checked in play (Decisions session 32). The
   game folder has it (make_portable.sh at 3622e5b3, the user's request; the DLC zone rewritten); pushed.
+- **The Thompson held closer** (session 32, the user: "does the thompson (first person view model) have the same
+  size as other weapons? it looks smaller"): `kb_gunPlacement`, archived, default 1. Its model is not small (the
+  same height as its third-person model); its own animations hold it ~5 cm farther from the eye than the MP40,
+  STG-44 and Type 100 (and much farther than the AK-47/AK74u/M16/Galil), so it looked ~15% smaller. Now it sits
+  where the MP40 does, then a little closer and lower so its back end is off screen (the user picked that from
+  three pictures). Only the player's own first-person gun moves. Checked with screenshots and a measurement
+  (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -601,7 +608,8 @@ the user was told would be lost: the 5 maps (so no Nacht-as-multiplayer-map late
 weapons (dropped earlier anyway), zombies content, rebuilding the guns file from scratch.
 
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
-Installed in the game folder and pushed at the user's request. The user also asked how recoil and spread compare
+Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
+user's request; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1112,6 +1120,32 @@ not cloned). Multiplayer uses the `dm*` lines.
   and kick, MoHAA's damage, or both; they took the damage only.
 - `listzone` now prints each weapon's fire type, bolt action, hip spread (stand/ducked/prone min-max, fire and move
   add, decay), ADS spread, move speed, and hip and ADS view kick and gun kick (db_save_tool.cpp).
+
+**The Thompson held closer (`kb_gunPlacement`)**, the user's question whether the first-person Thompson is smaller than
+the other guns (Status).
+- **Measured** (temporary prints, removed): each gun's first-person and third-person model bounds (XModel mins/maxs,
+  via listzone) and, in the game, where the view model's `tag_weapon` (the grip) and `tag_flash` (the muzzle) sit
+  from the eye at idle (CG_DObjGetWorldTagPos in CG_AddViewWeapon, in refdef view axes). A first answer compared the
+  bounds with the real guns' lengths ("built ~80% of real size"); the user asked whether that was seen or guessed,
+  and it doesn't hold: view models often lack or fold the stock, Black Ops' own include hidden attachment parts, and
+  the Thompson's view model is as high as its world model (length 0.75 of it, like BO's Kiparis 0.71, MAC-11 0.77,
+  Spectre and PM63 0.79). What differs is the hold: grip forward/left/up from the eye, Thompson 14.2 / -4.6 / -5.8,
+  MP40 12.2 / -3.7 / -4.5, STG-44 12.1 / -3.7 / -6.2, Type 100 12.3 / -3.1 / -5.0, MP5K 15.4, Uzi 15.7, Spectre
+  11.1, Kiparis 12.9, AK74u 7.8, AK-47 8.3, M16 8.0, Galil 7.1 (forward). It comes from the gun's own animations
+  (Treyarch's, unchanged by the port). The user's game hides the arms (`cg_drawArms 0`).
+- **How**: `CG_KbGunPlacement` (cg_weapons.cpp), called in CG_CalculateWeaponMovement_ClientSpecific before
+  LocalToWorld, adds a per-gun offset in the view model's local axes (forward, left, up), faded by
+  (1 - fWeaponPosFrac) like cg_gun_fovcomp so sights would still line up with ADS on; matched by the variant name's
+  first token. The Thompson's: (-2.0, 0.9, 1.3) puts its grip on the MP40's (measured 12.19 / -3.56 / -4.68 against
+  12.19 / -3.74 / -4.43); the user saw it and asked to move it "back just a little bit so i dont see its back side";
+  three variants tried with `cg_gun_x`/`cg_gun_z` (same local axes): 1 closer; 1 closer and 0.5 lower; 0.5 closer and
+  1 lower; the user picked the last: (-2.5, 0.9, 0.3). Black Ops' own SMGs were shown to the user (most are short
+  guns held far out whose back ends show too); none changed. Only the drawn first-person gun moves: aim, shots and
+  third person are unchanged.
+- **Checked**: screenshots (the chosen place matches the cg_gun preview), the ASan client holding, firing,
+  reloading and sprinting with the Thompson and toggling the dvar: no report. check_file.py natively and `--i386`,
+  audit_splitlocals.py 0. A test window ran once while the user was playing (their game had started; pgrep was
+  printed but not acted on): check before every run, and wait (a background loop on pgrep) while they play.
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
