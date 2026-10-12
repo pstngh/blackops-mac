@@ -402,9 +402,9 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   standing and crouched; prone keeps each gun's own crawl pose. The user chose all of them over only the Thompson.
   Checked (Decisions session 32). The game folder has it (make_portable.sh at 806f09a7, the user's request); pushed.
 - **Classes 1-5 only; sniper scopes** (session 32, the user: "only equip me with class 1-5 + my chosen class if its
-  not in 1-5, not all 10" and "i want a scope on teh snipers"): `kb_allClassGuns` now adds the primaries and
-  secondaries of custom classes 1-5 on top of the chosen class's loadout (a class 6-10 or a default class picked still
-  comes with its own guns). New `kb_sniperScope`, archived, default 1: with kb_noAds on, the scoped sniper rifles
+  not in 1-5, not all 10", then "only equip me with the secondary (pistol) of my chosen class, not 1-5", and "i want
+  a scope on teh snipers"): `kb_allClassGuns` now adds only the primaries of custom classes 1-5 on top of the chosen
+  class's loadout, whose pistol is the only one (a class 6-10 or a default class picked still comes with its own guns). New `kb_sniperScope`, archived, default 1: with kb_noAds on, the scoped sniper rifles
   (L96A1, WA2000, Dragunov, PSG1, WWII Scoped Kar98k) look through their scope with the aim button (the user's MOUSE2
   is `+toggleads_throw`); everything else still fires from the hip, the iron-sighted Kar98k and Arisaka too. Checked
   (Decisions session 32).
@@ -624,8 +624,8 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
 user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
-(`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5 only and the sniper scopes
-(`kb_allClassGuns`, `kb_sniperScope`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+(`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
+scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1184,7 +1184,10 @@ the other guns (Status).
   0-9; giveLoadout gives the chosen class first, so a chosen class 6-10 (`prestige1`-`prestige5` in changeclass) or a
   default class comes on top. Checked (temporary print in PlayerCmd_giveWeapon, removed): classes 1-5 given AK74u,
   MP5K, AK-47, L96A1, FAMAS with statWriteDDL, class 7 picked (`changeclass prestige2,0`; `custom7` isn't a class and
-  leaves the player unspawned): its own loadout, then exactly those five primaries and their secondaries.
+  leaves the player unspawned): its own loadout, then exactly those five primaries and their secondaries. Then the
+  user dropped the secondaries of 1-5: the loop gives primaries only. Checked the same way: class 7 gave its knife,
+  M1911 and Olympia, then the five primaries, no other pistol; class 2 (after `kill`) its own loadout and the other
+  four primaries (its MP5K not twice).
   (statWriteDDL to `customclass6`-`10` did nothing: the DDL names classes 6-10 otherwise; not looked up.)
 - **Scopes**: BG_KbNoAds (bg_weapons.cpp) no longer blocks ADS while the held weapon (ps->weapon) is one of the
   scoped sniper rifles, by the name's first token (l96a1, wa2000, dragunov, psg1, scopedkar98k; any attachment).

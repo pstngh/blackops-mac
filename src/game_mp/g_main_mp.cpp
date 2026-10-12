@@ -2098,7 +2098,7 @@ void G_RegisterDvars()
         "kb_allClassGuns",
         1,
         1u,
-        "Human players also carry the primary and secondary guns of custom classes 1-5");
+        "Human players also carry the primary guns of custom classes 1-5");
     kb_mohaaDamage = _Dvar_RegisterBool(
         "kb_mohaaDamage",
         1,

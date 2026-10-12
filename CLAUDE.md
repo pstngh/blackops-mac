@@ -104,8 +104,8 @@ crouch, `toggleprone` toggles crouch), `kb_noHitMarker` (no hit marker around th
 sound stays), `kb_cacButton` (the main menu's THEATER button is CREATE A CLASS; read at startup), `kb_cleanHud` (only the
 crosshair during play: no minimap, score, ammo, kill feed, popups, names or hints; the FPS counter, menus,
 scoreboard and round outcome stay), `kb_noCountdown` (no "Match begins in" countdown at a match's or round's start:
-players move as soon as they spawn), `kb_allClassGuns` (human players also carry the primaries, then the secondaries,
-of custom classes 1-5 on top of the chosen class, up to the 15 held weapons; not in gun game and the other wager modes), `kb_mohaaDamage`
+players move as soon as they spawn), `kb_allClassGuns` (human players also carry the primaries of custom classes 1-5 on
+top of the chosen class, whose pistol is the only one, up to the 15 held weapons; not in gun game and the other wager modes), `kb_mohaaDamage`
 (rifles, SMGs, machine guns and pistols do the closest MoHAA gun's damage at any distance, SMGs 25, assault rifles
 27, ...; headshots 4x, body, arms and legs 1x; bots' guns too; shotguns keep theirs), `kb_gunPlacement` (the
 first-person WWII Thompson is held closer, where the MP40 is, a little lower; a table in cg_weapons.cpp),

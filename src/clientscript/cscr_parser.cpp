@@ -1168,10 +1168,10 @@ static const ScrKbPatch scrKbPatches[] =
         "level.inPrematchPeriod = true;",
         "level.inPrematchPeriod = true; if ( GetDvarInt( \"kb_noCountdown\" ) ) level.prematchPeriod = 0;"
     },
-    // kb_allClassGuns: a human player also gets the primaries, then the secondaries, of custom classes 1-5
-    // (with their attachments and camo; a gun held already or past the 15 held weapons is left out), after
-    // any class's loadout, so a class 6-10 or a default class picked comes on top, but a game mode's own
-    // (gun game and the other wager modes)...
+    // kb_allClassGuns: a human player also gets the primaries of custom classes 1-5 (with their attachments
+    // and camo; a gun held already or past the 15 held weapons is left out; the secondary is the chosen
+    // class's only), after any class's loadout, so a class 6-10 or a default class picked comes on top, but
+    // a game mode's own (gun game and the other wager modes)...
     {
         "maps/mp/gametypes/_class.gsc",
         "self cac_selector();",
@@ -1182,12 +1182,11 @@ static const ScrKbPatch scrKbPatches[] =
     {
         "maps/mp/gametypes/_class.gsc",
         "giveLoadout( team, class )",
-        "kbGiveAllClassGuns() { self cac_getdata(); for ( slot = 0; slot < 2; slot++ ) { for ( i = 0; i < 5; i++ ) { "
+        "kbGiveAllClassGuns() { self cac_getdata(); for ( i = 0; i < 5; i++ ) { "
         "if ( !isDefined( self.custom_class[i] ) ) continue; "
-        "if ( slot == 0 ) { weapon = self.custom_class[i][\"primary\"]; options = self.custom_class[i][\"primary_weapon_options\"]; } "
-        "else { weapon = self.custom_class[i][\"secondary\"]; options = self.custom_class[i][\"secondary_weapon_options\"]; } "
+        "weapon = self.custom_class[i][\"primary\"]; options = self.custom_class[i][\"primary_weapon_options\"]; "
         "if ( !isDefined( weapon ) || weapon == \"\" || weapon == \"weapon_null_mp\" || self hasWeapon( weapon ) ) continue; "
-        "if ( !isDefined( options ) ) options = 0; self GiveWeapon( weapon, 0, int( options ) ); } } }\n"
+        "if ( !isDefined( options ) ) options = 0; self GiveWeapon( weapon, 0, int( options ) ); } }\n"
         "giveLoadout( team, class )"
     },
 };
