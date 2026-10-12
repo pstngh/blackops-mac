@@ -385,7 +385,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   semi-automatic rifles and the WA2000, Dragunov and PSG1 48 (M1 Garand), Kar98k and Arisaka 90 (Kar98k), L96A1 and
   Scoped Kar98k 106 (Springfield), pistols 30 (Colt); headshots (helmet, head, neck) 4x, so one kills with any of
   them; body, arms and legs 1x. Everyone's guns, the bots' too; shotguns, the knife, explosives and killstreak or
-  vehicle guns keep Black Ops' damage; walls still take their share. Checked in play (Decisions session 32).
+  vehicle guns keep Black Ops' damage; walls still take their share. Checked in play (Decisions session 32). The
+  game folder has it (make_portable.sh at 3622e5b3, the user's request; the DLC zone rewritten); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -600,9 +601,11 @@ the user was told would be lost: the 5 maps (so no Nacht-as-multiplayer-map late
 weapons (dropped earlier anyway), zombies content, rebuilding the guns file from scratch.
 
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
-Not installed in the game folder or pushed yet: ask. The user also asked how recoil and spread compare with MoHAA's
-(answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they chose only the
-damage. Next: ask how the damage plays; then whether they have more fixes; then offer the list below again.
+Installed in the game folder and pushed at the user's request. The user also asked how recoil and spread compare
+with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
+chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
+another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
+then whether they have more fixes; then offer the list below again.
 
 **Session 31: no start countdown and every custom class's guns at once: done** (the user's requests; Status,
 Decisions session 31). Installed in the game folder and pushed at the user's request. Earlier in session 31 the user tried item 4 below
