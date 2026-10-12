@@ -110,11 +110,13 @@ top of the chosen class, whose pistol is the only one, up to the 15 held weapons
 27, ...; headshots 4x, body, arms and legs 1x; bots' guns too; shotguns keep theirs), `kb_gunPlacement` (the
 first-person WWII Thompson is held closer, where the MP40 is, a little lower; a table in cg_weapons.cpp),
 `kb_wwiiGunMovement` (the first-person WWII guns move like Black Ops' while walking: no drop, a 2 degree tilt),
-`kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in). Tests
+`kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in),
+`kb_noRoundEndWait` (no outcome screen delay between rounds or after a match and no 30 s scoreboard: the next round
+or map at once). Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own
-damage `+set kb_mohaaDamage 0`; a scratch profile keeps whatever a run set
+damage `+set kb_mohaaDamage 0`, of the round/match outcome screens and scoreboard `+set kb_noRoundEndWait 0`; a scratch profile keeps whatever a run set
 (they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`; `viewpos` prints the
 eye position (60 above the feet standing, 40 crouched, 11 prone). Hits on demand: with `+set
 developer_script 1 +set scr_testclients 4 +set sv_botsAllowMovement 0`, `set scr_playerwarp enemies_host`

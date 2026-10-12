@@ -445,6 +445,7 @@ extern const dvar_t *kb_noHitMarker;
 extern const dvar_t *kb_noCountdown;
 extern const dvar_t *kb_allClassGuns;
 extern const dvar_t *kb_mohaaDamage;
+extern const dvar_t *kb_noRoundEndWait;
 extern const dvar_t *g_speed;
 extern const dvar_t *g_knockback;
 extern const dvar_t *g_maxDroppedWeapons;

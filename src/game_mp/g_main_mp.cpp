@@ -128,6 +128,7 @@ const dvar_t *kb_noHitMarker;
 const dvar_t *kb_noCountdown;
 const dvar_t *kb_allClassGuns;
 const dvar_t *kb_mohaaDamage;
+const dvar_t *kb_noRoundEndWait;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2104,6 +2105,11 @@ void G_RegisterDvars()
         1,
         1u,
         "Guns hit as hard as Medal of Honor: Allied Assault's, at any distance: headshots 4x, body, arms and legs 1x");
+    kb_noRoundEndWait = _Dvar_RegisterBool(
+        "kb_noRoundEndWait",
+        1,
+        1u,
+        "No waiting at a round's or match's end: no outcome screen delay or scoreboard, the next round or map at once");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

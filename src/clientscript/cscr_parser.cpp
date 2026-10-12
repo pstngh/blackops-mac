@@ -1189,6 +1189,22 @@ static const ScrKbPatch scrKbPatches[] =
         "if ( !isDefined( options ) ) options = 0; self GiveWeapon( weapon, 0, int( options ) ); } }\n"
         "giveLoadout( team, class )"
     },
+    // kb_noRoundEndWait: no waiting at a round's or match's end: the outcome screen's delays (roundEndWait:
+    // the round end, the side switch, the match end with its match bonus, which is still handed out)...
+    {
+        "maps/mp/gametypes/_globallogic.gsc",
+        "roundEndWait( defaultDelay, matchBonus )",
+        "roundEndWait( defaultDelay, matchBonus ) { if ( GetDvarInt( \"kb_noRoundEndWait\" ) ) { "
+        "if ( matchBonus ) level notify ( \"give_match_bonus\" ); level notify ( \"round_end_done\" ); return; } "
+        "kbRoundEndWait( defaultDelay, matchBonus ); }\n"
+        "kbRoundEndWait( defaultDelay, matchBonus )"
+    },
+    // ...and the scoreboard after a match (scr_intermission_time, 30 s) before the next map
+    {
+        "maps/mp/gametypes/_globallogic.gsc",
+        "wait GetDvarFloat( #\"scr_intermission_time\" );",
+        "if ( !GetDvarInt( \"kb_noRoundEndWait\" ) ) wait GetDvarFloat( #\"scr_intermission_time\" );"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)

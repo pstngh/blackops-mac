@@ -408,6 +408,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   (L96A1, WA2000, Dragunov, PSG1, WWII Scoped Kar98k) look through their scope with the aim button (the user's MOUSE2
   is `+toggleads_throw`); everything else still fires from the hip, the iron-sighted Kar98k and Arisaka too. Checked
   (Decisions session 32). The game folder has both (make_portable.sh at f91de0c8, the user's request); pushed.
+- **No waiting at a round's or match's end** (session 32, the user: "can you remove the "wait" at the end of a round? i
+  dont care about the score and stuff"): `kb_noRoundEndWait`, archived, default 1. The outcome screen's delays
+  (~5 s between rounds, the side switch, ~7 s after a match) and the 30 s scoreboard before the next map are gone: the
+  next round starts, or the next map loads, at once (measured: 0.07 s between S&D rounds, 0.1 s from a TDM time limit
+  to the map rotation; the load itself ~3-4.5 s). The match bonus and stats are still handled. Checked (Decisions
+  session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -625,7 +631,8 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
 user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
 (`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
-scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
+scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. Then no waiting at a
+round's or match's end (`kb_noRoundEndWait`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1205,6 +1212,23 @@ Finder information, or similar detritus not allowed") although build.sh deleted 
 (three installs earlier that day had passed). The bundle is now put together and signed in the script's temporary
 folder (outside the File Provider) and copied into the game folder with `ditto`; the tag that comes back afterwards
 doesn't break `codesign --verify` or launching (checked: the installed app verifies; a renamed copy opened and ran).
+
+**No waiting at a round's or match's end (`kb_noRoundEndWait`)**, the user's request (Status).
+- **The waits** (_globallogic.gsc, dumped with `listzone - rawfile`): every round-end display goes through
+  `roundEndWait( delay, matchBonus )`: displayRoundEnd (level.roundEndDelay, 5 s), displayRoundSwitch
+  (level.halftimeRoundEndDelay) and displayGameEnd (level.postRoundTime, 7 s, the match bonus notified halfway),
+  each also waiting for players' notifies (`doingNotify`) in 0.5 s steps; then, after a match on PC, `wait
+  scr_show_unlock_wait` (0.1 s) and `wait scr_intermission_time` (30 s, the scoreboard) before `exitLevel( false )`.
+- **How** (two scrKbPatches in cscr_parser.cpp): `roundEndWait` is wrapped (the original renamed kbRoundEndWait) so
+  that with the dvar on it notifies `give_match_bonus` (when it would) and `round_end_done` at once and returns; the
+  scoreboard's wait is skipped. The final killcam was already gone (kb_noDeathCam). The outcome texts start but the
+  map change or map_restart follows within the frame.
+- **Checked** (a timestamping runner on the release client's output; scratch profiles): TDM, 1-minute limit, 2 test
+  bots: the match ended at 67.8 s (the after-action-report menu's load, whose expression errors are the menu file's
+  own), `map_rotate` at 67.9 s, the next map's game at 72.4 s. S&D, 15 s rounds, round limit 2, a side switch each
+  round: round 2 began 0.07 s after round 1 ended (screenshots: the player in round 1, then at round 2's spawn, no
+  outcome screen), `map_rotate` right at round 2's end, three maps in a row. The ASan client (S&D, 30 s rounds, 3 test
+  bots, `kb_godMode 0`): 3 round restarts and 2 map rotations, no report. check_file.py natively and `--i386`.
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
