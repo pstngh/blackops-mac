@@ -125,6 +125,8 @@ const dvar_t *kb_noDeathCam;
 const dvar_t *kb_noLaunchers;
 const dvar_t *kb_noKillstreaks;
 const dvar_t *kb_noHitMarker;
+const dvar_t *kb_noCountdown;
+const dvar_t *kb_allClassGuns;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2086,6 +2088,16 @@ void G_RegisterDvars()
         1,
         1u,
         "No hit marker around the crosshair when a player hits someone (the hit sound stays)");
+    kb_noCountdown = _Dvar_RegisterBool(
+        "kb_noCountdown",
+        1,
+        1u,
+        "No countdown at the start of a match or round: players move as soon as they spawn");
+    kb_allClassGuns = _Dvar_RegisterBool(
+        "kb_allClassGuns",
+        1,
+        1u,
+        "Human players also carry the primary and secondary guns of all their custom classes");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

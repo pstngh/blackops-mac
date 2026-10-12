@@ -1274,7 +1274,10 @@ MessageWindow *__cdecl Con_GetDestWindow(int localClientNum, print_msg_dest_t de
     {
         __debugbreak();
     }
-    return (MessageWindow *)&con.messageBuffer[localClientNum].gamemsgText[2][52 * dest + 1892];
+    // The decompile's &gamemsgText[2][52 * dest + 1892] is gamemsgWindows[dest - CON_DEST_GAME_FIRST] with
+    // i386's 52-byte MessageWindow; the 64-bit one is larger, so GAME2/GAME3 (bold game text, subtitles)
+    // read a window straddling two (a garbage messages pointer, then a crash or a stray write).
+    return &con.messageBuffer[localClientNum].gamemsgWindows[dest - CON_DEST_GAME_FIRST];
 }
 
 void __cdecl Con_UpdateNotifyLine(int localClientNum, unsigned int channel, bool lineFeed, int flags)

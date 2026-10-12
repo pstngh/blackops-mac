@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 30)
+## Status (2026-10-11, session 31)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -364,6 +364,19 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   sprinting bot is drawn 50-75 ms behind the server, as in the original). Bodies still go when 4 newer ones
   exist (the game's limit, MAX_CLIENT_CORPSES 4). The game folder has it (make_portable.sh at 2012ed90, the
   user's request; the DLC zone rewritten, the shader library step still stops at the missing Metal Toolchain).
+- **No start countdown; every custom class's guns at once** (session 31, the user: "remove the game start
+  coutndown" and "let me choose the class, then after i choose start the game automatically. and also equip me
+  with ALL custom classes", then, asked, "carry all their guns at once"): `kb_noCountdown` (no "MATCH BEGINS IN"
+  and no frozen players at a match's or round's start: a player picks a class and plays at once) and
+  `kb_allClassGuns` (a human player spawns with the chosen class as before plus the primaries, then the
+  secondaries, of all 10 custom classes, each with its attachments and camo, a gun held already left out; weapon
+  switching cycles through them all; bots don't get them; not in gun game and the other wager modes), both
+  archived, default 1. Checked in play (Decisions session 31): 10 classes with different guns gave 14 guns (10
+  primaries, 4 distinct secondaries), cycled through with weapnext, again after a respawn. Fixed on the way: the
+  15 clip slots overflowed and crashed the server in `giveWeapon` (two slots were held by the frag's and the
+  tactical's ammo, which kb_noGrenades never gives), and an old 64-bit bug in the console's game message windows
+  (bold game text and subtitles used a window straddling two: a garbage pointer, then a crash or a stray write;
+  every build of this port had it). Not in the game folder yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -552,10 +565,13 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**The user's bug report (end of session 29): fixed in session 30** ("when i kill bots, they disapear
-INSTANTLY, AND/OR they teleport like a meter away"; Status, Decisions session 30). Installed in the game
-folder and pushed at the user's request. Next: ask the user whether they have more fixes, then offer the
-list below again.
+**Session 31: no start countdown and every custom class's guns at once: done** (the user's requests; Status,
+Decisions session 31). Not installed, not pushed: ask. Earlier in session 31 the user tried item 4 below
+(attachments for the WWII guns: a suppressor on the Thompson), then asked to undo it, which was done (nothing of it
+remains); asked what the game itself has, the user said to "leave as is for now". Their answers for when it comes
+back: only attachments that come with the game; the Thompson's suppressed sound would be the Black Ops one
+(`wpn_thompson_silencer_fire_*`, which plays the AUG's suppressed recordings). Next: ask the user whether they
+have more fixes, then offer the list below again. Session 30's bot-body fix is installed and pushed.
 
 **The user's list for later** (session 28: offered as the menu of what to do next, the user answered
 "remember these we'll come back to them. i wanna fix a few more things first"; ask before each, in plain
@@ -817,6 +833,11 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 31: in one test with `kb_noCountdown 0` the player, standing still, was 1200 units away 16 s later
+(a respawn? the team balance of `teamchangeGracePeriod` moving the only human?); not looked at. The
+"CG_SetWeaponHidePartBits: No such bone tag" errors (tag_brass2, tag_stock, tag_extended_clip, multiplayer guns'
+hideTags their models lack) print at each switch to those guns; only `developer` shows them on screen.
+
 Seen in session 30 (the body fix, Decisions session 30): the decompile's `(int)(x + 9.313225746154785e-10)`
 is the original's rounding conversion, and only the network coordinates round now; the ~200 other sites
 (dvar and HUD colours, `cl_input_mp.cpp`'s usercmd moves and selected location, the `-86` net field's writer
@@ -1011,6 +1032,47 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 31)
+
+**No start countdown (`kb_noCountdown`) and every custom class's guns (`kb_allClassGuns`)**, the user's requests
+(Status). Both are script patches (cscr_parser.cpp's scrKbPatches) read when the scripts run, dvars registered in
+g_main_mp.cpp (archived, default 1).
+- **The countdown** is _globallogic.gsc's prematch period: `level.prematchPeriod` (the "prematchperiod" tweakable,
+  15 s, then +-2 s at random above 2 s) runs `matchStartTimer` ("MATCH BEGINS IN", the grey mpIntro vision) while
+  spawned players are frozen; it starts at the map's start, so it runs while a player sits in the team and class
+  menus. The patch zeroes it where Callback_StartGameType sets `level.inPrematchPeriod` (every round), so
+  `prematchPeriod()` takes its no-countdown branch: vision restored, players unfrozen at once. The grace period
+  (late spawns in round modes) is untouched.
+- **The guns**: giveLoadout (_class.gsc), after any class's loadout (custom or default) and before
+  `cac_selector`, calls a new `kbGiveAllClassGuns` (patched in before giveLoadout) for a player that is no bot
+  and no test client, unless the game mode gives its own loadout (`level.giveCustomLoadout`: gun game, one in the
+  chamber, sharpshooter, sticks and stones). It loads the custom classes (`cac_getdata`: 0-4, and 5-9 in an online
+  game, which `map` games are) and gives every class's primary, then every class's secondary, with their weapon
+  options (camo), skipping guns held already; kb_noLaunchers and kb_noDualWield apply as in giveWeapon. The chosen
+  class's primary stays the spawn weapon; weapnext cycles through all.
+- **Limits**: 15 held weapons, 15 clips and 15 ammo pools a player. The first test crashed the server in
+  BG_AddAmmoToClip (null clip: "Tried to add ammo ... no free available clips", which the original asserts and then
+  writes through): the class script sets the frag's and the tactical's clips (SetWeaponAmmoClip) after giving them,
+  and kb_noGrenades never gives them, so two clip slots held ammo for weapons nobody had ("found ammo clip 2 that
+  we do not have a weapon for"). Now SetWeaponAmmoClip/Stock skip a weapon a kb_* dvar blocks that the player
+  doesn't hold, and giveWeapon leaves out a weapon whose clip or ammo pool has no slot (a developer print), which
+  makes any number of gives safe.
+- **The console's game message windows** (cl_console.cpp Con_GetDestWindow): the decompile's
+  `&gamemsgText[2][52 * dest + 1892]` is `gamemsgWindows[dest - CON_DEST_GAME_FIRST]` with i386's 52-byte
+  MessageWindow; on 64-bit the window is larger, so GAME2/GAME3 (bold game text, subtitles) got a window starting
+  inside the previous one: its `messages` pointer was half of one field and half of the next window's `lines`
+  (fault address 0x640199b00000000c), and Con_UpdateMessage crashed or wrote through it. Seen once in this
+  session's tests (a print at the spawn); every 64-bit build had it.
+- **Checked** (release client, listen server on mp_nuked, scratch profiles, KB_SCREENSHOT): with
+  `kb_noCountdown 0` and the class picked 1 s after joining, "MATCH BEGINS IN 12" and the player frozen (same
+  `viewpos` after a second of +forward); with 1 the clock running at once and the player walking. Ten classes set
+  with `statWriteDDL` to ten different primaries (Thompson, MP5K, L96A1, AK-47, SPAS-12, MP40, Uzi, FN FAL,
+  WA2000, STG-44) and three secondaries: weapnext went through those and the CZ75, M1911, Makarov and ASP (the
+  M72 LAW of one class came as the AK-47, held already), the same after `kill` and the respawn; with
+  `kb_allClassGuns 0` only the class's Thompson and ASP. Two more release runs and the ASan client (the whole
+  sequence, a death and respawn): no crash or report. check_file.py natively and `--i386`, audit_splitlocals.py 0,
+  gen_db_save.py `--check`. Not tried: a round-based mode's later rounds, managed bots (the script skips them).
 
 ## Decisions (session 30)
 

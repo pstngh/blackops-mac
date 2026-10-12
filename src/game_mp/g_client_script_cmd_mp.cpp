@@ -308,6 +308,29 @@ int __cdecl BG_PlayerWeaponSetBlockPickupWeapon(playerState_s *ps, unsigned int 
     return 1;
 }
 
+// A weapon a kb_* dvar keeps from players (G_GivePlayerWeapon refuses it) and the player doesn't hold:
+// setting its ammo would take one of the 15 clip and 15 ammo slots for nothing (the class script sets
+// the frag's and the tactical's after giving them).
+static bool G_KbBlockedWeaponNotHeld(const playerState_s *ps, unsigned int weaponIndex)
+{
+    return (G_KbNoGrenadeWeapon(weaponIndex) || G_KbNoLauncherWeapon(weaponIndex) || G_KbNoDualWieldWeapon(weaponIndex))
+        && !BG_PlayerHasWeapon(ps, weaponIndex);
+}
+
+// The weapon's clip and ammo pool are the player's already or have a free slot (index 0) of the 15 each:
+// a give without one wrote through a null clip in BG_AddAmmoToClip (kb_allClassGuns gives many guns).
+static bool G_WeaponAmmoFits(playerState_s *ps, unsigned int weaponIndex)
+{
+    int clipIndex;
+    int ammoIndex;
+
+    clipIndex = BG_ClipForWeapon(weaponIndex);
+    ammoIndex = BG_AmmoForWeapon(weaponIndex);
+    if ( clipIndex && !BG_GetAmmoClip(ps, clipIndex) && !BG_GetAmmoClip(ps, 0) )
+        return 0;
+    return !ammoIndex || BG_GetAmmoPool(ps, ammoIndex) || BG_GetAmmoPool(ps, 0);
+}
+
 void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
 {
     const char *v1; // eax
@@ -398,6 +421,11 @@ void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
             return;
         weaponModel = 0;
         hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
+    }
+    if ( !hadWeapon && !G_WeaponAmmoFits(&pSelf->client->ps, weaponIndex) )
+    {
+        Com_DPrintf(17, "giveWeapon: no free clip or ammo slot for %s\n", BG_WeaponName(weaponIndex));
+        return;
     }
     if ( G_GivePlayerWeapon(&pSelf->client->ps, weaponIndex, weaponModel, weaponOptions) )
     {
@@ -4813,6 +4841,8 @@ void __cdecl PlayerCmd_SetWeaponAmmoClip(scr_entref_t entref)
     weapName = Scr_GetString(0, SCRIPTINSTANCE_SERVER);
     ammoCount = Scr_GetInt(1u, SCRIPTINSTANCE_SERVER);
     weapIndex = G_GetWeaponIndexForName(weapName);
+    if ( weapIndex && G_KbBlockedWeaponNotHeld(&pSelf->client->ps, weapIndex) )
+        return;
     if ( weapIndex )
     {
         clipIndex = BG_ClipForWeapon(weapIndex);
@@ -4898,6 +4928,8 @@ void __cdecl PlayerCmd_SetWeaponAmmoStock(scr_entref_t entref)
     newAmmoCnt = Scr_GetInt(1u, SCRIPTINSTANCE_SERVER);
     weapIdx = G_GetWeaponIndexForName(weapName);
     ps = &pSelf->client->ps;
+    if ( weapIdx && G_KbBlockedWeaponNotHeld(ps, weapIdx) )
+        return;
     if ( weapIdx )
     {
         if ( BG_WeaponIsClipOnly(weapIdx) )

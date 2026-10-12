@@ -1161,6 +1161,34 @@ static const ScrKbPatch scrKbPatches[] =
         "self.hud_damagefeedback.alpha = 1;",
         "if ( !GetDvarInt( \"kb_noHitMarker\" ) ) self.hud_damagefeedback.alpha = 1;"
     },
+    // kb_noCountdown: no prematch period ("Match begins in", everyone frozen) at a match's or round's
+    // start (set before its random +-2 s, which applies above 2 s only)
+    {
+        "maps/mp/gametypes/_globallogic.gsc",
+        "level.inPrematchPeriod = true;",
+        "level.inPrematchPeriod = true; if ( GetDvarInt( \"kb_noCountdown\" ) ) level.prematchPeriod = 0;"
+    },
+    // kb_allClassGuns: a human player also gets the primaries, then the secondaries, of all ten custom
+    // classes (with their attachments and camo; a gun held already or past the 15 held weapons is left
+    // out), after any class's loadout but a game mode's own (gun game and the other wager modes)...
+    {
+        "maps/mp/gametypes/_class.gsc",
+        "self cac_selector();",
+        "if ( GetDvarInt( \"kb_allClassGuns\" ) && !isDefined( level.giveCustomLoadout ) && !self is_bot() && !self istestclient() ) "
+        "self kbGiveAllClassGuns(); self cac_selector();"
+    },
+    // ...the function, put before giveLoadout
+    {
+        "maps/mp/gametypes/_class.gsc",
+        "giveLoadout( team, class )",
+        "kbGiveAllClassGuns() { self cac_getdata(); for ( slot = 0; slot < 2; slot++ ) { for ( i = 0; i < 10; i++ ) { "
+        "if ( !isDefined( self.custom_class[i] ) ) continue; "
+        "if ( slot == 0 ) { weapon = self.custom_class[i][\"primary\"]; options = self.custom_class[i][\"primary_weapon_options\"]; } "
+        "else { weapon = self.custom_class[i][\"secondary\"]; options = self.custom_class[i][\"secondary_weapon_options\"]; } "
+        "if ( !isDefined( weapon ) || weapon == \"\" || weapon == \"weapon_null_mp\" || self hasWeapon( weapon ) ) continue; "
+        "if ( !isDefined( options ) ) options = 0; self GiveWeapon( weapon, 0, int( options ) ); } } }\n"
+        "giveLoadout( team, class )"
+    },
 };
 
 static char *Scr_KbPatchSource(const char *extFilename, char *sourceBuf, int *len)
