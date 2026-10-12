@@ -426,6 +426,7 @@ const dvar_s *kb_noAds;
 const dvar_s *kb_sprintFire;
 const dvar_s *kb_aaLean;
 const dvar_s *kb_noProne;
+const dvar_s *kb_wwiiGunMovement;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1062,6 +1063,12 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Nobody goes prone or dives to prone; the prone keys crouch instead");
+    // The user's change (HANDOFF, Decisions session 32); 0 gives the original game.
+    kb_wwiiGunMovement = _Dvar_RegisterBool(
+        "kb_wwiiGunMovement",
+        1,
+        1u,
+        "The first-person WWII guns move like Black Ops' while walking: no drop, a small tilt");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,

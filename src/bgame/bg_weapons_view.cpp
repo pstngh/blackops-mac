@@ -350,6 +350,35 @@ void __cdecl BG_CalculateWeaponMovement_Base_Internal_Stance(
         *targetAngles = (float)(ps->fWeaponPosFrac * weapDef->fAdsAimPitch) + *targetAngles;
 }
 
+// kb_wwiiGunMovement: the WWII guns (World at War's, through Black Ops' zombie maps) keep World at War's walking
+// motion: the first-person gun drops (vStandMove 0 0 -2.5 for the Thompson, -3.25 the STG-44, -1 to -2 the others)
+// and doesn't tilt, where every Black Ops gun (and the MP40, Black Ops' own model) has no drop and a 2 degree
+// tilt, standing and crouched: 0 0 0 and 2 0 -2 (HANDOFF, Decisions session 32). They move like Black Ops' guns;
+// prone keeps each gun's own crawl pose (both games' are alike). Known by the name up to the first '_'.
+static const char *bg_kbWwiiGuns[] =
+{
+    "thompson", "stg44", "type100", "fg42", "bar", "bipodbar", "m1garand", "m1carbine", "gewehr43", "kar98k",
+    "scopedkar98k", "type99", "trenchgun", "doublebarrel", "sawedoff",
+};
+static const float bg_kbBlackOpsMove[3] = { 0.0f, 0.0f, 0.0f };
+static const float bg_kbBlackOpsRot[3] = { 2.0f, 0.0f, -2.0f };
+
+static bool BG_KbWwiiGun(int weapIndex)
+{
+    const char *name;
+    size_t nameLen;
+    unsigned int i;
+
+    name = BG_GetWeaponVariantDef(weapIndex)->szInternalName;
+    nameLen = strcspn(name, "_");
+    for ( i = 0; i < ARRAY_COUNT(bg_kbWwiiGuns); ++i )
+    {
+        if ( strlen(bg_kbWwiiGuns[i]) == nameLen && !strncmp(name, bg_kbWwiiGuns[i], nameLen) )
+            return true;
+    }
+    return false;
+}
+
 void __cdecl BG_CalculateWeaponMovement_Base_Internal_Movement(
                 const weaponState_t *ws,
                 float minSpeed,
@@ -395,6 +424,11 @@ void __cdecl BG_CalculateWeaponMovement_Base_Internal_Movement(
     {
         locomotionMaxMovement = (const float (*)[3])weapDef->vStandMove;
         locomotionMaxAngles = (const float (*)[3])weapDef->vStandRot;
+    }
+    if ( !isProne && kb_wwiiGunMovement->current.enabled && BG_KbWwiiGun(weapIndex) )
+    {
+        locomotionMaxMovement = &bg_kbBlackOpsMove;
+        locomotionMaxAngles = &bg_kbBlackOpsRot;
     }
     speedFrac = (float)(ws->xyspeed - minSpeed) / (float)((float)ps->speed - minSpeed);
     if ( (float)(speedFrac - 1.0) < 0.0 )

@@ -395,6 +395,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   three pictures). Only the player's own first-person gun moves. Checked with screenshots and a measurement
   (Decisions session 32). The game folder has it (make_portable.sh at cef623ac, the user's request); pushed.
   Undoing it: `kb_gunPlacement 0`, or revert cef623ac (one self-contained commit) and reinstall.
+- **WWII guns move like Black Ops' while walking** (session 32, the user: "why does the thompson move down so much
+  when i start moving forward? other weapons dont seem to do that"): `kb_wwiiGunMovement`, archived, default 1. The
+  WWII guns kept World at War's walking motion (the first-person gun drops 1-3.25 units and doesn't tilt); every
+  Black Ops gun stays up and tilts 2 degrees. Now all 15 WWII guns (the MP40 already did) move like Black Ops'
+  standing and crouched; prone keeps each gun's own crawl pose. The user chose all of them over only the Thompson.
+  Checked (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -610,7 +616,8 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
-user's request; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
+user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
+(`kb_wwiiGunMovement`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1147,6 +1154,22 @@ the other guns (Status).
   reloading and sprinting with the Thompson and toggling the dvar: no report. check_file.py natively and `--i386`,
   audit_splitlocals.py 0. A test window ran once while the user was playing (their game had started; pgrep was
   printed but not acted on): check before every run, and wait (a background loop on pgrep) while they play.
+
+**WWII guns' walking motion (`kb_wwiiGunMovement`)**, the user's question why the Thompson drops when they walk (Status).
+- **The data** (a temporary listzone print, removed): BG_CalculateWeaponMovement_Base_Internal_Movement moves the
+  first-person gun by `vStandMove` / `vDuckedMove` and turns it by `vStandRot` / `vDuckedRot` (x speed / max speed).
+  All 1600+ Black Ops bullet-weapon variants: move 0 0 0, rot 2 0 -2, standing and crouched (prone differs per gun,
+  large crawl offsets like -160 3 -120 / 0 300 -300). The WWII guns: Thompson move 0 0 -2.5 (crouched -2), STG-44
+  -3.25 with rot -0.3 0 0, BAR, Garand, Carbine, Gewehr 43, Kar98k, Arisaka -2, Scoped Kar98k -1.2, FG42 -1.6, Type
+  100 -1.5, the shotguns 0 0.7 -1, no rot; their prone values are crawl poses of the same kind as Black Ops'. The MP40
+  (Black Ops' model) is already 0 0 0 / 2 0 -2.
+- **How**: in that function, for the 15 WWII guns by name (BG_KbWwiiGun, bg_weapons_view.cpp; not the MP40), standing
+  and crouched use 0 0 0 / 2 0 -2; prone untouched. The server runs the same function (G_ClientThink, for ADS gun
+  angles); the dvar is a BG one (bg_misc.cpp), like kb_staticCrosshair.
+- **Checked** (temporary grip-height log, removed): Thompson walking at full speed, grip height -7.9 with the dvar off
+  (-5.8 standing: a 2-unit drop), -5.7 with it on (-5.7 standing); screenshots sent to the user. The ASan client
+  walking and crouch-walking with the Thompson, STG-44, Kar98k and MP5K, the dvar toggled: no report. check_file.py
+  natively and `--i386`, audit_splitlocals.py 0.
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
