@@ -574,6 +574,31 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
+**Next (the user's decision, 2026-10-12, in session 31's conversation): remove Rezurrection from the game folder,
+keep the 16 WWII guns.** Facts found (read-only): each DLC added its own map files and numbered archives (dates and
+contents): First Strike `iw_26`-`28` + mp_berlinwall2, mp_discovery, mp_kowloon, mp_stadium, zombie_cosmodrome;
+Escalation `iw_29`-`32` + mp_gridlock, mp_hotel, mp_outskirts, mp_zoo, zombie_coast; Annihilation `iw_33`-`35` +
+mp_area51, mp_drivein, mp_golfcourse, mp_silo, zombie_temple; Rezurrection (zombies only, ~800 MB) `iw_36`-`41` +
+zombie_cod5_prototype/asylum/sumpf/factory and zombie_moon, each with a `_patch` zone and an `en_` zone in
+zone/English (common_zombie is the base game's: keep it). At play time kb_dlc_weapons.ff needs from Rezurrection
+only 53 images in `iw_38` (8.7 MB, the guns' high mips) and one sound in `iw_40`
+(sound/wawzmb/sfx/levels/nazi_zombie_sumpf/radio/message_2/m2.wav, 0.8 MB); found by matching the zone's strings
+(decompressed) against the archives' file names. The MP40's suppressor, aperture sight and drum are parts of its
+view model, which is in kb_dlc_weapons.ff; their textures are in base-game archives (`iw_09`, `iw_11`). Suppressed
+sounds no gun uses yet, to keep: World at War's suppressed Thompson (`weap_thompson_fire_plr_sil`, its own recording
+wpn_thompson_st_sil.wav) and Type 100 (`weap_type100_fire_plr_act_sil`, `weap_type100_act_sil`:
+wpn_type100_st_sup.wav, wpn_type100_m_sup.wav), the Black Ops-era `wpn_thompson_silencer_fire_plr/_npc` and
+`wpn_mp40_silencer_fire_plr/_npc` (both play the AUG's suppressed recordings, `sound\wpn\assault\aug\plr\shot\silenced\
+silenced_00-03.wav`; secondaries `*_sweet_*`, `*_bass_swt`). World at War's other `_sil` aliases (Carbine, STG-44
+as mp44, MP40, Garand) are the normal shots quieter or mechanism noise: not wanted. In main/ of the base path the
+game loads only archives named `iw_*` (com_files.cpp, "Invalid IWD"). The plan the user approved ("ok go, in a fresh
+session"): add the suppressed aliases to kb_dlc_weapons.ff (the writer needs an option to keep aliases no asset
+names); copy the 54 files into a new `main/iw_kb_dlc_weapons.iwd`; make make_portable.sh keep both files (not rebuild)
+when Rezurrection's zones are missing; test without Rezurrection (scratch game folder); back both files up in
+build_macos (ignored by git; game content never goes to GitHub); then move Rezurrection's files to the Trash. Things
+the user was told would be lost: the 5 maps (so no Nacht-as-multiplayer-map later), Pack-a-Punch versions and wonder
+weapons (dropped earlier anyway), zombies content, rebuilding the guns file from scratch.
+
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
 Not installed in the game folder or pushed yet: ask. The user also asked how recoil and spread compare with MoHAA's
 (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they chose only the
