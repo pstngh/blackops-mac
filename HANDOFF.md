@@ -376,7 +376,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   15 clip slots overflowed and crashed the server in `giveWeapon` (two slots were held by the frag's and the
   tactical's ammo, which kb_noGrenades never gives), and an old 64-bit bug in the console's game message windows
   (bold game text and subtitles used a window straddling two: a garbage pointer, then a crash or a stray write;
-  every build of this port had it). Not in the game folder yet.
+  every build of this port had it). The game folder has it (make_portable.sh at f5eacfea, the user's request;
+  the DLC zone rewritten, the shader library step still stops at the missing Metal Toolchain); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -566,7 +567,7 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **Session 31: no start countdown and every custom class's guns at once: done** (the user's requests; Status,
-Decisions session 31). Not installed, not pushed: ask. Earlier in session 31 the user tried item 4 below
+Decisions session 31). Installed in the game folder and pushed at the user's request. Earlier in session 31 the user tried item 4 below
 (attachments for the WWII guns: a suppressor on the Thompson), then asked to undo it, which was done (nothing of it
 remains); asked what the game itself has, the user said to "leave as is for now". Their answers for when it comes
 back: only attachments that come with the game; the Thompson's suppressed sound would be the Black Ops one
