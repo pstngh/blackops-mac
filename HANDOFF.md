@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 31)
+## Status (2026-10-12, session 32)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -378,6 +378,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   (bold game text and subtitles used a window straddling two: a garbage pointer, then a crash or a stray write;
   every build of this port had it). The game folder has it (make_portable.sh at f5eacfea, the user's request;
   the DLC zone rewritten, the shader library step still stops at the missing Metal Toolchain); pushed.
+- **Medal of Honor damage** (session 32, the user, after asking how the guns compare with MoHAA's SMGs and StG:
+  "make the damage like mohaa", "Arms and legs you can keep same as body"): `kb_mohaaDamage`, archived, default 1.
+  Every rifle, SMG, machine gun and pistol does the damage of its closest MoHAA: Allied Assault gun (1.11's
+  multiplayer values) at any distance: SMGs 25 (Thompson, MP40), assault rifles 27 (StG 44), machine guns 30 (BAR),
+  semi-automatic rifles and the WA2000, Dragunov and PSG1 48 (M1 Garand), Kar98k and Arisaka 90 (Kar98k), L96A1 and
+  Scoped Kar98k 106 (Springfield), pistols 30 (Colt); headshots (helmet, head, neck) 4x, so one kills with any of
+  them; body, arms and legs 1x. Everyone's guns, the bots' too; shotguns, the knife, explosives and killstreak or
+  vehicle guns keep Black Ops' damage; walls still take their share. Checked in play (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -565,6 +573,11 @@ the engine's frame pacing (~730 fps: the main loop's `NET_Sleep(1)` until the ne
 millisecond), so CPU and GPU are close to balanced at A and the engine caps the rest.
 
 ## Next steps (in order)
+
+**Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
+Not installed in the game folder or pushed yet: ask. The user also asked how recoil and spread compare with MoHAA's
+(answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they chose only the
+damage. Next: ask how the damage plays; then whether they have more fixes; then offer the list below again.
 
 **Session 31: no start countdown and every custom class's guns at once: done** (the user's requests; Status,
 Decisions session 31). Installed in the game folder and pushed at the user's request. Earlier in session 31 the user tried item 4 below
@@ -834,6 +847,11 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 32 (kb_mohaaDamage): Create a Class's damage and range bars still show Black Ops' numbers
+(mp/attributesTable.csv); the bots still choose their fighting distances by Black Ops' damage ranges
+(sv_bot_mp.cpp reads fMinDamageRange/fMaxDamageRange); the scripts' `getWeaponDamage`-style builtins return Black
+Ops' values. None of these was asked for.
+
 Seen in session 31: in one test with `kb_noCountdown 0` the player, standing still, was 1200 units away 16 s later
 (a respawn? the team balance of `teamchangeGracePeriod` moving the only human?); not looked at. The
 "CG_SetWeaponHidePartBits: No such bone tag" errors (tag_brass2, tag_stock, tag_extended_clip, multiplayer guns'
@@ -1033,6 +1051,64 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 32)
+
+**How the guns compare with MoHAA's** (the user's question: recoil and spread against MoHAA's SMGs and StG, and the
+damage). Sources: the user's MoHAA install, `/Users/pstn/Documents/Games/moh` (OpenMoHAA; read only), whose
+`main/pak7.pk3` (the 1.11 patch) holds the final `models/weapons/*.tik` (`unzip -p`; Pak0's are older), and
+OpenMoHAA's code on GitHub (weapon.cpp, weaputils.cpp, sentient.cpp, cg_commands.cpp, cg_view.c; read with WebFetch,
+not cloned). Multiplayer uses the `dm*` lines.
+- **MoHAA's numbers** (dmbulletdamage, dmfiredelay, dmbulletspread min / max, dmfirespreadmult add falloff cap
+  maxtime, viewkick): Thompson 25, 0.086 s, 40 / 50, 0.3 0.6 150 0.25, kick -1.58 a shot ("V", yaw x -0.16 of the
+  pitch, recentre 0.9, caps 8.5 / 8.6); MP40 25, 0.086, 38 / 50, same mult, -1.65 ("V", yaw x +-0.12, recentre 1);
+  StG 44 27, 0.086, 10 / 53, 0.475 0.5 200 0.8, -1.8 ("T", yaw -0.2..0.05, recentre 3.2, caps 12 / 0.2, scatter
+  2.2); BAR 30, 0.12, 12 / 52; M1 Garand 48, 0.15; Kar98k 90, 1.1; Springfield and KAR98 sniper 106, 2.0; shotgun
+  20 pellets of 17, 0.75; Colt 30; P38 35; silenced pistol 15. Player health 100.
+- **How MoHAA uses them**: a shot goes to `dir * 4000 + right * grandom() * x + up * grandom() * y` (grandom is a
+  Gaussian, sigma 1, so the spread is one sigma at 4000 units: 40 = 0.57 degrees), x/y lerped from min to max by
+  velocity / sv_runspeed, times (1 + mult); mult gains `add` a shot, loses `falloff` a second, resets after
+  `maxtime` without firing. The view kick adds to the camera angles, which the client sends as its eye angles
+  (CL_EyeInfo -> the server's m_vViewAng), so it moves the aim; it recentres at kick x recentre degrees a second,
+  clamped to 12-25. Damage has no distance falloff (only penetration); hit locations scale it (Sentient's
+  m_fDamageMultipliers, every multiplayer game): head, helmet, neck 4, torso 1, pelvis 0.9, upper arms and legs
+  0.8, lower 0.6, hands and feet 0.5 (realism mode, Spearhead's: head 5).
+- **Black Ops here**: `kb_staticCrosshair` keeps a human player's spread at 0.4 degrees whatever they do (bots keep
+  theirs); the view kick (BG_WeaponFireRecoil, cg_view_mp.cpp's kick integration) sets a pitch/yaw velocity a shot
+  that the centre speed brakes, returns at 0.06 of the rate, clamps at 10 degrees, and goes into the usercmd angles
+  (it moves the aim too). Simulated 30-round bursts (a throwaway script of both games' rules): climb after 10 / 30
+  shots, MoHAA Thompson 4.9 / 7.4 (and 7 degrees left by the end), MP40 5.5 / 7.4, StG 5.0 / 5.6; BO MP5K 1.2 / 2.5
+  (+-2 sideways), AK-47 0.8 / 1.5, Uzi 2.0 / 5.7, WWII Thompson 2.4 / 7.2, WWII MP40 0.5 / 0.5, WWII STG-44 7.5 /
+  9.7. MoHAA's spread (90% circle) grows from 1.2 degrees (Thompson, first shot, standing) to 4 at the 10th and 10
+  at the 30th; StG 0.3 -> 1.5 -> 4.2 standing, 1.6 -> 7.7 -> 21 running. Offered (the user's choice): MoHAA's spray
+  and kick, MoHAA's damage, or both; they took the damage only.
+- `listzone` now prints each weapon's fire type, bolt action, hip spread (stand/ducked/prone min-max, fire and move
+  add, decay), ADS spread, move speed, and hip and ADS view kick and gun kick (db_save_tool.cpp).
+
+**MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
+Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
+semi-automatic rifles the Garand's, iron-sighted bolt-actions the Kar98k's, pistols the Colt's); of the snipers only
+the bolt-actions kill with one body hit (L96A1, Scoped Kar98k: 106), the semi-automatic WA2000, Dragunov and PSG1
+hit like the Garand; shotguns stay Black Ops' (MoHAA's fires 20 pellets, BO's 8); bots' guns too; arms and legs as
+the body (MoHAA's limbs take less).
+- **How**: `G_KbMohaaDamage` (g_combat_mp.cpp) maps a weapon variant to its MoHAA damage by the name's first token
+  (`mp5k_silencer_mp` -> `mp5k`; a token that starts with a table name counts, so the dual-wield halves `aspdw`,
+  `pythonlh` too; the attachments' own weapons `gl_`, `mk_`, `ft_` don't), only for bullet weapons; 0 for the
+  rest. `Bullet_Process` (bullet.cpp) replaces Bullet_GetDamage's ranged damage with it times `damageMultiplier`
+  (penetration: a bullet through a wall or a player still loses its share, as in both games), so no falloff;
+  `G_GetWeaponHitLocationMultiplier` returns 4 for helmet, head and neck and 1 for the rest (a hit on the gun
+  keeps the weapon's own 0). The kill feed's headshots and the script's damage path are unchanged (no Black Ops
+  perk changes bullet damage: `cac_modified_damage`'s bullet perks don't exist in MP). Read per hit: the dvar
+  works mid-match. It changes what bullets do to vehicles, glass and destructibles too.
+- **Checked** (temporary per-hit log in G_DamageClient, removed; release client, listen server on mp_nuked, scratch
+  profiles): test bots and the player with ten guns, then the launcher's 7 managed bots, 100 s each: body hits mp5k,
+  thompson, pm63 25, famas, galil, aug, m16, ak47, stg44 27, rpk, fg42 30, m14, fnfal, m1garand, gewehr43, m1carbine
+  48, l96a1, scopedkar98k 106; headshots 100 (SMGs), 108 (AK-47, AUG), 120 (FG42), 192 (Dragunov, FAL, Garand), 424
+  (L96A1); neck 100; the PM63 at 1708-1760 units 25 and 100 (Black Ops: 20 and 28); a few lower values through
+  walls; shotguns (Olympia, Stakeout, Trench Gun, double-barrel) their own 38-40 on head and body; the knife 135-139;
+  `set kb_mohaaDamage 0` mid-match gave Black Ops' (RPK 40, head 55; FAMAS 33-35 with falloff). The ASan client
+  (`kb_godMode 0`, 7 managed bots, the dvar toggled off and on): no report. check_file.py natively and `--i386`,
+  audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 31)
 

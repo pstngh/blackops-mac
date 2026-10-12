@@ -127,6 +127,7 @@ const dvar_t *kb_noKillstreaks;
 const dvar_t *kb_noHitMarker;
 const dvar_t *kb_noCountdown;
 const dvar_t *kb_allClassGuns;
+const dvar_t *kb_mohaaDamage;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2098,6 +2099,11 @@ void G_RegisterDvars()
         1,
         1u,
         "Human players also carry the primary and secondary guns of all their custom classes");
+    kb_mohaaDamage = _Dvar_RegisterBool(
+        "kb_mohaaDamage",
+        1,
+        1u,
+        "Guns hit as hard as Medal of Honor: Allied Assault's, at any distance: headshots 4x, body, arms and legs 1x");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

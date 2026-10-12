@@ -417,6 +417,10 @@ double __cdecl G_GetWeaponHitLocationMultiplier(hitLocation_t hitLoc, unsigned i
     }
     if ( !weapon )
         return g_fHitLocDamageMult[hitLoc];
+    // kb_mohaaDamage: Medal of Honor's 4x for the head (its helmet and neck too), 1x for the body, arms and legs
+    // alike (the user's choice; MoHAA takes less for the limbs); a hit on the gun stays the weapon's own.
+    if ( hitLoc != HITLOC_GUN && G_KbMohaaDamage(BG_GetWeaponVariantDef(weapon)) )
+        return hitLoc == HITLOC_HELMET || hitLoc == HITLOC_HEAD || hitLoc == HITLOC_NECK ? 4.0 : 1.0;
     weapDef = BG_GetWeaponDef(weapon);
     if ( weapDef
         && (weapDef->weapType == WEAPTYPE_BULLET
@@ -436,6 +440,53 @@ double __cdecl G_GetWeaponHitLocationMultiplier(hitLocation_t hitLoc, unsigned i
 bool __cdecl G_KbGodMode(const gentity_s *ent)
 {
     return kb_godMode->current.enabled && ent->client && !SV_IsTestClient(ent->s.number);
+}
+
+// kb_mohaaDamage: what a bullet of an infantry gun does, everyone's guns, bots' too: the damage of the closest
+// Medal of Honor: Allied Assault gun (1.11's multiplayer values, its weapons' dmbulletdamage) at any distance
+// (HANDOFF, Decisions session 32). SMGs the Thompson's and MP40's 25, assault rifles the StG 44's 27, machine
+// guns the BAR's 30, semi-automatic rifles and snipers the M1 Garand's 48, the iron-sighted bolt-actions the
+// Kar98k's 90, the bolt-action sniper rifles the Springfield's 106, pistols the Colt's 30. A gun is known by
+// its name up to the first '_', so its attachment variants (mp5k_silencer_mp) and dual-wield halves (aspdw_mp)
+// count, an attachment's own weapon (gl_ak47_mp, mk_ak47_mp) doesn't. Shotguns (the user's choice), the Death
+// Machine, turrets and vehicle guns keep their damage: 0.
+static const struct
+{
+    const char *name;
+    int damage;
+} g_kbMohaaDamage[] =
+{
+    { "mp5k", 25 }, { "skorpion", 25 }, { "mac11", 25 }, { "ak74u", 25 }, { "uzi", 25 }, { "pm63", 25 },
+    { "mpl", 25 }, { "spectre", 25 }, { "kiparis", 25 }, { "thompson", 25 }, { "type100", 25 }, { "mp40", 25 },
+    { "ak47", 27 }, { "m16", 27 }, { "enfield", 27 }, { "famas", 27 }, { "galil", 27 }, { "aug", 27 },
+    { "commando", 27 }, { "g11", 27 }, { "stg44", 27 },
+    { "hk21", 30 }, { "rpk", 30 }, { "m60", 30 }, { "stoner63", 30 }, { "fg42", 30 }, { "bar", 30 },
+    { "bipodbar", 30 },
+    { "m14", 48 }, { "fnfal", 48 }, { "m1garand", 48 }, { "gewehr43", 48 }, { "m1carbine", 48 },
+    { "wa2000", 48 }, { "dragunov", 48 }, { "psg1", 48 },
+    { "kar98k", 90 }, { "type99", 90 },
+    { "l96a1", 106 }, { "scopedkar98k", 106 },
+    { "asp", 30 }, { "m1911", 30 }, { "makarov", 30 }, { "python", 30 }, { "cz75", 30 },
+};
+
+int __cdecl G_KbMohaaDamage(const WeaponVariantDef *weapVariantDef)
+{
+    const char *name;
+    size_t nameLen;
+    size_t len;
+    unsigned int i;
+
+    if ( !kb_mohaaDamage->current.enabled || !weapVariantDef || weapVariantDef->weapDef->weapType != WEAPTYPE_BULLET )
+        return 0;
+    name = weapVariantDef->szInternalName;
+    nameLen = strcspn(name, "_");
+    for ( i = 0; i < ARRAY_COUNT(g_kbMohaaDamage); ++i )
+    {
+        len = strlen(g_kbMohaaDamage[i].name);
+        if ( len <= nameLen && !strncmp(name, g_kbMohaaDamage[i].name, len) )
+            return g_kbMohaaDamage[i].damage;
+    }
+    return 0;
 }
 
 void __cdecl G_DamageClient(

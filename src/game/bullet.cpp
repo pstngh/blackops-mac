@@ -509,6 +509,7 @@ void __cdecl Bullet_Process(
     int weapon; // [esp+50h] [ebp-30h]
     float coneCos; // [esp+54h] [ebp-2Ch]
     int damage; // [esp+58h] [ebp-28h]
+    int mohaaDamage;
     gentity_s *inflictorEnt; // [esp+5Ch] [ebp-24h]
     DynEntityDrawType drawType; // [esp+60h] [ebp-20h] BYREF
     gentity_s *bulletEffectTempEnt; // [esp+64h] [ebp-1Ch] BYREF
@@ -554,6 +555,10 @@ void __cdecl Bullet_Process(
         CG_DebugLine(bp->start, br->hitPos, color, 1, 100);
     }
     damage = Bullet_GetDamage(bp, br, weapDef, attacker);
+    // kb_mohaaDamage: the gun's Medal of Honor damage at any distance, less what it lost going through walls
+    mohaaDamage = G_KbMohaaDamage(weapVariantDef);
+    if ( mohaaDamage )
+        damage = (int)(float)((float)mohaaDamage * bp->damageMultiplier);
     G_CheckHitTriggerDamage(attacker, bp->start, br->hitPos, damage, bp->methodOfDeath);
     bulletEffectTempEnt = 0;
     if ( processFx )

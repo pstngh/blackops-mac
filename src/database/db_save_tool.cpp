@@ -1331,6 +1331,17 @@ static void DB_SaveTool_PrintWeapon(const WeaponVariantDef *weapon)
                def->damage, def->minDamage, def->fMaxDamageRange, def->fMinDamageRange, def->playerDamage,
                def->minPlayerDamage, def->iMeleeDamage, def->shotCount, def->penetrateType, def->iFireTime,
                notes[0] ? notes : " -");
+    // How it shoots from the hip (BG_GetSpreadForWeapon, PM_AdjustAimSpreadScale, BG_WeaponFireRecoil): the
+    // spread in degrees, the view kick (deg/s at the shot, centred at deg/s^2; it moves the aim) and the gun's.
+    Com_Printf(0, "listzone:   firetype %i bolt %i spread stand %g-%g ducked %g-%g prone %g-%g fireadd %g moveadd %g decay %g ads %g move %g\n",
+               def->fireType, def->bBoltAction, def->fHipSpreadStandMin, def->hipSpreadStandMax, def->fHipSpreadDuckedMin, def->hipSpreadDuckedMax,
+               def->fHipSpreadProneMin, def->hipSpreadProneMax, def->fHipSpreadFireAdd, def->fHipSpreadMoveAdd,
+               def->fHipSpreadDecayRate, def->fAdsSpread, def->moveSpeedScale);
+    Com_Printf(0, "listzone:   viewkick pitch %g-%g yaw %g-%g centre %g ads %g-%g %g-%g centre %g gunkick %g-%g %g-%g\n",
+               def->fHipViewKickPitchMin, def->fHipViewKickPitchMax, def->fHipViewKickYawMin, def->fHipViewKickYawMax,
+               weapon->fHipViewKickCenterSpeed, def->fAdsViewKickPitchMin, def->fAdsViewKickPitchMax,
+               def->fAdsViewKickYawMin, def->fAdsViewKickYawMax, weapon->fAdsViewKickCenterSpeed,
+               def->fHipGunKickPitchMin, def->fHipGunKickPitchMax, def->fHipGunKickYawMin, def->fHipGunKickYawMax);
     Com_Printf(0, "listzone:   ammo %s clip %s sharedcap %s spawned %s gun %s world %s projectile %s\n",
                DB_SaveTool_String(weapon->szAmmoName), DB_SaveTool_String(weapon->szClipName),
                DB_SaveTool_String(def->szSharedAmmoCapName), DB_SaveTool_String(def->szSpawnedGrenadeWeaponName),

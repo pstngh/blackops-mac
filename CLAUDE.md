@@ -87,7 +87,7 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23, 26, 27, 28, 29 and 31): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26, 27, 28, 29, 31 and 32): `kb_godMode` (human players take no damage), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
@@ -105,10 +105,13 @@ sound stays), `kb_cacButton` (the main menu's THEATER button is CREATE A CLASS; 
 crosshair during play: no minimap, score, ammo, kill feed, popups, names or hints; the FPS counter, menus,
 scoreboard and round outcome stay), `kb_noCountdown` (no "Match begins in" countdown at a match's or round's start:
 players move as soon as they spawn), `kb_allClassGuns` (human players also carry the primaries, then the secondaries,
-of all 10 custom classes, up to the 15 held weapons; not in gun game and the other wager modes). Tests
+of all 10 custom classes, up to the 15 held weapons; not in gun game and the other wager modes), `kb_mohaaDamage`
+(rifles, SMGs, machine guns and pistols do the closest MoHAA gun's damage at any distance, SMGs 25, assault rifles
+27, ...; headshots 4x, body, arms and legs 1x; bots' guns too; shotguns keep theirs). Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
-`kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`; a scratch profile keeps whatever a run set
+`kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own
+damage `+set kb_mohaaDamage 0`; a scratch profile keeps whatever a run set
 (they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`; `viewpos` prints the
 eye position (60 above the feet standing, 40 crouched, 11 prone). Hits on demand: with `+set
 developer_script 1 +set scr_testclients 4 +set sv_botsAllowMovement 0`, `set scr_playerwarp enemies_host`
@@ -186,8 +189,8 @@ leaves none); `damage <weapon>=<mp weapon>` copies a multiplayer gun's damage, `
 `strings <file>` adds localized strings (`NAME text` lines). Source zones load by name from `zone/`
 of the install path, so a written zone is a source only from a scratch game folder; tool runs pass
 `+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
-`listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold
-and their damage, localized strings with their text, `menu <name>` a menu's items with their rect,
+`listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold,
+their damage, hip spread and view kick, localized strings with their text, `menu <name>` a menu's items with their rect,
 visibility and text expressions and the scripts with their conditions, in postfix order),
 `listzone - weapon` multiplayer's weapons, `listzone - localize [prefix]` its strings, `listzone -
 rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a table. Commands too long
