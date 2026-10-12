@@ -479,11 +479,36 @@ void __cdecl BG_GetSpreadForWeapon(
     }
 }
 
+// kb_sniperScope: the scoped sniper rifles (Black Ops' four and the WWII Scoped Kar98k, any attachment) keep
+// their scope under kb_noAds (HANDOFF, Decisions session 32); the iron-sighted Kar98k and Arisaka don't. Known
+// by the name up to the first '_'.
+static const char *bg_kbScopedSnipers[] = { "l96a1", "wa2000", "dragunov", "psg1", "scopedkar98k" };
+
+static bool BG_KbSniperScope(int weapIndex)
+{
+    const char *name;
+    size_t nameLen;
+    unsigned int i;
+
+    if ( !kb_sniperScope->current.enabled || !weapIndex )
+        return false;
+    name = BG_GetWeaponVariantDef(weapIndex)->szInternalName;
+    nameLen = strcspn(name, "_");
+    for ( i = 0; i < ARRAY_COUNT(bg_kbScopedSnipers); ++i )
+    {
+        if ( strlen(bg_kbScopedSnipers[i]) == nameLen && !strncmp(name, bg_kbScopedSnipers[i], nameLen) )
+            return true;
+    }
+    return false;
+}
+
 // kb_noAds: human players never raise the sights, not even with the weapons that raise them to
-// fire (launchers, the Death Machine), which fire from the hip; vehicle seats keep theirs.
+// fire (launchers, the Death Machine), which fire from the hip; vehicle seats keep theirs, and the
+// scoped sniper rifles their scope (kb_sniperScope).
 static bool BG_KbNoAds(const playerState_s *ps)
 {
-    return kb_noAds->current.enabled && (ps->eFlags & 0x4000) == 0 && BG_KbHumanPlayer(ps);
+    return kb_noAds->current.enabled && (ps->eFlags & 0x4000) == 0 && BG_KbHumanPlayer(ps)
+        && !BG_KbSniperScope(ps->weapon);
 }
 
 void __cdecl PM_UpdateAimDownSightFlag(pmove_t *pm, pml_t *pml)

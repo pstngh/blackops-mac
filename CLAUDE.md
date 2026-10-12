@@ -105,11 +105,12 @@ sound stays), `kb_cacButton` (the main menu's THEATER button is CREATE A CLASS; 
 crosshair during play: no minimap, score, ammo, kill feed, popups, names or hints; the FPS counter, menus,
 scoreboard and round outcome stay), `kb_noCountdown` (no "Match begins in" countdown at a match's or round's start:
 players move as soon as they spawn), `kb_allClassGuns` (human players also carry the primaries, then the secondaries,
-of all 10 custom classes, up to the 15 held weapons; not in gun game and the other wager modes), `kb_mohaaDamage`
+of custom classes 1-5 on top of the chosen class, up to the 15 held weapons; not in gun game and the other wager modes), `kb_mohaaDamage`
 (rifles, SMGs, machine guns and pistols do the closest MoHAA gun's damage at any distance, SMGs 25, assault rifles
 27, ...; headshots 4x, body, arms and legs 1x; bots' guns too; shotguns keep theirs), `kb_gunPlacement` (the
 first-person WWII Thompson is held closer, where the MP40 is, a little lower; a table in cg_weapons.cpp),
-`kb_wwiiGunMovement` (the first-person WWII guns move like Black Ops' while walking: no drop, a 2 degree tilt). Tests
+`kb_wwiiGunMovement` (the first-person WWII guns move like Black Ops' while walking: no drop, a 2 degree tilt),
+`kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in). Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own

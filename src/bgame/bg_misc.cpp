@@ -427,6 +427,7 @@ const dvar_s *kb_sprintFire;
 const dvar_s *kb_aaLean;
 const dvar_s *kb_noProne;
 const dvar_s *kb_wwiiGunMovement;
+const dvar_s *kb_sniperScope;
 const dvar_s *player_clipSizeMultiplier;
 const dvar_s *player_lastStandBleedoutTime;
 const dvar_s *player_lastStandBleedoutTimeNoRevive;
@@ -1069,6 +1070,11 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "The first-person WWII guns move like Black Ops' while walking: no drop, a small tilt");
+    kb_sniperScope = _Dvar_RegisterBool(
+        "kb_sniperScope",
+        1,
+        1u,
+        "With kb_noAds, the scoped sniper rifles can still look through their scope");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,

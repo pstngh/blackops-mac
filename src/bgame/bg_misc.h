@@ -344,6 +344,7 @@ extern const dvar_s *kb_sprintFire;
 extern const dvar_s *kb_aaLean;
 extern const dvar_s *kb_noProne;
 extern const dvar_s *kb_wwiiGunMovement;
+extern const dvar_s *kb_sniperScope;
 extern const dvar_s *player_clipSizeMultiplier;
 extern const dvar_s *player_lastStandBleedoutTime;
 extern const dvar_s *player_lastStandBleedoutTimeNoRevive;
