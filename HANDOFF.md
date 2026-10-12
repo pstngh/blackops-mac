@@ -393,7 +393,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   STG-44 and Type 100 (and much farther than the AK-47/AK74u/M16/Galil), so it looked ~15% smaller. Now it sits
   where the MP40 does, then a little closer and lower so its back end is off screen (the user picked that from
   three pictures). Only the player's own first-person gun moves. Checked with screenshots and a measurement
-  (Decisions session 32).
+  (Decisions session 32). The game folder has it (make_portable.sh at cef623ac, the user's request); pushed.
+  Undoing it: `kb_gunPlacement 0`, or revert cef623ac (one self-contained commit) and reinstall.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -609,7 +610,7 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
-user's request; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+user's request; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
