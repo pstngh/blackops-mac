@@ -362,7 +362,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   session 30). Checked in 7-bot matches (the launcher's managed bots): before, 1 to 10 bodies a run (of 23-29;
   four runs) appeared 18-876 units off; after, 32 of 35 within 5 units and the rest at the server's exact position (a
   sprinting bot is drawn 50-75 ms behind the server, as in the original). Bodies still go when 4 newer ones
-  exist (the game's limit, MAX_CLIENT_CORPSES 4). Not in the game folder yet.
+  exist (the game's limit, MAX_CLIENT_CORPSES 4). The game folder has it (make_portable.sh at 2012ed90, the
+  user's request; the DLC zone rewritten, the shader library step still stops at the missing Metal Toolchain).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -552,8 +553,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **The user's bug report (end of session 29): fixed in session 30** ("when i kill bots, they disapear
-INSTANTLY, AND/OR they teleport like a meter away"; Status, Decisions session 30). Not in the game folder
-until the user says so (make_portable.sh). Next: ask the user whether they have more fixes, then offer the
+INSTANTLY, AND/OR they teleport like a meter away"; Status, Decisions session 30). Installed in the game
+folder and pushed at the user's request. Next: ask the user whether they have more fixes, then offer the
 list below again.
 
 **The user's list for later** (session 28: offered as the menu of what to do next, the user answered
