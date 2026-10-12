@@ -13,10 +13,14 @@ trap 'rm -rf "$work"' EXIT
 
 swiftc -O -parse-as-library -target arm64-apple-macos13.0 "$here/Launcher.swift" -o "$work/BlackOpsLauncher"
 
-rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
-cp "$work/BlackOpsLauncher" "$app/Contents/MacOS/BlackOpsLauncher"
-cat > "$app/Contents/Info.plist" <<'EOF'
+# The bundle is put together and signed in the temporary folder, then copied into the game folder:
+# in a Documents folder under a File Provider (iCloud Drive), the system tags a new bundle with Finder
+# info again right after it is removed, and codesign refuses a bundle that carries it ("resource fork,
+# Finder information, or similar detritus not allowed"). A tag added after signing is harmless.
+bundle="$work/Black Ops Launcher.app"
+mkdir -p "$bundle/Contents/MacOS"
+cp "$work/BlackOpsLauncher" "$bundle/Contents/MacOS/BlackOpsLauncher"
+cat > "$bundle/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -38,12 +42,10 @@ cat > "$app/Contents/Info.plist" <<'EOF'
 </dict>
 </plist>
 EOF
-# Finder or iCloud Drive (a Documents folder that syncs) can tag the new bundle with Finder info,
-# which codesign refuses ("resource fork, Finder information, or similar detritus not allowed").
-xattr -rd com.apple.FinderInfo "$app" 2>/dev/null || true
-xattr -rd com.apple.ResourceFork "$app" 2>/dev/null || true
-if ! err=$(codesign --force --sign - "$app" 2>&1); then
+if ! err=$(codesign --force --sign - "$bundle" 2>&1); then
     echo "$err" >&2
     exit 1
 fi
+rm -rf "$app"
+ditto "$bundle" "$app"
 echo "installed $app"

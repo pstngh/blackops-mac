@@ -407,7 +407,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   class's loadout, whose pistol is the only one (a class 6-10 or a default class picked still comes with its own guns). New `kb_sniperScope`, archived, default 1: with kb_noAds on, the scoped sniper rifles
   (L96A1, WA2000, Dragunov, PSG1, WWII Scoped Kar98k) look through their scope with the aim button (the user's MOUSE2
   is `+toggleads_throw`); everything else still fires from the hip, the iron-sighted Kar98k and Arisaka too. Checked
-  (Decisions session 32).
+  (Decisions session 32). The game folder has both (make_portable.sh at f91de0c8, the user's request); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -625,7 +625,7 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
 user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
 (`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
-scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1198,6 +1198,13 @@ the other guns (Status).
   did with `+speed_throw` and in a fresh run). The ASan client (`kb_godMode 0`, class 7, the L96A1, PSG1 with hold
   breath and Dragunov scoped and fired, a death and respawn): no report. check_file.py natively and `--i386`,
   audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**The launcher's signing, again** (tools/launcher/build.sh): installing f91de0c8 stopped at `codesign` ("resource fork,
+Finder information, or similar detritus not allowed") although build.sh deleted the Finder info just before signing
+(session 29's fix): the File Provider over ~/Documents put `com.apple.FinderInfo` back on the new bundle in between
+(three installs earlier that day had passed). The bundle is now put together and signed in the script's temporary
+folder (outside the File Provider) and copied into the game folder with `ditto`; the tag that comes back afterwards
+doesn't break `codesign --verify` or launching (checked: the installed app verifies; a renamed copy opened and ran).
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
