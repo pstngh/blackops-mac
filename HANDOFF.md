@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-11, session 29)
+## Status (2026-10-11, session 30)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -352,6 +352,17 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   Action Report. Checked in play (Decisions session 29). The game folder has it (make_portable.sh at
   1c9ef755 plus the launcher fix below, the user's request; the DLC zone came out the same bytes, the shader
   library step still stops at the missing Metal Toolchain).
+- **Bot bodies stay where the bot died** (session 30, the user's report: "when i kill bots, they disapear
+  INSTANTLY, AND/OR they teleport like a meter away"): a body that took over one of the 4 body slots far from
+  the slot's last body, and a bot that respawned far from where it died, were decoded by the client tens to
+  hundreds of units from their real place when the old coordinate was negative (the network code truncated
+  where the original rounds), and stayed off: a body shifted ~1 m, or out of sight ("disappears"), and a
+  respawned bot drawn away from where the server had it (shots at it missed). Every build of this decompile
+  had it, with or without the user's `kb_*` changes. Fixed in the coordinate encoder and decoder (Decisions
+  session 30). Checked in 7-bot matches (the launcher's managed bots): before, 1 to 10 bodies a run (of 23-29;
+  four runs) appeared 18-876 units off; after, 32 of 35 within 5 units and the rest at the server's exact position (a
+  sprinting bot is drawn 50-75 ms behind the server, as in the original). Bodies still go when 4 newer ones
+  exist (the game's limit, MAX_CLIENT_CORPSES 4). Not in the game folder yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -540,14 +551,10 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**The user's bug report (end of session 29), next**: "when i kill bots, they disapear INSTANTLY, AND/OR
-they teleport like a meter away (looks glitchy/buggy) hard to describe". Not looked at yet. Leads to check
-first: whether the original game does it too (all `kb_*` dvars 0), `kb_noDeathCam` (respawn 0.1 s after dying:
-does it reach the bots, and does their corpse, `clonePlayer` in the death callback, still get made and keep
-its place?), the corpse's death animation/ragdoll start (Decisions session 21 has the physics work), and the
-corpse entity's interpolation on the client. Session 29's kill test (KB_CMDS with `scr_playerwarp
-enemies_host`, Decisions session 29) shows bodies on the ground in screenshots taken 3 times a second; a
-faster sequence around one kill is needed to see a jump.
+**The user's bug report (end of session 29): fixed in session 30** ("when i kill bots, they disapear
+INSTANTLY, AND/OR they teleport like a meter away"; Status, Decisions session 30). Not in the game folder
+until the user says so (make_portable.sh). Next: ask the user whether they have more fixes, then offer the
+list below again.
 
 **The user's list for later** (session 28: offered as the menu of what to do next, the user answered
 "remember these we'll come back to them. i wanna fix a few more things first"; ask before each, in plain
@@ -809,6 +816,12 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 30 (the body fix, Decisions session 30): the decompile's `(int)(x + 9.313225746154785e-10)`
+is the original's rounding conversion, and only the network coordinates round now; the ~200 other sites
+(dvar and HUD colours, `cl_input_mp.cpp`'s usercmd moves and selected location, the `-86` net field's writer
+and its equality test, the timescale's msec, demo UI) truncate, at most 1 off (255 * 0.5 gives 127, not 128).
+Not seen to matter. Also: only 4 bodies at a time (the 5th removes the oldest), as in the original.
+
 Seen in session 28 (the sharedUiInfo rework, Decisions session 28): other fields still serve two meanings.
 UI_FeederSelection's mods list (feeder 9) stores the picked mod in `modCount`; the camo/option index
 (feeder 60, the UI viewer's camo, equipClassCurrentOption) and the combat record's pivot share
@@ -997,6 +1010,47 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 30)
+
+**Bot bodies away from where the bot died** (the user's report, Status).
+- **What a body is**: the death callback (_globallogic_player.gsc Callback_PlayerKilled) calls `clonePlayer`
+  (PlayerCmd_ClonePlayer): a new ET_PLAYER_CORPSE entity at the player's `ps.origin`, in one of 4 slots
+  (entities 32-35, round robin, G_SpawnPlayerClone; the 5th body frees the oldest), moved by the death
+  animation's root motion (G_RunCorpseMove, a few units a frame) and then a ragdoll. The client hides a dead
+  player (EF_DEAD) and draws the body entity in its place, with the bot's animation tree copied over.
+- **Measured** (temporary logging, removed: the client's drawn position of each bot and body per frame, the
+  server's body position, the coordinates each side encoded and decoded): with test bots killed where they
+  stood, every body appeared 1-8 units from the bot; in 7-bot matches (the launcher's managed bots, TDM on
+  mp_nuked) some appeared 18-876 units away. The server had them right (`ps.origin` at the clone, the body's
+  trBase); the client decoded one coordinate wrong in the snapshot and kept the error.
+- **The cause**: an entity's or player's x/y/z that moved 64 units or more since the client's old state is
+  sent as 16 (z: 17) bits, (old - centre + 0x8000) XOR (new - centre + 0x8000), with both rounded to whole
+  units by `(int)(x + 9.313225746154785e-10)` (MSG_WriteOriginFloat/ZFloat, MSG_ReadOriginFloat/ZFloat). The
+  client holds whole numbers, so for its negative old -325.0 the cast gave -324 (the 2^-30 bias, then toward
+  zero) where the server got -325 from its -325.17; XORed with the off-by-one old value the new one came out
+  wrong in its low bits: 1 unit off half the time, 31 or more about one time in 16 (e.g. -82 read as -55).
+  Later small moves are sent as differences, so the error stayed until the next large move. Large moves are a
+  new body in a slot whose last body lay elsewhere and a respawn; so bodies landed off (a metre, or out of
+  sight) and respawned bots were drawn off the server's position. The original rounds (IDA shows a rounding
+  conversion, cvtsd2si/fistp, as a C cast; the 2^-30 only makes sense as a tie bias for rounding), and the
+  protocol only works if both sides round. Not caused by `kb_noDeathCam`, which only makes deaths, and so
+  reused body slots, more frequent.
+- **The fix** (msg_mp.h `MSG_RoundCoord`, `lrint` of the biased value, i.e. round to nearest as cvtsd2si):
+  the writers (origins, the theater demo's rounded floats), MSG_ValuesAreEqual's test for those fields (it
+  must round as the writer does, else a value can stay unsent while the server's base moves on) and the
+  readers. The theater demo reader keeps `(int)oldValue` (its old value is always whole). Every other
+  `(int)(x + 9.313225746154785e-10)` (~200: colours, HUD, usercmd moves, `-86` net fields) still truncates; at
+  most 1 off, and none is decoded against another side's rounding (Open items).
+- **Checked**: release client, 7 managed bots, 130 s: 35 bodies, 32 within 5 units of the bot's last drawn
+  position, 3 at 8-19 units, each exactly at the server's position (sprinting bots are drawn 50-75 ms behind
+  the server, the original's interpolation); before the fix four such runs gave 7 of 29, 9 of 27, 1 of 23 and
+  10 bodies at 18-876 units. Client and dedicated server as two processes over UDP (4 test bots, the kill loop): joins, plays, 12
+  kills, no error. check_file.py natively and `--i386` (only the known GLEW/SDL artefacts), audit_splitlocals.py
+  0, gen_db_save.py `--check`.
+- **Tool**: `kb_shots <count> [<every>]` (sys_platform.cpp, both backends' KB_SCREENSHOT hook in gl_d3d9.cpp):
+  with KB_SCREENSHOT, the next <count> screenshots every <every> presents from the moment the command runs, so
+  a KB_CMDS entry films one kill at 30 per second; `KB_SCREENSHOT_EVERY=0` takes no periodic ones.
 
 ## Decisions (session 29)
 

@@ -44,6 +44,7 @@ void KB_WindowToBackbuffer(int *x, int *y);
 void KB_BackbufferToWindow(int *x, int *y);
 void KB_GLWindowToPixels(int *x, int *y);
 void KB_GLPixelsToWindow(int *x, int *y);
+void KB_SetScreenshotBurst(int count, int every);
 
 // ---- The window-vars global (normally in win_wndproc.cpp) ------------------
 WinVars_t g_wv;
@@ -274,10 +275,12 @@ void Sys_LoadingKeepAlive() { Sys_PumpSDLEvents(Sys_Milliseconds()); }
 // Test tools for the menus, run from KB_MENU_CMDS or KB_CMDS (CLAUDE.md): `kb_mouse <x> <y>` puts the menu
 // cursor at that back-buffer pixel in place of the mouse's position (no arguments: the mouse again), and
 // `kb_key <key>` presses and releases a key by its bind name (MOUSE1 clicks there, ESCAPE, ENTER, ...).
+// `kb_shots <count> [<every>]`: with KB_SCREENSHOT, the next <count> screenshots every <every> presents.
 static bool kbMouseOverride;
 static int kbMouseX, kbMouseY;
 static cmd_function_s KB_Mouse_f_VAR;
 static cmd_function_s KB_Key_f_VAR;
+static cmd_function_s KB_Shots_f_VAR;
 
 static void KB_Mouse_f() {
     kbMouseOverride = Cmd_Argc() >= 3;
@@ -294,6 +297,9 @@ static void KB_Key_f() {
     }
     Sys_QueEvent(Sys_Milliseconds(), SE_KEY, key, 1, 0, nullptr);
     Sys_QueEvent(Sys_Milliseconds(), SE_KEY, key, 0, 0, nullptr);
+}
+static void KB_Shots_f() {
+    KB_SetScreenshotBurst(Cmd_Argc() >= 2 ? atoi(Cmd_Argv(1)) : 0, Cmd_Argc() >= 3 ? atoi(Cmd_Argv(2)) : 1);
 }
 
 // Poll the mouse each frame and feed it to the client, mirroring win_input.cpp's
@@ -315,6 +321,7 @@ void IN_Frame() {
         commandsAdded = true;
         Cmd_AddCommandInternal("kb_mouse", KB_Mouse_f, &KB_Mouse_f_VAR);
         Cmd_AddCommandInternal("kb_key", KB_Key_f, &KB_Key_f_VAR);
+        Cmd_AddCommandInternal("kb_shots", KB_Shots_f, &KB_Shots_f_VAR);
     }
     if (relative) {
         SDL_GetRelativeMouseState(&dx, &dy);   // accumulated look deltas since last call

@@ -13,6 +13,7 @@
 extern unsigned long g_kbDraws, g_kbBlits, g_kbUploads, g_kbPresentEnter;
 extern unsigned long long g_kbUploadBytes;
 void KB_NotePresentRect(int x, int y, int w, int h, int bbWidth, int bbHeight);
+bool KB_ScreenshotNow(unsigned long presents);
 // The end of a map (cl_cgame_mp.cpp, main thread): the render thread writes the map's
 // pipeline cache file at its next Present (or as the device goes, at a quit).
 extern void (*g_kbRendererLevelEnd)(const char *mapName);
@@ -1367,14 +1368,13 @@ HRESULT MTL_SaveSurfaceToFile(const char *file, IDirect3DSurface9 *surface) {
     return D3D_OK;
 }
 
-// KB_SCREENSHOT=<dir> (+KB_SCREENSHOT_EVERY=n): the back buffer every n presents, as the
-// GL layer writes it.
+// KB_SCREENSHOT=<dir> (+KB_SCREENSHOT_EVERY=n, `kb_shots`): the back buffer every n presents, as
+// the GL layer writes it.
 static void MaybeScreenshot(MetalDevice *dev, MetalSurface *bb) {
     static const char *dir = getenv("KB_SCREENSHOT");
     if (!dir) return;
-    static int every = [] { const char *e = getenv("KB_SCREENSHOT_EVERY"); int n = e ? atoi(e) : 0; return n > 0 ? n : 300; }();
     static unsigned long presents;
-    if (++presents % every) return;
+    if (!KB_ScreenshotNow(++presents)) return;
     MetalSurface tmp(dev, MetalSurface::S_SYSMEM, bb->width(), bb->height(), D3DFMT_A8R8G8B8, nullptr, nullptr, 0, 0);
     dev->GetRenderTargetData(bb, &tmp);
     for (size_t i = 3; i < tmp.sysmem().size(); i += 4) tmp.sysmem()[i] = 0xFF;

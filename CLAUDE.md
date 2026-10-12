@@ -140,7 +140,9 @@ waits for a drawable there instead (untested with the display asleep).
 Seeing the client: `screencapture` lacks Screen Recording permission and the
 console is unreachable, so `KB_SCREENSHOT=<dir> KB_SCREENSHOT_EVERY=<n>` writes the
 back buffer as `<dir>/present_N.tga` every n presents (with draw counters on stderr);
-On the GL layer (`KB_RENDERER=gl`) only, `KB_SCREENSHOT_WINDOW=1` adds `window_N.tga`,
+the console command `kb_shots <count> [<every>]` (from KB_CMDS) takes the next <count> every
+<every> presents from then on, to film one moment (a kill at 30 per second: `3.3:kb_shots 90 2`;
+`KB_SCREENSHOT_EVERY=0` takes no periodic ones). On the GL layer (`KB_RENDERER=gl`) only, `KB_SCREENSHOT_WINDOW=1` adds `window_N.tga`,
 what the window shows after scaling, and `KB_TRACEFRAME=n1,n2` logs those frames'
 render-target/viewport/clear/blit/draw calls and, with KB_SCREENSHOT, dumps the back
 buffer at the first resolves.

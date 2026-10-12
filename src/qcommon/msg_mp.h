@@ -2,6 +2,7 @@
 #include <universal/q_shared.h>
 #include <qcommon/bitarray.h>
 #include "ent.h"
+#include <math.h>
 
 enum compressionType_t : unsigned __int8 // LWSS: Not a real enum name
 {
@@ -260,6 +261,17 @@ int __cdecl MSG_ReadDeltaEventParamField(msg_t *msg);
 int __cdecl MSG_ReadEFlags(msg_t *msg, int oldFlags);
 double __cdecl MSG_ReadOriginFloat(int bits, msg_t *msg, float oldValue);
 double __cdecl MSG_ReadOriginZFloat(msg_t *msg, float oldValue);
+
+// The coordinates' conversion to whole units, `(int)(x + 9.313225746154785e-10)` as IDA shows it: a
+// rounding conversion (to nearest), which a C cast doesn't do (toward zero). Truncated, the client read
+// a negative coordinate it held (-325.0) as -324 where the server had rounded its -325.17 to -325, so a
+// coordinate that moved 64 units or more (sent as an XOR with the old value) decoded tens to hundreds of
+// units off and stayed off: bot bodies and respawned bots drawn away from where they were (HANDOFF,
+// Decisions session 30). The writer, its unchanged test and the reader all round with this.
+inline int MSG_RoundCoord(double value)
+{
+    return (int)lrint(value + 9.313225746154785e-10);
+}
 int __cdecl MSG_ReadDeltaEntityStruct(
                 msg_t *msg,
                 int time,

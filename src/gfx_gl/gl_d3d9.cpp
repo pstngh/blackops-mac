@@ -503,13 +503,32 @@ void KB_WriteBackbufferTGA(unsigned fbo, const char *path, int w, int h) {
     fclose(f);
 }
 
+// `kb_shots <count> [<every>]` (sys_platform.cpp) with KB_SCREENSHOT: the next <count> screenshots
+// every <every> presents (default 1) from now on, besides KB_SCREENSHOT_EVERY's; that variable at 0
+// takes none but these. Both backends ask at each present.
+static std::atomic<int> g_kbShotsLeft, g_kbShotsEvery, g_kbShotsPresent;
+
+void KB_SetScreenshotBurst(int count, int every) {
+    g_kbShotsEvery = every > 0 ? every : 1;
+    g_kbShotsPresent = 0;
+    g_kbShotsLeft = count > 0 ? count : 0;
+}
+
+bool KB_ScreenshotNow(unsigned long presents) {
+    static int every = [] { const char *e = getenv("KB_SCREENSHOT_EVERY"); int n = e ? atoi(e) : 300; return n >= 0 ? n : 300; }();
+    if (g_kbShotsLeft > 0 && !(g_kbShotsPresent++ % g_kbShotsEvery)) {
+        --g_kbShotsLeft;
+        return true;
+    }
+    return every && !(presents % every);
+}
+
 // Returns the present's number when it wrote a screenshot, else 0.
 static unsigned long KB_MaybeScreenshot(unsigned fbo, int w, int h) {
     static const char *dir = getenv("KB_SCREENSHOT");
     if (!dir || w <= 0 || h <= 0) return 0;
-    static int every = [] { const char *e = getenv("KB_SCREENSHOT_EVERY"); int n = e ? atoi(e) : 0; return n > 0 ? n : 300; }();
     static unsigned long presents;
-    if (++presents % every) return 0;
+    if (!KB_ScreenshotNow(++presents)) return 0;
 
     char path[1024];
     snprintf(path, sizeof(path), "%s/present_%06lu.tga", dir, presents);

@@ -178,8 +178,8 @@ void __cdecl MSG_WriteOriginFloat(
     {
         __debugbreak();
     }
-    roundedValue = (int)(value + 9.313225746154785e-10);
-    roundedOldValue = (int)(oldValue + 9.313225746154785e-10);
+    roundedValue = MSG_RoundCoord(value);
+    roundedOldValue = MSG_RoundCoord(oldValue);
     if ( (unsigned int)(roundedValue - roundedOldValue + 64) >= 0x80 )
     {
         MSG_WriteBit1(msg);
@@ -212,7 +212,7 @@ void __cdecl MSG_WriteOriginFloat(
         {
             __debugbreak();
         }
-        roundedCenter = (int)(svsHeader.mapCenter[index] + 9.313225746154785e-10);
+        roundedCenter = MSG_RoundCoord(svsHeader.mapCenter[index]);
         MSG_WriteBits(msg, (roundedOldValue + 0x8000 - roundedCenter) ^ (roundedValue - roundedCenter + 0x8000), 0x10u);
     }
     else
@@ -297,8 +297,8 @@ void __cdecl MSG_WriteOriginZFloat(
     {
         __debugbreak();
     }
-    roundedValue = (int)(value + 9.313225746154785e-10);
-    roundedOldValue = (int)(oldValue + 9.313225746154785e-10);
+    roundedValue = MSG_RoundCoord(value);
+    roundedOldValue = MSG_RoundCoord(oldValue);
     if ( (unsigned int)(roundedValue - roundedOldValue + 64) >= 0x80 )
     {
         MSG_WriteBit1(msg);
@@ -312,7 +312,7 @@ void __cdecl MSG_WriteOriginZFloat(
         {
             __debugbreak();
         }
-        roundedCenter = (int)(svsHeader.mapCenter[2] + 9.313225746154785e-10);
+        roundedCenter = MSG_RoundCoord(svsHeader.mapCenter[2]);
         MSG_WriteBits(msg, (roundedOldValue + 0x10000 - roundedCenter) ^ (roundedValue - roundedCenter + 0x10000), 0x11u);
     }
     else
@@ -377,8 +377,8 @@ void __cdecl MSG_WriteDemoRoundedFloat(
     }
     diffBias = 1 << (diffBits - 1);
     fullBias = 1 << (fullBits - 1);
-    roundedValue = (int)(value + 9.313225746154785e-10);
-    roundedOldValue = (int)(oldValue + 9.313225746154785e-10);
+    roundedValue = MSG_RoundCoord(value);
+    roundedOldValue = MSG_RoundCoord(oldValue);
     truncDelta = roundedValue - roundedOldValue;
     if ( diffBias + roundedValue - roundedOldValue < 0 || diffBias + truncDelta >= 1 << diffBits )
     {
@@ -474,7 +474,7 @@ bool __cdecl MSG_ValuesAreEqual(int clientNum, int bits, int size, const int *fr
         case -66:
         case -65:
         case -64:
-            result = (int)(*(float *)fromF + 9.313225746154785e-10) == (int)(*(float *)toF + 9.313225746154785e-10);
+            result = MSG_RoundCoord(*(float *)fromF) == MSG_RoundCoord(*(float *)toF);
             break;
         case -100:
         case -87:
