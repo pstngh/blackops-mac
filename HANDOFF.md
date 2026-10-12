@@ -400,7 +400,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   WWII guns kept World at War's walking motion (the first-person gun drops 1-3.25 units and doesn't tilt); every
   Black Ops gun stays up and tilts 2 degrees. Now all 15 WWII guns (the MP40 already did) move like Black Ops'
   standing and crouched; prone keeps each gun's own crawl pose. The user chose all of them over only the Thompson.
-  Checked (Decisions session 32).
+  Checked (Decisions session 32). The game folder has it (make_portable.sh at 806f09a7, the user's request); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -617,7 +617,7 @@ weapons (dropped earlier anyway), zombies content, rebuilding the guns file from
 **Session 32: Medal of Honor damage (`kb_mohaaDamage`): done** (the user's request; Status, Decisions session 32).
 Installed in the game folder and pushed at the user's request. Then the Thompson held closer (`kb_gunPlacement`, the
 user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
-(`kb_wwiiGunMovement`; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+(`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
