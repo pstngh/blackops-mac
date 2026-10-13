@@ -658,12 +658,58 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
+**Next (the user's decision, 2026-10-13, session 34): strip what nothing uses from the archives, then all of zombies.**
+Asked "what is the biggest next thing we can strip from the game to save space", the user was shown the measurement
+(Decisions session 34, "What is left to strip") and answered "i approve both, in a fresh session for each. please make
+ABSOLUTELY sure ur not deleting anything we'll need by mistkae. can you also FULLY backup the gun files from rez first
+somewhere?". The backup is done (below). Two jobs, each in its own session, in this order:
+- **A (session 35): the archive files nothing names, ~2.66 GB** (1.6 GB images, 1.0 GB sounds; 2.26 GB in the base
+  game's iw_00-25 and localized archives, most likely the campaign's, whose zones went in session 33; 0.4 GB in the map
+  packs' archives, files their own maps never name). A file of main/*.iwd is kept if any zone of the game folder names it
+  (images/<name>.iwi by <name>, sounds by path: NUL-terminated strings of each decompressed zone) or the executable does
+  (13 files, 78 KB: `$white`, `$black`, `cross`, `ui3d`, fileSysCheck.cfg, configure_mp.csv, ...); the zombie zones
+  still count (job B removes them). Engine fact: an image file is opened only as "images/" + the GfxImage's name + ".iwi"
+  (r_image_load_obj.cpp), a streamed sound only by its alias's file name. Before trusting the list, look for any other
+  way a file is opened by a name no zone holds (FS_FOpenFile* callers that build names: loading screens, `va(...)`
+  material or image names, fonts, cinematics, the .cfg/.csv files, the localized archives) and keep anything doubtful.
+  Then as session 33: rebuild the changed archives (tools/strip_voices.py's archive code; a new tool), a scratch game
+  folder with the rebuilt archives and an untouched one to compare. The checks that must pass (the user wants it
+  ABSOLUTELY sure): temporary logging of every file open that fails and every streamed image or sound not found, same
+  set in both folders, over every map (all 26) with the client (bench_views.py --map all; a match per map with bots
+  and the scripted player firing the WWII guns and multiplayer's), the main menu, Create a Class (every list and the
+  WWII guns' pictures), the launcher's 16-bot FFA, a dedicated server rotation; screenshots of every map's views
+  compared with tools/cmp_screens.py (no more than the normal 0.05-5% noise); missingasset.csv unchanged; then the real
+  folder only with the user's OK, originals to the Trash through Finder (Put Back works), rebuilt archives in as
+  `.iwd.new` then renamed (session 33's way). Afterwards, rebuild the guns file from the backup (below) to show it still
+  can be.
+- **B (session 36): all of zombies, ~1.6 GB**: the 10 zombie maps (zombie_theater, zombie_pentagon, zombie_cosmodrome,
+  zombie_coast, zombie_temple, zombie_moon, zombie_cod5_prototype/asylum/sumpf/factory) and Dead Ops Arcade (zombietron),
+  each with its _patch and en_ zones, common_zombie(_patch) and en_common_zombie (615 MB of zones), and the archive files
+  only zombie zones name (967 MB: e.g. all of iw_37, iw_40, iw_41, most of iw_28, iw_32, iw_35, iw_36, iw_38). This
+  multiplayer executable can't play zombies (Black Ops runs zombies in its campaign executable). This replaces the
+  Rezurrection item below (its facts still hold: the guns need from Rezurrection only files kb_dlc_weapons.ff names,
+  which the usage rule keeps wherever they are, so no separate iw_kb_dlc_weapons.iwd is needed; still do its first step,
+  the suppressed aliases added to kb_dlc_weapons.ff, before the zones go, and make make_portable.sh keep the installed
+  kb_dlc_weapons.ff when the source zones are missing). The small shared non-multiplayer zones (common.ff,
+  code_pre_gfx.ff, code_post_gfx.ff, patch.ff and their en_, 23 MB) are campaign/zombies only too: ask the user before
+  touching them. Same checks as A, plus every WWII gun in a match (fire, reload sounds, full-resolution textures by
+  screenshot against the untouched folder), Create a Class's WWII entries, and the guns file rebuilt from the backup.
+  The user was told what goes: zombies entirely (unplayable here anyway), Rezurrection's 5 maps, rebuilding the guns
+  from the game folder alone (the backup can).
+- **The backup (done, session 34; the user chose "next to the game (iCloud)")**:
+  `/Users/pstn/Documents/Games/codbo_wwii_guns_backup` (766 MB, in iCloud Drive like the game folder), the game folder's
+  layout: zone/Common zombie_cod5_{prototype,asylum,sumpf,factory}(.ff, _patch.ff), common_zombie.ff,
+  common_zombie_patch.ff, kb_dlc_weapons.ff (the installed one); zone/English en_zombie_cod5_*.ff, en_common_zombie.ff;
+  main/iw_36-41.iwd (Rezurrection's archives, as they were). SHA256SUMS.txt (every copy matched its original),
+  README.txt. Checked: tools/make_dlc_weapons.sh on a scratch game folder whose zombie zones were only the backup's
+  wrote a kb_dlc_weapons.ff byte-identical to the installed one. Game content: never into the repo.
+
 **Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
 (Status, Decisions session 34; installed in the game folder and pushed at the user's request). Then never reload
 (`kb_infiniteClip` and the launcher's switch; Status), then the user's answers to the two questions (the HS-10 comes as
 an AK-47, "give it any other weapon"; the bots' second gun is a pistol, "bot's secondary should be a pistol"): installed
 in the game folder (make_portable.sh at 28f22cab) and pushed (GitHub mac-port at 28f22cab), at the user's request. Next:
-the Rezurrection item below (check git log first), unless the user brings something new.
+the two strip jobs above (A, then B, each in a fresh session), unless the user brings something new.
 The request as it was (session 33). The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
 dual wield/launcher block ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine
 guns / ALL snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS THOUGH. i will go
@@ -696,8 +742,8 @@ each spawn; asked whether bots too, no answer).
 32; Status, Decisions session 33). The user's OK came after the list and the scratch-folder tests; the removed files are in
 the user's iCloud Drive Trash (they empty it). The plan kept from session 32 is in git history (51940abf).
 
-**Next (the user's decision, 2026-10-12, in session 31's conversation): remove Rezurrection from the game folder,
-keep the 16 WWII guns.** Facts found (read-only): each DLC added its own map files and numbered archives (dates and
+**Replaced by job B above (2026-10-13: all of zombies); kept for its facts. Was next (the user's decision, 2026-10-12, in
+session 31's conversation): remove Rezurrection from the game folder, keep the 16 WWII guns.** Facts found (read-only): each DLC added its own map files and numbered archives (dates and
 contents): First Strike `iw_26`-`28` + mp_berlinwall2, mp_discovery, mp_kowloon, mp_stadium, zombie_cosmodrome;
 Escalation `iw_29`-`32` + mp_gridlock, mp_hotel, mp_outskirts, mp_zoo, zombie_coast; Annihilation `iw_33`-`35` +
 mp_area51, mp_drivein, mp_golfcourse, mp_silo, zombie_temple; Rezurrection (zombies only, ~800 MB) `iw_36`-`41` +
@@ -1304,6 +1350,17 @@ secondary should be a pistol".
   `kb_noGrenades 0`: 34 bot spawns got 18 launchers, China Lakes and crossbows (as the original game), no Ballistic
   Knife. Create a Class (screenshots): the class screen without the three rows, the secondary with Pistols only, as
   before. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**What is left to strip** (the user's question; read-only, game folder 7.3 GB). main/ 5.1 GB (50 archives), zone/ 1.7 GB,
+players/ 465 MB (464 MB of it the Metal pipeline cache, players/metal_pipelines: it is rebuilt as maps are played, so not
+a saving). A scan of every archive file against the NUL-terminated strings of every decompressed zone (multiplayer
+group: mp_*, *_mp, kb_dlc_weapons and their en_; zombies: zombie*, common_zombie*; the rest: common, code_*_gfx, patch):
+named by multiplayer 1,532 MB (14,917 files), only by zombie zones 967 MB (2,899), only by the small shared zones 10 MB
+(42), by nothing 2,657 MB (11,535 files: 1,615 MB images, 1,039 MB sounds, 3 MB other). Zones: multiplayer 1,080 MB,
+zombies 616 MB, shared 23 MB. Of the "nothing" set, the executable's strings name 13 files (78 KB). Spot checks of the
+map packs' share: e.g. `~-gt5_vehicle_t55_map2_berlin_c` (mp_berlinwall2 names `t5_vehicle_t55_map2_berlin_n` only),
+`mp_ib_wall_interior_01_n` (mp_discovery names only the material `wc/mp_ib_wall_interior_01`). The scan script was a
+scratch tool (scratchpad, deleted); job A writes a proper one.
 
 **Never reload (`kb_infiniteClip`)** (Status).
 - **Where**: every shot's ammo goes through PM_WeaponUseAmmo (bg_weapons_ammo.cpp; guns, both hands of a dual wield, and
