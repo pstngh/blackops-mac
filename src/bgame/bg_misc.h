@@ -338,6 +338,7 @@ extern const dvar_s *player_debugHealth;
 extern const dvar_s *player_debugSprint;
 extern const dvar_s *player_sustainAmmo;
 extern const dvar_s *kb_infiniteReserve;
+extern const dvar_s *kb_infiniteClip;
 extern const dvar_s *kb_staticCrosshair;
 extern const dvar_s *kb_noAds;
 extern const dvar_s *kb_sprintFire;

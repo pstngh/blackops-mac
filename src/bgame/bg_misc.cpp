@@ -421,6 +421,7 @@ const dvar_s *player_debugHealth;
 const dvar_s *player_debugSprint;
 const dvar_s *player_sustainAmmo;
 const dvar_s *kb_infiniteReserve;
+const dvar_s *kb_infiniteClip;
 const dvar_s *kb_staticCrosshair;
 const dvar_s *kb_noAds;
 const dvar_s *kb_sprintFire;
@@ -1040,6 +1041,12 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Reloading doesn't use up the human players' reserve ammo (the clip still empties)");
+    // The user's change (HANDOFF, Decisions session 34); the launcher's "Never reload" sets it at every start.
+    kb_infiniteClip = _Dvar_RegisterBool(
+        "kb_infiniteClip",
+        1,
+        1u,
+        "Firing doesn't empty the human players' magazines, so they never reload");
     kb_staticCrosshair = _Dvar_RegisterBool(
         "kb_staticCrosshair",
         1,

@@ -63,7 +63,8 @@ the picture in Contents/Resources and a rebuild without one reuses it: HANDOFF, 
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
-normal` (easy/normal/hard/fu; the bots arrive ~10 s in), and `+set kb_damagePercent <n>` ("Gun damage", every start). `KB_LAUNCHER_TEST=<dir>`
+normal` (easy/normal/hard/fu; the bots arrive ~10 s in), `+set kb_damagePercent <n>` ("Gun damage") and `+set
+kb_infiniteClip 0/1` ("Never reload"), both at every start. `KB_LAUNCHER_TEST=<dir>`
 makes the app save its window as `<dir>/launcher.png` and press Play itself; run it
 in a scratch copy of the game folder (links to `main`, `zone`, `lib` and a copy of
 `blackops`), as the app starts the `blackops` next to it with that folder's profile.
@@ -95,7 +96,8 @@ sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32 and 34): `kb_godMode` (human play
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
 read at startup: a change takes effect at the next start),
 `kb_noDeathCam` (respawn 0.1 s after dying), `kb_noMusic`, `kb_noAnnouncer`,
-`kb_infiniteReserve`, `kb_staticCrosshair` (the user's Counter-Strike crosshair, CS:GO's classic
+`kb_infiniteReserve`, `kb_infiniteClip` (the human players' magazines never empty: no reloads; the launcher's "Never reload"),
+`kb_staticCrosshair` (the user's Counter-Strike crosshair, CS:GO's classic
 static one, in screen pixels; its look is `kb_crosshairSize`/`Gap`/`Thickness`/`Color`/`UseAlpha`/
 `Dot`/`Outline`/`OutlineThickness`, CS's `cl_crosshair*`; the human players' shots land inside its
 gap, 0.4 degrees), `kb_noVersion` (no version text at the bottom right), `kb_noAds`,

@@ -727,6 +727,11 @@ void __cdecl PM_WeaponUseAmmo(playerState_s *ps, unsigned int wp, int amount)
     int v4; // [esp+0h] [ebp-10h]
     int AmmoInClip; // [esp+4h] [ebp-Ch]
 
+    // kb_infiniteClip: a shot takes nothing from a human player's magazine, so a gun never needs a reload
+    // (pmove runs on the server and in the client's own prediction: BG_KbHumanPlayer); offhands (grenades,
+    // equipment) still use theirs up
+    if ( kb_infiniteClip->current.enabled && !BG_GetWeaponDef(wp)->offhandClass && BG_KbHumanPlayer(ps) )
+        return;
     if ( !player_sustainAmmo->current.enabled || !Flame_GetLocalClientSourceRange() )
     {
         AmmoInClip = BG_GetAmmoInClip(ps, wp);

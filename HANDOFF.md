@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-12, session 34)
+## Status (2026-10-13, session 34)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -461,7 +461,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   crossbow, and has no Lethal, Tactical and Equipment rows (nor those items in the class's summary); the secondary
   offers only Pistols. With `kb_cleanHud`, the teammates' death skull and every other world marker (objective markers)
   are hidden during play too: session 29 hid them in a drawing path the game doesn't use. Checked in play and in the
-  menus (Decisions session 34). Not installed in the game folder yet.
+  menus (Decisions session 34). The game folder has it (make_portable.sh at bdf8bbb7, the user's request; the DLC zone
+  rewritten, same size; the shader library step still stops at the missing Metal Toolchain).
+- **Never reload** (session 34, the user: "a cvar that lets me never reload (mag never empites) should also be a switch on
+  the launcher"): `kb_infiniteClip`, archived, default 1, and the launcher's "Never reload" switch (in Guns, on until
+  turned off; passed at every start like Gun damage). Firing takes nothing from a human player's magazine, so a gun never
+  needs a reload; the bots' guns empty and reload as before; grenades and equipment (blocked anyway) still use theirs up.
+  Checked (Decisions session 34). Not installed in the game folder yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -651,8 +657,9 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
-(Status, Decisions session 34; committed, not installed in the game folder, not pushed). Next: ask the user whether to
-install it (make_portable.sh) and push; then two questions for them, in plain words: (a) the HS-10 turned out to be a main
+(Status, Decisions session 34; installed in the game folder at the user's request, not pushed). Then never reload
+(`kb_infiniteClip` and the launcher's switch; Status): committed, not installed, not pushed. Next: ask the user whether to
+install it (make_portable.sh) and push; then two questions for them (asked once in session 34, not answered yet), in plain words: (a) the HS-10 turned out to be a main
 gun (a shotgun, like the Olympia), so a class with it now spawns with only its pistol, as they asked ("leaves the slot
 empty"): keep that, or give an AK-47 like the other blocked main guns? (b) bots that pick a launcher as their second gun
 still get an AK-47 there (session 23's kb_noLaunchers; the user's answer then): have them pick a pistol instead? Then the
@@ -1277,6 +1284,24 @@ user's answers in Next steps). Both new dvars archived, default 1; 0 gives the o
   Specials. A dedicated server with 4 test clients (75 s): 100 gives, no blocked gun, no melee. The launcher's FFA with 16
   bots (95 s): no error beyond the usual map-load effect warnings, no script patch warning. check_file.py natively and
   `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**Never reload (`kb_infiniteClip`)** (Status).
+- **Where**: every shot's ammo goes through PM_WeaponUseAmmo (bg_weapons_ammo.cpp; guns, both hands of a dual wield, and
+  the offhands' throws); with the dvar it returns for a human player's (BG_KbHumanPlayer, as kb_infiniteReserve: pmove
+  runs on the server and in the client's prediction of its own player) non-offhand weapon (`offhandClass` 0), so the
+  clip stays full and a reload never starts. Offhands are left alone so that turning kb_noGrenades off doesn't give
+  endless grenades. The cheat dvar `player_sustainAmmo` does the same for everyone, bots too; not used.
+- **The launcher**: an `@AppStorage("neverReload")` switch (default on) in the Guns section, passed as `+set
+  kb_infiniteClip 1/0` at every start (the main menu too), like `kb_damagePercent`; the section's footer explains both
+  rows; the window is 760 points high (720 cut off the View row).
+- **Checked**: release client, mp_nuked TDM, 7 managed bots, the default SMG class (MP5K), 6 s of full-auto fire twice
+  (temporary counting of PM_WeaponUseAmmo calls, removed): with the dvar, 296 human calls kept the clip, the bots' 4
+  used theirs, the HUD (kb_cleanHud 0) showed 30/90 after the bursts; with `kb_infiniteClip 0`, 79 human calls used the
+  clip and it reloaded (28/90; the reserve stays with kb_infiniteReserve). The launcher from a scratch game folder
+  (re-identified copy, KB_LAUNCHER_TEST, its defaults domain deleted afterwards): the game started with `+set
+  kb_infiniteClip 1` and saved `seta kb_infiniteClip "1"`; with the switch off (`defaults write ... neverReload -bool
+  false`), `0` and `"0"`; the window shows the switch and every row. check_file.py natively and `--i386`,
+  audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 33)
 

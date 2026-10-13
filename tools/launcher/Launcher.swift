@@ -7,7 +7,8 @@
 // sv_botsPressAttackBtn and sv_botsPressMeleeBtn default to off (the scripts turn
 // them on only in developer blocks), so the launcher sets them. Friendly bots are
 // on allies and the player joins allies through KB_CMDS (linux_main.cpp).
-// Gun damage is kb_damagePercent (every gun but the sniper rifles, everyone's).
+// Gun damage is kb_damagePercent (every gun but the sniper rifles, everyone's), Never reload
+// kb_infiniteClip (the player's magazines never empty).
 //
 // Build: tools/launcher/build.sh <game dir>
 import AppKit
@@ -107,6 +108,7 @@ struct LauncherView: View {
     @AppStorage("noScoreLimit") private var noScoreLimit = false
     @AppStorage("showArms") private var showArms = true     // cg_drawArms
     @AppStorage("damagePercent") private var damagePercent = 100    // kb_damagePercent
+    @AppStorage("neverReload") private var neverReload = true      // kb_infiniteClip
     @State private var error: String?
 
     private let installedMapPackMaps: [GameMap] = {
@@ -163,10 +165,11 @@ struct LauncherView: View {
                 }
                 Section {
                     Stepper("Gun damage: \(damagePercent)%", value: $damagePercent, in: 5...100, step: 5)
+                    Toggle("Never reload", isOn: $neverReload)
                 } header: {
                     Text("Guns")
                 } footer: {
-                    Text("Lowers every gun but the snipers, yours and the bots'. 100% is normal.")
+                    Text("Gun damage lowers every gun but the snipers, yours and the bots'; 100% is normal. Never reload: your magazine never empties.")
                         .foregroundStyle(.secondary)
                 }
                 Section("View") {
@@ -186,7 +189,7 @@ struct LauncherView: View {
             .padding([.horizontal, .bottom], 20)
             .padding(.top, 4)
         }
-        .frame(width: 440, height: 720)
+        .frame(width: 440, height: 760)
         .alert("Can't start the game", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: {
@@ -256,8 +259,9 @@ struct LauncherView: View {
         process.executableURL = game
         process.currentDirectoryURL = folder
         var environment = ProcessInfo.processInfo.environment
-        // First-person arms (cg_drawArms 0: the weapon alone) and gun damage; the game saves them.
-        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(min(max(damagePercent, 5), 100))]
+        // First-person arms (cg_drawArms 0: the weapon alone), gun damage and never reloading; the game saves them.
+        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(min(max(damagePercent, 5), 100)),
+                             "+set", "kb_infiniteClip", neverReload ? "1" : "0"]
         if match {
             process.arguments! += matchArguments()
             // Join the team the friendly bots are on (allies); free-for-all has one.
