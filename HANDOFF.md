@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-13, session 34)
+## Status (2026-10-13, session 35)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -470,6 +470,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   needs a reload; the bots' guns empty and reload as before; grenades and equipment (blocked anyway) still use theirs up.
   Checked (Decisions session 34). The game folder has it (make_portable.sh at 28f22cab, the user's request, with the
   answers below; the launcher with the switch); pushed at the user's request.
+- **Archive files nothing names** (session 35, job A of the user's decision in session 34: "i approve both ... please make
+  ABSOLUTELY sure ur not deleting anything we'll need by mistkae"): tools/strip_unused.py lists and rebuilds main/*.iwd
+  without the images and sounds no zone, executable or archive text names: 3,894 files, 1,783 MB (story-mission music
+  806 MB, 3,034 unused pictures 693 MB, event, ambience, test and other sounds). Not session 34's 2.66 GB: its scan missed
+  4,508 images the zones do name (~750 MB the game needs; Decisions session 35). 24 archives rebuilt, iw_21 emptied; the
+  map packs' and Rezurrection's archives lose nothing. Checked on scratch copies, all passing (Decisions session 35):
+  no removed file requested in any run, the same misses with and without them, screenshots of every map and of Create
+  a Class within run-to-run noise, the WWII guns file rebuilt from the backup byte-identical. Waiting for the user's OK
+  before the real folder is touched (their list: build_macos/strip_unused/removal_list.txt, git-ignored).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -663,29 +672,21 @@ Asked "what is the biggest next thing we can strip from the game to save space",
 (Decisions session 34, "What is left to strip") and answered "i approve both, in a fresh session for each. please make
 ABSOLUTELY sure ur not deleting anything we'll need by mistkae. can you also FULLY backup the gun files from rez first
 somewhere?". The backup is done (below). Two jobs, each in its own session, in this order:
-- **A (session 35): the archive files nothing names, ~2.66 GB** (1.6 GB images, 1.0 GB sounds; 2.26 GB in the base
-  game's iw_00-25 and localized archives, most likely the campaign's, whose zones went in session 33; 0.4 GB in the map
-  packs' archives, files their own maps never name). A file of main/*.iwd is kept if any zone of the game folder names it
-  (images/<name>.iwi by <name>, sounds by path: NUL-terminated strings of each decompressed zone) or the executable does
-  (13 files, 78 KB: `$white`, `$black`, `cross`, `ui3d`, fileSysCheck.cfg, configure_mp.csv, ...); the zombie zones
-  still count (job B removes them). Engine fact: an image file is opened only as "images/" + the GfxImage's name + ".iwi"
-  (r_image_load_obj.cpp), a streamed sound only by its alias's file name. Before trusting the list, look for any other
-  way a file is opened by a name no zone holds (FS_FOpenFile* callers that build names: loading screens, `va(...)`
-  material or image names, fonts, cinematics, the .cfg/.csv files, the localized archives) and keep anything doubtful.
-  Then as session 33: rebuild the changed archives (tools/strip_voices.py's archive code; a new tool), a scratch game
-  folder with the rebuilt archives and an untouched one to compare. The checks that must pass (the user wants it
-  ABSOLUTELY sure): temporary logging of every file open that fails and every streamed image or sound not found, same
-  set in both folders, over every map (all 26) with the client (bench_views.py --map all; a match per map with bots
-  and the scripted player firing the WWII guns and multiplayer's), the main menu, Create a Class (every list and the
-  WWII guns' pictures), the launcher's 16-bot FFA, a dedicated server rotation; screenshots of every map's views
-  compared with tools/cmp_screens.py (no more than the normal 0.05-5% noise); missingasset.csv unchanged; then the real
-  folder only with the user's OK, originals to the Trash through Finder (Put Back works), rebuilt archives in as
-  `.iwd.new` then renamed (session 33's way). Afterwards, rebuild the guns file from the backup (below) to show it still
-  can be.
-- **B (session 36): all of zombies, ~1.6 GB**: the 10 zombie maps (zombie_theater, zombie_pentagon, zombie_cosmodrome,
+- **A (session 35): the archive files nothing names: scratch checks done, waiting for the user's OK** (Status,
+  Decisions session 35). tools/strip_unused.py: 3,894 files, 1,783 MB (not 2.66 GB: session 34's scan missed 4,508
+  images the zones name). The rebuilt archives are in session 35's scratchpad; rebuild them for the real folder with
+  `python3 tools/strip_unused.py /Users/pstn/Documents/Games/codbo <out dir>` (~3 minutes, checks each archive; the plan is
+  deterministic: same zones, archives and executables give the same list). With the user's OK: originals to the Trash
+  through Finder, the rebuilt ones in as `.iwd.new`, checked by checksum, renamed right after each original leaves;
+  iw_21.iwd only to the Trash; then `tools/strip_unused.py <game dir> - --check`, a server start and a short client run
+  from the real folder (build_macos/blackops, scratch fs_h, windowed). Then remove the temporary KB_FSLOG logging from
+  com_files.cpp (never committed) and rebuild.
+- **B (session 36): all of zombies, ~1.9 GB**: the 10 zombie maps (zombie_theater, zombie_pentagon, zombie_cosmodrome,
   zombie_coast, zombie_temple, zombie_moon, zombie_cod5_prototype/asylum/sumpf/factory) and Dead Ops Arcade (zombietron),
   each with its _patch and en_ zones, common_zombie(_patch) and en_common_zombie (615 MB of zones), and the archive files
-  only zombie zones name (967 MB: e.g. all of iw_37, iw_40, iw_41, most of iw_28, iw_32, iw_35, iw_36, iw_38). This
+  only zombie zones name (session 35's count: 1,245 MB, 4,143 files, mostly iw_38, iw_36 and the map packs' iw_26, 29,
+  33; session 34's 967 MB had missed the images whose names follow a printable hash, Decisions session 35;
+  tools/strip_unused.py's list gives each file's naming groups: `zombie` alone is B's). This
   multiplayer executable can't play zombies (Black Ops runs zombies in its campaign executable). This replaces the
   Rezurrection item below (its facts still hold: the guns need from Rezurrection only files kb_dlc_weapons.ff names,
   which the usage rule keeps wherever they are, so no separate iw_kb_dlc_weapons.iwd is needed; still do its first step,
@@ -1271,6 +1272,97 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 35)
+
+**Stripping the archive files nothing names (job A)** (Status; the user's approval in Next steps). Read-only audit first,
+then two scratch game folders, then the real one with the user's OK.
+- **How the engine opens archive files** (audit): every read of main/*.iwd goes through FS_FOpenFileReadForThread
+  (com_files.cpp; FS_FOpenFileRead/ReadCurrentThread/ByMode/ReadFile and the stream thread all end there), plus the
+  listings (FS_ListFilteredFiles: gametype scripts, mp/*.arena, maps/*.d3dbsp, localizedstrings, shaders, effects .csv,
+  mods, console completion; none lists images/ or sound/). The archives hold only images/*.iwi (21,583 files), .wav
+  under sound/ and english/sound/ (6,589), weapons/ text files (1,165) and ~40 .cfg/.csv/.accu files. In fastfile mode an
+  image file is opened only as "images/" + a GfxImage asset's name + ".iwi" (Image_LoadFromFile/Image_LoadToBuffer,
+  r_image_load_obj.cpp; Image_Register and Image_FindExisting go to DB_FindXAssetHeader, so every GfxImage is a zone
+  asset: Load_GfxImagePtr adds each inline image as an asset too), a streamed sound only by its alias's file string
+  (SND_StartAliasStream -> SND_AliasGetFileName -> Snd_ReadBuffer, verbatim, no language prefix). Load screens
+  (Com_LoadMapLoadingScreenFastFile), `loadscreen_%s` materials, fonts and menus come from zones; cinematics aren't in
+  the archives; no code builds an image or sound path (`"images/"`/`.iwi` only in r_image_load_obj.cpp; no `.wav`,
+  `"sound/"` or `_loc` names). So only images and sounds can go, by the names the zones hold.
+- **Session 34's estimate was too high** (2,657 MB, 11,535 files): its scan took whole NUL-terminated strings. In a zone
+  an image's name follows its GfxImage struct, whose last field is a 4-byte hash (`ff ff ff ff` <hash> <name>\0); when
+  hash bytes are printable they join the name (`$aimpoint_red_dot_n`, `v$white_r32f`, `Ua51_dec_glass_broken_c`).
+  `listzone <zone> image` / `sound` over all 109 zones (one dedicated server, a cfg of 218 listzone commands, <1 minute):
+  17,466 image names (17,450 in the archives), 19,762 streamed sound files (5,597 in the archives; the rest are the
+  voices session 33 removed). 4,508 of those images are not whole strings in the zones: all of them end a string with at
+  most 4 extra characters (the hash). Whole strings only would have removed them (~750 MB the game needs). The real figure:
+  removals by rule: engine lists only 1,800 MB (4,055 files); strings ending with the name (any prefix) 1,787 MB; the
+  name anywhere in a string (the rule chosen, the most keeping) 1,783 MB (3,894 files). The engine lists add nothing to
+  the chosen rule's keep set (checked: `--names` of all 41,739 engine names keeps 0 more).
+- **tools/strip_unused.py** (new): keeps every file that isn't an image or sound; keeps an image or sound when its name
+  (image name; sound path; any case, / or \) is a substring of a string (run of name characters) of any zone of the game
+  folder (all 109: multiplayer, zombies, the shared campaign zones; the zlib-packed scripts inside them unpacked too),
+  either executable (the game folder's and build_macos's), the archives' own text files, or a --names list. Writes the
+  changed archives (entries in order; local header, data and central record byte for byte but the offset), checks each
+  (central records equal but the offset; every file unpacked by the central directory's sizes to its size and CRC), and
+  lists every file with what happens and why: strip_unused.txt (the groups naming it: mp, zombie, shared, exe, archive).
+  `--check` checks every archive of a folder that way (the real folder's 29,393 files: all ok, session 33's rebuilt
+  ones included).
+- **A bug found on the way**: the first rebuild wrote, from strip_voices.py's central_record, the compressed size into
+  the uncompressed-size field. Session 33's archives hold only stored files, where both sizes agree; the image archives
+  are deflated, and the game stopped at startup with "image 'images/gamefonts_pc.iwi' is truncated" (scratch folder
+  only). strip_unused.py keeps the original records; strip_voices.py now writes both sizes and its check unpacks
+  deflated files (it would have refused such an archive before, its CRC check failing); rerun on the real folder it
+  reproduces session 33's six archives byte for byte. `unzip -t` had passed the bad archives: it doesn't trust the sizes.
+- **The result** (dry run = the written plan): 3,894 files, 1,783 MB stored (images 693 MB, 3,034 files; sounds 1,090 MB,
+  860 files: music nothing plays 806 MB (the story missions', the Stones' "Sympathy" loops, two unused multiplayer spawn
+  jingles), events and scenes 154, ambience 66, the audio test sounds sound/tst 38, vehicles, characters 26). 24 archives rebuilt (iw_01-20, 22, 23, localized_English_iw00-01), iw_21
+  (campaign music only) emptied; iw_00, 24-41 (all map packs and Rezurrection) and localized_English_iw02, 03, 12 lose
+  nothing. main/ 5,422 -> 3,639 MB of archives. Kept files by who names them: multiplayer only 1,649 MB, multiplayer and
+  zombies 681 MB, zombies only 1,245 MB (4,143 files: job B's share, mostly iw_36/38 and the map packs' iw_26/29/33),
+  the shared campaign zones only 17.6 MB.
+- **Checks** (scratch folders: A = links to every original archive and the zones, B = the rebuilt archives, the others
+  linked, no iw_21; build_macos/blackops with temporary logging of every file read request and listing, KB_FSLOG, once per
+  distinct request, in com_files.cpp, never committed; scratch profiles; OpenAL Soft's wave writer to /dev/null, so silent):
+  - **Every request logged** (an analysis script in the scratchpad): over all runs below, A read 14,565 distinct files from
+    the archives and B 14,525 (14,713 of the 23,214 kept images and sounds between them; every image of every
+    multiplayer zone is read when the zone loads, sounds as they play: ~40 music files and ~250-290 voice placeholders a
+    rotation); not one file on the removal list was requested in either folder (opens, existence checks, listings);
+    the misses are the same 20 names in both (autoexec_dev_mp.cfg, ban.txt, devgui_*.cfg: files that never exist); the
+    listings only ever ask for localizedstrings/ and maps/ (nothing in the archives). No "image ... is missing /
+    truncated", "Could not open streaming sound", "Invalid file", Sys_Error or ASan line in any of the 66 game logs.
+  - **Client, all 26 maps, a match each**: one rotation (TDM, Dom, HQ, CTF, Sab, Dem, S&D in turn, 1-minute limits) per
+    folder, the launcher's 7 managed bots, the scripted player giving himself and firing and reloading each of the 16
+    WWII guns in turn; with the user's settings (two passes, 50 and 51 maps) and with every kb_ change off but
+    the WWII guns and the CAC button (music, announcer, HUD, grenades, killstreaks, outcome screens, scoreboard;
+    developer 1): no crash; the error and warning lines differ only where the play did (which guns the bots held,
+    physics and bot path messages).
+  - **Dedicated server**: the same rotation with 8 test clients, 30-second limits, 88 map loads per folder: the same
+    error and warning lines.
+  - **missingasset.csv** (written with developer 1, under fs_h): the same 98 entries in both folders (58,261 bytes each);
+    its entries beyond the real folder's old file are missing with the untouched archives too (zone assets).
+  - **Screenshots**: tools/bench_views.py --map all --shots (33 views: every map's overview, mp_nuked's a-f and sky),
+    A, B, A again: B against the closer A run 0.00-0.12% of pixels on all views but mp_hotel 0.91, mp_radiation 0.77,
+    mp_mountain 0.43 and mp_kowloon 3.20 (A against A: 1.61, 0.95, 0.74, 2.20; mp_crisis's first A run differed 23.9% from
+    both others). The four views where B differs more than A from A (firingrange 0.12, kowloon 3.20, russianbase 0.08,
+    silo 0.06%) looked at as difference images: the FPS counter, a bird, a fire particle, Kowloon's lightning and rain.
+  - **Menus** (KB_MENU_CMDS, 31 screenshots each; the list is cut at 4 KB, so in three runs): the main menu, Create a
+    Class, Custom 1, the gun screen, the group list, the assault/SMG/LMG/sniper/shotgun lists, each of the 16 WWII guns'
+    gun screens (picture, name, bars), the secondary's Pistols: 0.10-0.12% of pixels apart (the same spot each time).
+    The menus' icons (68 perk icons, emblems, killstreak, camo and attachment icons) are read when the menu zones load,
+    in both folders, so every Create a Class list's pictures were read.
+  - **The launcher** (scratch game folders with a copy of the build and of the game folder's launcher, re-identified
+    local.kisakblack.launcher.s35testA/B, codesigned after `xattr -cr`; KB_LAUNCHER_TEST; defaults: FFA, 16 bots,
+    mp_nuked, 1 minute; the domains and their plists deleted afterwards): the window, Play, the 16-bot free-for-all
+    (52/53 joins), the match end and two map rotations, in both folders.
+  - **The WWII guns file**: tools/make_dlc_weapons.sh on a scratch game folder with B's archives and the backup's
+    zombie zones (codbo_wwii_guns_backup) wrote kb_dlc_weapons.ff byte-identical to the installed one and the backup's
+    (SHA-256 0cc7b4ae...).
+- **Test harness notes**: the game reads the game folder's players/config_mp.cfg, never the profile's (only the base
+  path's players/ is a search path): the first rotations ran fullscreen 1920x1080 from the scratch folders' copy of the
+  user's config (CLAUDE.md corrected; the scratch folders then got a windowed copy and every run passes `+set
+  r_fullscreen 0 +set r_mode 1024x768`). sv_mapRotation doesn't hold the start map, so a rotation started with `+map X`
+  comes back to its second map. KB_CMDS/KB_MENU_CMDS keep 4 KB and 64 entries.
 
 ## Decisions (session 34)
 

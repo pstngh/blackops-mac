@@ -125,9 +125,9 @@ def local_header(entry, crc, size):
                        crc, size, size, len(name), 0) + name
 
 
-def central_record(entry, crc, size, offset):
+def central_record(entry, crc, csize, usize, offset):
     record = bytearray(entry["record"])
-    struct.pack_into("<III", record, 16, crc, size, size)
+    struct.pack_into("<III", record, 16, crc, csize, usize)
     struct.pack_into("<I", record, 42, offset)
     return bytes(record)
 
@@ -159,7 +159,7 @@ def rebuild(path, out_path, voices_used, log, dry_run):
                 continue
             if action == "keep":
                 blob = read_local(src, e)
-                crc, size = e["crc"], e["csize"]
+                crc, size, usize = e["crc"], e["csize"], e["usize"]
                 stats["kept"] += 1
             else:
                 if e["method"] != 0:
@@ -169,11 +169,12 @@ def rebuild(path, out_path, voices_used, log, dry_run):
                 if data is None:
                     sys.exit(f"{e['name']}: not a version 1 MS-ADPCM stream, no placeholder")
                 crc, size = zlib.crc32(data) & 0xFFFFFFFF, len(data)
+                usize = size
                 blob = local_header(e, crc, size) + data
                 stats["placeholders"] += 1
                 stats["placeholder_bytes"] += e["csize"]
                 log.write(f"placeholder {os.path.basename(path)} {e['name']}\n")
-            records.append(central_record(e, crc, size, written))
+            records.append(central_record(e, crc, size, usize, written))
             if out:
                 out.write(blob)
             written += len(blob)
@@ -202,8 +203,9 @@ def verify(original, rebuilt, plan):
     with open(original, "rb") as a, open(rebuilt, "rb") as b:
         for got, (e, action) in zip(entries, [p for p in plan if p[1] != "remove"]):
             data = read_local(b, got)[-got["csize"]:]
-            if zlib.crc32(data) & 0xFFFFFFFF != got["crc"]:
-                sys.exit(f"{rebuilt}: {got['name']}: CRC mismatch")
+            unpacked = zlib.decompress(data, -15) if got["method"] == 8 else data
+            if len(unpacked) != got["usize"] or zlib.crc32(unpacked) & 0xFFFFFFFF != got["crc"]:
+                sys.exit(f"{rebuilt}: {got['name']}: size or CRC mismatch")
             if action == "keep" and data != read_local(a, e)[-e["csize"]:]:
                 sys.exit(f"{rebuilt}: {got['name']}: changed")
 

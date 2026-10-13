@@ -79,9 +79,11 @@ Without Steam any client is accepted (stubs_online.cpp). The engine keeps at mos
 Offline stats (rank, unlocks, custom classes) live in `<home>/players/mpstats.dat`;
 the home path dvar is `fs_h` (defaults to the base path, i.e. the user's real
 profile). Test runs that touch stats should pass `+set fs_h <scratch dir>`. That
-only moves writes: with no config in it, the game folder's `players/config_mp.cfg`
-(the user's settings) is still read. A fresh profile: `+set fs_b <dir>` where
-`<dir>/main` links to the game's `main`.
+only moves writes: the config read at startup is always the game folder's `players/config_mp.cfg`
+(the user's: fullscreen 1920x1080), even when the profile holds one (only the base path's `players/` is
+searched; session 35), so test clients pass `+set r_fullscreen 0 +set r_mode 1024x768`, and a test's
+other settings go on the command line or into a scratch game folder's `players/config_mp.cfg`. A fresh
+profile: `+set fs_b <dir>` where `<dir>/main` links to the game's `main`.
 Everything is unlocked and owned, rank 50/prestige 15, by default (HANDOFF,
 session 8); to test the progression underneath, pass `+set allItemsUnlocked 0
 +set allItemsPurchased 0 +set allEmblemsUnlocked 0 +set allEmblemsPurchased 0`.
@@ -221,7 +223,10 @@ session 27 (the console sequences). A zone with weapons outside the weapon table
 is generated: rerun `tools/gen_db_save.py` after changing db_load.cpp. `tools/ff_info.py <zone.ff>`
 prints a zone's header. `tools/strip_voices.py <game dir> <out dir>` rebuilds main/*.iwd without the voices (silent
 same-format placeholders for the ones multiplayer names; the user's game folder has them since session 33: HANDOFF,
-Decisions session 33). Moving the game folder's files to the Trash: `/usr/bin/trash` refuses most of them (the folder is
+Decisions session 33). `tools/strip_unused.py <game dir> <out dir> [--dry-run]` rebuilds main/*.iwd without the
+images and sounds no zone, executable or archive text names (the list with every file's reason in
+`<out dir>/strip_unused.txt`; `<game dir> - --check` unpacks every archive file as the engine reads it; HANDOFF,
+Decisions session 35). Moving the game folder's files to the Trash: `/usr/bin/trash` refuses most of them (the folder is
 in iCloud Drive); Finder works: `osascript -e 'tell application "Finder" to delete (POSIX file "<path>" as alias)'`. `tools/iwi_to_png.py <game dir> <out dir> <image>...` converts the game's images
 (`images/<name>.iwi` in main/*.iwd: menu art, emblems, rank and prestige icons) to PNGs.
 
