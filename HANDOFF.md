@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-12, session 32)
+## Status (2026-10-12, session 33)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -432,6 +432,23 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   now also keeps the picture (Contents/Resources/launcher_icon.png), and build.sh reuses the installed app's copy when
   it gets no picture, so the game folder carries everything, even for a rebuild elsewhere. The game folder has it
   (make_portable.sh at 6fb3d477, the user's request); pushed.
+- **No campaign, no voices** (session 33, the user's decision in session 32: "id like to strip the single player stuff
+  SAFELY", then "i dont want the voices", ALL of them; asked mid-way whether empty files would be safer, then "replacing
+  wiht an empty files of the minimum possible length", "make sure you replace with EXACTLY the same format tho", and "i
+  dont think the SP sounds need to be reaplaced tho? deleting is fine right?"): the game folder went from 11.34 GB to
+  7.85 GB (3.49 GB freed once the user empties the Trash). Gone: the 18 campaign levels and the campaign menu and
+  briefings (50 zone files, 1,673 MB) and every voice (dialogue, announcer, battle chatter, the zombies' voices, the
+  numbers broadcasts, Hudson's briefings, crowds and campaign screams): 22,514 voice files multiplayer never names left
+  out of the archives (1,568 MB), the 4,593 that multiplayer names (the announcer, its battle chatter, a few map voices)
+  replaced by silent placeholders of the same format (263 MB -> 11.5 MB; one MS-ADPCM block, 0.01 s); 8 archives
+  rebuilt, 10 emptied ones removed (tools/strip_voices.py). Music, effects, textures, the zombie maps, Rezurrection's
+  archives and the small shared campaign zones stay. Measured in the game's final mix: battle chatter -13..-36 dBFS ->
+  silence, the match-start announcer -7.7 dBFS -> silence. Checked on a scratch copy first (every map and 7 modes, the
+  launcher's 16-bot FFA, menus, Create a Class, the WWII guns rebuild byte-identical; Decisions session 33), then the
+  real folder (same archives by checksum, same zone list, a server start with the same messages). The originals are in
+  the user's iCloud Drive Trash (Finder's Trash), 3.94 GB. ~190 short voice sounds inside multiplayer's own zones (pain
+  grunts, burning screams, a gas cough, Nuketown's loudspeaker) can't be reached that way; offered a mute setting, no
+  answer yet. Steam doesn't manage the folder (this Mac's Steam has only Counter-Strike), so nothing brings the files back.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -620,31 +637,37 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next (the user's decision, 2026-10-12, session 32): strip the campaign's levels and all voices from the game folder,
-in a fresh session, safely.** The user: "id like to strip the single player stuff SAFELY, like maps, videos,
-voices/sounds"; shown the inventory below, they chose: the campaign levels, the campaign menu and briefings, and
-"i dont want the voices", which they confirmed means ALL voices (the campaign's dialogue, multiplayer's battle chatter
-and announcer recordings, the zombies' voices). Not chosen, so they stay: music and sound effects, textures, the zombie
-maps (common_zombie and the cod5 maps also feed the WWII guns file), the small shared campaign zones (code_pre_gfx,
-code_post_gfx, common, patch and their en_ files, 24 MB). Videos: the folder has none (no .bik anywhere).
-Measured (read-only, session 32; the game folder is 11 GB): zone/ campaign levels 1.6 GB, 36 files (creek_1, cuba,
-flashpoint, fullahead, hue_city, int_escape, khe_sanh, kowloon, outro, pentagon, pow, rebirth, river, terminal,
-underwaterbase, vorkuta, wmd, wmd_sr71 and their en_ files); campaign menu and briefings 58 MB, 14 files (frontend,
-so_narrative1-6_frontend and en_). Voices live inside the archives, mixed with other files: localized_English_iw01-14
-hold english/sound/vox/scripted 1.41 GB (18788 files), vox/mpl 200 MB (the multiplayer announcer), dds/us, rn, br 66 MB
-(battle chatter), vox/dds 10 MB, vox/mp 4 MB, vox/contextual_melee 4 MB, voiceovers/zmb 2 MB, mid/int_hudson_explains_*
-(campaign), but also images 40 MB (localized_English_iw00, iw12: keep), mus/licensed 55 MB and evt/front_end 3 MB
-(not voices: keep); the plain archives hold sound/vox/dds 55 MB and vox/scripted 46 MB (iw_23, iw_24), vox/zmb (iw_32)
-and more to find. The plan agreed with the user: (1) the whole zone files; (2) rebuild the archives without the voice
-files (keep every other file; an archive left empty can go), deciding what is a voice by folder (vox, dds, voiceovers,
-mid dialogue) and checking the list before removing; (3) test everything on a scratch game folder (links, plus the
-rebuilt archives) before touching the real one: every multiplayer map and several modes, the main menu, Create a Class,
-the launcher, the WWII guns rebuild (tools/make_dlc_weapons.sh), the sound console channel (`+con_showchannel sound`)
-and main/missingasset.csv for errors from the missing voices, and that a match doesn't stall on failed sound opens (a
-kb_* mute for voice aliases, like kb_noAnnouncer, if it does); (4) then move the removed zone files and the original
-archives to the Trash (never delete; the user empties it) and put the rebuilt archives in. Don't run this at the same
-time as the Rezurrection removal below (both change the game folder and its archives). If the folder came from Steam,
-Steam's file check would bring the files back.
+**Next (the user's request, 2026-10-12, session 33): block more weapons, like kb_noLaunchers and
+kb_noDualWield.** The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
+dual wield/launcher block ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine
+guns / ALL snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS THOUGH. i will go
+through those separately". Told: deleting isn't safe (the guns are in common_mp.ff with everything else; anything naming
+them would miss models/textures) and saves a few MB; the block covers every variant of a gun (attachments, camo, dual
+wield); multiplayer has no Pack-a-Punch ("upgraded") weapons. The list: FN FAL, Galil, M14; Olympia, HS-10; HK21, RPK,
+M60, Stoner63; Dragunov, WA2000, PSG1 (L96A1 stays); lethal, tactical and equipment are already never given
+(kb_noGrenades). The user's answers (asked in plain words): (1) "Double-Barreled Shotgun" means only the Olympia, not
+the WWII double-barrel; (2) knives: none at all, the Ballistic Knife and melee too, for everyone, "so bots dont even try
+to melee" (the launcher passes sv_botsPressMeleeBtn 1); (3) a blocked primary comes as an AK-47 (as a launcher does), a
+blocked HS-10 or Ballistic Knife leaves the slot empty; (4) Create a Class hides the blocked guns and the lethal, tactical
+and equipment items; (5) bots pick only from the allowed guns (not AK-47s in place of blocked ones). Every WWII gun
+(kb_dlc_weapons.ff) stays as it is. Like the other changes: kb_* dvars, archived, default 1.
+With it (the user's "yes", session 33): no teammate death skull. The user: "theres a skull icon that appears on screen
+sometimes, what is it , and can we disable/remove it"; shown the picture (main/*.iwd images/headicon_dead.iwi), it is
+_deathicons.gsc's addDeathIcon (called from _globallogic_player.gsc with the body and a 5 s timeout): a team hud
+element waypoint, `headicon_dead`, 54 units above the body, alpha 0.61, team modes only (FFA never makes it), skipped
+when `GetDvar( #"ui_hud_showdeathicons" ) == "0"` or in hardcore; the only other user is _supplydrop.gsc's booby-trapped
+crate (killstreaks are off). Built in, as part of kb_cleanHud (the user chose that over typing `seta
+ui_hud_showdeathicons 0`): find why kb_cleanHud doesn't already hide it (CG_KbHideHudElems skips the scripts' hud
+elements and CG_AddDrawSurfsFor3dHudElems while matchUIVisibilityFlags 0x800 is set; not reproduced yet), then e.g. a
+scrKbPatch so addDeathIcon returns while kb_cleanHud is on.
+On hold (the user: "hold on all this for now"; nothing done, don't start): more than one attachment per gun without
+Warlord (each combination is a separate weapon variant: only the 2-attachment combinations Warlord allows exist, not
+checked yet which), and every perk at once (a class saves exactly 3; the offer was a setting giving every Pro perk at
+each spawn; asked whether bots too, no answer).
+
+**Session 33: the campaign's levels and all voices stripped from the game folder: done** (the user's decision in session
+32; Status, Decisions session 33). The user's OK came after the list and the scratch-folder tests; the removed files are in
+the user's iCloud Drive Trash (they empty it). The plan kept from session 32 is in git history (51940abf).
 
 **Next (the user's decision, 2026-10-12, in session 31's conversation): remove Rezurrection from the game folder,
 keep the 16 WWII guns.** Facts found (read-only): each DLC added its own map files and numbered archives (dates and
@@ -667,7 +690,15 @@ game loads only archives named `iw_*` (com_files.cpp, "Invalid IWD"). The plan t
 session"): add the suppressed aliases to kb_dlc_weapons.ff (the writer needs an option to keep aliases no asset
 names); copy the 54 files into a new `main/iw_kb_dlc_weapons.iwd`; make make_portable.sh keep both files (not rebuild)
 when Rezurrection's zones are missing; test without Rezurrection (scratch game folder); back both files up in
-build_macos (ignored by git; game content never goes to GitHub); then move Rezurrection's files to the Trash. Things
+build_macos (ignored by git; game content never goes to GitHub); then move Rezurrection's files to the Trash (through Finder: `/usr/bin/trash` refuses most files of the game folder,
+Decisions session 33). Since session 33 the archives differ from these facts' time: iw_16, iw_23, iw_24, iw_28,
+iw_32 and localized_English_iw01-03 are rebuilt without voices and localized_English_iw04-11, 13 and 14 are gone
+(tools/strip_voices.py); Rezurrection's iw_36-41 were left as they were: their only voices are the zombie radio
+messages in sound/wawzmb (they go with Rezurrection). m2.wav above is one of them (a Shi No Numa radio message, 33.6 s,
+mono MS-ADPCM); session 33's scan of kb_dlc_weapons.ff's .wav names (the regex of tools/strip_voices.py) finds only
+sound/wawzmb/sfx/levels/berlin_2/thump/thump_00-03.wav from iw_40's folder, not m2.wav: check again what names it
+before copying it; if it is needed, the user wants every voice gone, so copy it as a silent placeholder of the same
+format (tools/strip_voices.py's `placeholder()`). Things
 the user was told would be lost: the 5 maps (so no Nacht-as-multiplayer-map later), Pack-a-Punch versions and wonder
 weapons (dropped earlier anyway), zombies content, rebuilding the guns file from scratch.
 
@@ -1157,6 +1188,61 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 33)
+
+**Stripping the campaign and the voices** (Status). Read-only first, then a scratch game folder, then the real one with
+the user's OK.
+- **The archives**: in main/ of the base path the engine loads only `iw_*` and `localized_<language>_*` .iwd files
+  (com_files.cpp FS_AddIwdFilesForGameDirectory; any number, gaps fine). An archive's checksum (the files' CRCs) only
+  matters to `sv_pure` (off) and to a client and server comparing archives; nothing checks a fixed list. All entries are
+  stored (method 0), no extras or data descriptors.
+- **Streamed sounds**: a streamed alias names its file (`english/sound/...` in the localized archives, `sound/...` in the
+  rest); the game opens it at play time. A missing file prints "### Could not open streaming sound" and the stream
+  errors, but SD_UpdateStreamVoice returns before its error check while the stream has no header
+  (snd_driver_xaudio2.cpp: `!Snd_StreamGetHeader` before `SND_STREAM_ERROR`), so a missing file may keep one of the 10
+  stream voices busy; an empty file would be read as a sound with no header bytes (the previous buffer's). Hence
+  placeholders for every file multiplayer names. The format (snd_stream.cpp Snd_StreamLoadHeader): a 2096-byte header
+  (snd_asset, version 1, then seek table space; all 29,103 sound files in the archives have it, all MS-ADPCM but one PCM
+  effect), file size = data_size + 2096 (looping files over 0x106000 padded to 0x83000 windows), MS-ADPCM blocks of 262
+  bytes a channel = 512 frames. A placeholder keeps the original header but frame_count 512 and data_size 262 x
+  channels, then one block: predictor 0, delta 16, samples 0, codes 0 (decoded: 512 frames of 0). No multiplayer alias
+  is primed (no prime data in the zone that would disagree with a short file).
+- **What multiplayer names**: new `listzone <zones> sound` prints every alias with its group, the group's category
+  (sfx, music, voice, ui; the SndDriverGlobals table, a source zone's or multiplayer's; campaign's is the same 36
+  groups) and its file (loaded = data in the zone, streamed = an archive file, +primed); `listzone <zones>
+  snddriverglobals` the groups. Over all multiplayer zones (mp_*, *_mp, kb_dlc_weapons and en_): 20,643 aliases, 7,551
+  files, 5,298 of them streamed; tools/strip_voices.py's scan of the decompressed zones for `.wav` names gives the same
+  7,551. The engine's voice category is wider than speech (two licensed songs, heartbeat, sniper breathing, swimming
+  bubbles, death screams) and its non-voice groups hold speech (amb_numbers, mp_cosmo's countdown, radio PA as
+  ambience), so voices were chosen by folder: english/sound/vox, english/sound/dds, english/sound/voiceovers,
+  english/sound/mid, english/sound/evt/front_end/tvs (the campaign menu's TV speeches), sound/vox, sound/evt/num (the
+  numbers broadcasts), sound/wpn/matroyshka/chrs (Ascension's dolls). Rezurrection's iw_36-41 hold none of those
+  folders (their speech is in sound/wawzmb: left for the Rezurrection task). Voices inside zones (loaded): 191 in
+  multiplayer (vox_<faction>_<n>_pain_small, body_burn screams, wpn_tabun_cough, mp_nuked's amb_pa_notify/amb_feedback).
+- **tools/strip_voices.py** writes each changed archive (entries in order, kept ones byte for byte from their local
+  headers, placeholders with new CRCs and sizes), checks it (names, CRCs, kept bytes), and lists every voice and what
+  happened to it. Result: iw_16 (num), iw_23, iw_24, iw_28 (dolls), iw_32 and localized_English_iw01-03 rebuilt;
+  localized_English_iw04-11, 13, 14 (campaign and zombie dialogue only) empty. `unzip -t` passes them.
+- **Checked** (scratch folder: links to every kept archive and zone, the rebuilt archives, no campaign zones; an
+  untouched copy for comparison; build_macos/blackops, scratch profiles, OpenAL Soft's wave writer, so the tests were
+  silent): a dedicated server prints the same errors and warnings as with the original archives (51,907 -> 29,393 files
+  in archives); Nuketown TDM with 7 managed bots and `kb_noAnnouncer 0`, the original vs the rebuilt archives: `_inform_`
+  soloed (chatter) -13..-36 dBFS -> -120 in every 5 s window, `_boost` soloed (the match-start announcer) -7.7 -> -120;
+  all 26 maps in one rotation (TDM, Dom, HQ, CTF, Sab, Dem, S&D, 1-minute limits, scripted player, KB_SND_STATS): no
+  "Could not open streaming sound", no asserts or crashes, 116-250 fps, 0 underruns, every map rotated (Sabotage ran to
+  overtime, up to 151 s, fps steady); missingasset.csv has no sound entries (its other new entries were missing with the
+  untouched folder too: mp_cracked_single_brick on a server from the real folder); main menu and Create a Class by
+  KB_MENU_CMDS (the cac menus' expression errors are in the user's own blackops.log too); the game folder's launcher,
+  re-identified, KB_LAUNCHER_TEST, FFA with 16 bots on mp_nuked: the match ended and rotated, no errors;
+  tools/make_dlc_weapons.sh from the scratch folder: kb_dlc_weapons.ff byte-identical to the installed one.
+  check_file.py natively and `--i386` (db_save_tool.cpp), audit_splitlocals.py 0, gen_db_save.py `--check`.
+- **Moving to the Trash**: `/usr/bin/trash` refused 66 of the folder's files ("you don't have permission", NSCocoaError
+  513; not this shell's sandbox, not iCloud sync: fileproviderctl shows them uploaded with the same capabilities); the two
+  it moved carried a `com.apple.macl` attribute. Finder moves them (`osascript -e 'tell application "Finder" to delete
+  (POSIX file "<path>" as alias)'`, into the iCloud Drive Trash, Put Back works). The rebuilt archives were copied in as
+  `.iwd.new` (not listed by the game), checked by checksum, and renamed right after each original left.
+- SIGTERM still doesn't stop the game (Open items, session 10): kill test clients with SIGKILL.
 
 ## Decisions (session 32)
 

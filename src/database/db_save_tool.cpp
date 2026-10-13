@@ -1555,6 +1555,57 @@ static void DB_SaveTool_PrintMultiplayerLocalize(XAssetHeader header, void *data
         DB_SaveTool_PrintLocalize(header.localize);
 }
 
+// A sound bank's aliases: the group and its category (voice, music...) from
+// the driver globals (a source zone's, else multiplayer's), and the file:
+// loaded (its data in the zone) or streamed (read from main/*.iwd by name).
+static void DB_SaveTool_PrintSoundBank(const SndBank *bank, const SndDriverGlobals *globals)
+{
+    static const char *categories[] = { "sfx", "music", "voice", "ui" };
+    const snd_alias_list_t *list;
+    const snd_alias_t *alias;
+    const snd_group *group;
+    const char *file;
+    unsigned int listIndex;
+    int aliasIndex;
+    unsigned int groupIndex;
+
+    for (listIndex = 0; listIndex < bank->aliasCount; ++listIndex)
+    {
+        list = &bank->alias[listIndex];
+        for (aliasIndex = 0; aliasIndex < list->count; ++aliasIndex)
+        {
+            alias = &list->head[aliasIndex];
+            groupIndex = (alias->flags & 0x3F0000) >> 16;
+            group = globals && groupIndex < globals->groupCount ? &globals->groups[groupIndex] : NULL;
+            file = "";
+            if (alias->soundFile && alias->soundFile->u.loadSnd)
+                file = alias->soundFile->type == 1 ? (const char *)alias->soundFile->u.loadSnd->name
+                                                   : (const char *)alias->soundFile->u.streamSnd->filename;
+            Com_Printf(0, "listzone: alias %s group %s %s %s%s %s\n", (const char *)alias->name,
+                       group ? group->name : "?",
+                       group && (unsigned int)group->category < 4 ? categories[group->category] : "?",
+                       !alias->soundFile ? "none" : alias->soundFile->type == 1 ? "loaded" : "streamed",
+                       alias->soundFile && alias->soundFile->type != 1 && alias->soundFile->u.streamSnd
+                           && alias->soundFile->u.streamSnd->primeSnd ? "+primed" : "",
+                       file ? file : "");
+        }
+    }
+}
+
+static void DB_SaveTool_PrintSoundGroups(const SndDriverGlobals *globals)
+{
+    unsigned int i;
+
+    for (i = 0; i < globals->groupCount; ++i)
+        Com_Printf(0, "listzone: group %u %s parent %s category %i\n", i, globals->groups[i].name,
+                   globals->groups[i].parentName, globals->groups[i].category);
+}
+
+static void DB_SaveTool_PrintMultiplayerSoundBank(XAssetHeader header, void *data)
+{
+    DB_SaveTool_PrintSoundBank(header.sound, (const SndDriverGlobals *)data);
+}
+
 // Scripts are packed: the length, the packed length and zlib data
 // (Scr_ReadFile_FastFile).
 static void DB_SaveTool_PrintRawFile(const RawFile *rawFile)
@@ -1596,8 +1647,9 @@ static void DB_SaveTool_PrintRawFile(const RawFile *rawFile)
 // the fields that name other assets for weapons), or the count of each type.
 // A string table's name prints its cells (multiplayer's if no source has it);
 // localized strings print their text, a menu's name its items and scripts
-// (DB_SaveTool_PrintMenu). "listzone - weapon" lists multiplayer's
-// weapons, "listzone - localize [<prefix>]" its localized strings,
+// (DB_SaveTool_PrintMenu), a sound bank its aliases (DB_SaveTool_PrintSoundBank).
+// "listzone - weapon" lists multiplayer's weapons, "listzone - sound" its
+// sound aliases, "listzone - localize [<prefix>]" its localized strings,
 // "listzone - rawfile <name>" prints one of its raw files (scripts).
 static void DB_SaveTool_ListZone_f()
 {
@@ -1607,6 +1659,7 @@ static void DB_SaveTool_ListZone_f()
     int type;
     const char *name;
     DBSaveToolAsset *asset;
+    const SndDriverGlobals *globals;
 
     if (Cmd_Argc() < 2 || Cmd_Argc() > 4)
     {
@@ -1634,10 +1687,17 @@ static void DB_SaveTool_ListZone_f()
 
     DB_SaveTool_LoadCommon();
     DB_SaveTool_FreeAll();
-    // "-": no source zones, multiplayer's weapons, string tables or raw files.
+    globals = DB_SaveTool_MultiplayerHas(ASSET_TYPE_SNDDRIVER_GLOBALS, "singleton")
+        ? DB_FindXAssetHeader(ASSET_TYPE_SNDDRIVER_GLOBALS, (char *)"singleton", 1, -1).sndDriverGlobals
+        : NULL;
+    // "-": no source zones, multiplayer's weapons, sound banks, string tables or raw files.
     if (!strcmp(zones, "-"))
     {
-        if (type == ASSET_TYPE_WEAPON)
+        if (type == ASSET_TYPE_SOUND)
+            DB_EnumXAssets(ASSET_TYPE_SOUND, DB_SaveTool_PrintMultiplayerSoundBank, (void *)globals, 0);
+        else if (type == ASSET_TYPE_SNDDRIVER_GLOBALS && globals)
+            DB_SaveTool_PrintSoundGroups(globals);
+        else if (type == ASSET_TYPE_WEAPON)
             DB_EnumXAssets(ASSET_TYPE_WEAPON, DB_SaveTool_PrintMultiplayerWeapon, NULL, 0);
         else if (type == ASSET_TYPE_LOCALIZE_ENTRY)
             DB_EnumXAssets(ASSET_TYPE_LOCALIZE_ENTRY, DB_SaveTool_PrintMultiplayerLocalize,
@@ -1655,6 +1715,11 @@ static void DB_SaveTool_ListZone_f()
     g_dbSaveToolMode = 1;
     DB_SaveTool_LoadZones(zones);
     g_dbSaveToolMode = 0;
+    for (i = 0; i < s_toolAssets.size(); ++i)
+    {
+        if (s_toolAssets[i].type == ASSET_TYPE_SNDDRIVER_GLOBALS)
+            globals = s_toolAssets[i].header.sndDriverGlobals;
+    }
     if (Cmd_Argc() == 4 && type == ASSET_TYPE_MENU)
     {
         DB_SaveTool_IndexAssets();
@@ -1691,6 +1756,16 @@ static void DB_SaveTool_ListZone_f()
         if (type == ASSET_TYPE_LOCALIZE_ENTRY)
         {
             DB_SaveTool_PrintLocalize(s_toolAssets[i].header.localize);
+            continue;
+        }
+        if (type == ASSET_TYPE_SOUND)
+        {
+            DB_SaveTool_PrintSoundBank(s_toolAssets[i].header.sound, globals);
+            continue;
+        }
+        if (type == ASSET_TYPE_SNDDRIVER_GLOBALS)
+        {
+            DB_SaveTool_PrintSoundGroups(s_toolAssets[i].header.sndDriverGlobals);
             continue;
         }
         name = DB_SaveTool_AssetName(s_toolAssets[i].type, (const void *)s_toolAssets[i].header.data);

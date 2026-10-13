@@ -199,7 +199,8 @@ of the install path, so a written zone is a source only from a scratch game fold
 `+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
 `listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold,
 their damage, hip spread and view kick, localized strings with their text, `menu <name>` a menu's items with their rect,
-visibility and text expressions and the scripts with their conditions, in postfix order),
+visibility and text expressions and the scripts with their conditions, in postfix order), `sound` every alias with
+its group, category (sfx/music/voice/ui) and file (loaded in the zone or streamed from main/*.iwd; `- sound` multiplayer's),
 `listzone - weapon` multiplayer's weapons, `listzone - localize [prefix]` its strings, `listzone -
 rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a table. Commands too long
 for the command line (1 KB) go in a cfg under `<fs_h>/main` (`+exec`).
@@ -212,7 +213,10 @@ new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (li
 session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then
 `give`) allows one such weapon per map load (a second: "Weapon index mismatch"). `src/database/db_save.cpp`
 is generated: rerun `tools/gen_db_save.py` after changing db_load.cpp. `tools/ff_info.py <zone.ff>`
-prints a zone's header. `tools/iwi_to_png.py <game dir> <out dir> <image>...` converts the game's images
+prints a zone's header. `tools/strip_voices.py <game dir> <out dir>` rebuilds main/*.iwd without the voices (silent
+same-format placeholders for the ones multiplayer names; the user's game folder has them since session 33: HANDOFF,
+Decisions session 33). Moving the game folder's files to the Trash: `/usr/bin/trash` refuses most of them (the folder is
+in iCloud Drive); Finder works: `osascript -e 'tell application "Finder" to delete (POSIX file "<path>" as alias)'`. `tools/iwi_to_png.py <game dir> <out dir> <image>...` converts the game's images
 (`images/<name>.iwi` in main/*.iwd: menu art, emblems, rank and prestige icons) to PNGs.
 
 Metal: the macOS client renders through src/gfx_mtl (a D3D9 device on Metal);
