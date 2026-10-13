@@ -686,12 +686,38 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next: nothing queued.** Both strip jobs of the user's decision in session 34 are done (job A in session 35, job B in
-session 36); ask the user what they want next. ON HOLD (the user: "hold on all this for now"; don't start): two
-attachments per gun without Warlord, every perk at once (below, session 34's item). The game folder's unexplained
-`Black Ops Launcher 2.app` stays as it is (Open items). Ideas, not asked for: the ~190 short voices inside multiplayer's
-own zones (session 33, a mute setting was offered, no answer); players/metal_pipelines (464 MB) is rebuilt as maps
-are played, so not a saving.
+**Next (the user's decision, 2026-10-13, end of session 36): the duplicate copies in the archives, in a fresh session
+(session 37).** The user asked "theres a bunch of small iwd after the cleanup, shouldnt we merge a bunch of them ?".
+Told (measured on the game folder): merging saves nothing (an archive is its files; the 43 archives are 2.37 GB either
+way, 16 of them under 20 MB; their central directories, 1.85 MB together, stay one record per file), startup gains
+milliseconds, and merging would have to keep the copy the game uses of every file stored twice. Offered instead: the
+files stored in more than one archive. The user: "yeah sure, in a fresh session".
+- **The facts** (read-only, end of session 36; names compared without case, as FS_FilenameCompare does): 688 names are
+  in more than one archive, 669 of them with the same CRC in every copy; the stored bytes of all copies but the largest
+  of each name: 112.7 MB (an upper bound of the saving). Most are between the map packs, which each shipped shared
+  textures again (iw_29/iw_33 77 names, iw_26/iw_29 67, iw_26/iw_30 61, iw_30/iw_34 59, iw_33/iw_36 56, iw_30/iw_33 41),
+  and iw_01/localized_English_iw00 (character textures). Like jobs A and B: only images and sounds should go.
+- **The plan**: first work out exactly which copy the engine opens for each name. In com_files.cpp,
+  FS_AddIwdFilesForGameDirectory sorts the archive names with iwdsort (localized_ ones as ten spaces, English before
+  other languages) and adds each with FS_AddSearchPath (check whether it inserts at the head, so the last added is
+  searched first); FS_UseSearchPath skips localized paths of other languages; FS_FOpenFileReadForThread takes the first
+  match along fs_searchpaths; the home path's main/ is added too (fs_h; the scratch profiles have no archives). Then
+  confirm it on the running game: the KB_FSLOG logging records the archive each file was found in (saved as
+  build_macos/strip_zombies/test_scripts/kb_fslog.patch; `git apply` for the tests only, never commit). Remove only
+  copies the engine never opens; for the 19 names whose copies differ, keep the opened copy (when in doubt, keep
+  all). The tool: tools/strip_unused.py (a mode for duplicates) or a new one, writing archives the same way (kept
+  entries byte for byte, checked) and a list with each removed copy and the copy that stays. Checks as in sessions
+  35-36 (Decisions sessions 35 and 36; the scripts: build_macos/strip_zombies/test_scripts, README.txt there): scratch
+  folders A (untouched) and B (deduplicated); every request logged, not one removed copy asked for, and every file
+  opened in B found in the archive where A found it, or one with identical content; all 26 maps with the user's
+  settings and with the kb_ changes off; the dedicated server rotation; the menus and Create a Class; the launcher's
+  16-bot FFA; every WWII gun; screenshots within run-to-run noise; missingasset.csv the same; the WWII guns file rebuilt
+  from the backup byte-identical. Only then the list and results to the user, their OK, and the swap as in session 36
+  (`.new` copies checked by SHA-256, originals to the Trash through Finder one at a time).
+- ON HOLD (the user: "hold on all this for now"; don't start): two attachments per gun without Warlord, every perk at
+  once (session 34's item below). The game folder's unexplained `Black Ops Launcher 2.app` stays as it is (Open items).
+  Ideas, not asked for: the ~190 short voices inside multiplayer's own zones (session 33, a mute setting was offered,
+  no answer); players/metal_pipelines (464 MB) is rebuilt as maps are played, so not a saving.
 
 **Session 36: all of zombies stripped from the game folder (job B): done** (Status, Decisions session 36). The user's
 decision in session 34 ("what is the biggest next thing we can strip from the game to save space"; shown the
