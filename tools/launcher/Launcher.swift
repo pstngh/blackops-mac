@@ -162,11 +162,11 @@ struct LauncherView: View {
                     }
                 }
                 Section {
-                    Stepper("Gun damage: \(damagePercent)%", value: $damagePercent, in: 10...500, step: 10)
+                    Stepper("Gun damage: \(damagePercent)%", value: $damagePercent, in: 5...100, step: 5)
                 } header: {
                     Text("Guns")
                 } footer: {
-                    Text("Every gun but the sniper rifles, yours and the bots'. 100% is normal.")
+                    Text("Lowers every gun but the snipers, yours and the bots'. 100% is normal.")
                         .foregroundStyle(.secondary)
                 }
                 Section("View") {
@@ -257,7 +257,7 @@ struct LauncherView: View {
         process.currentDirectoryURL = folder
         var environment = ProcessInfo.processInfo.environment
         // First-person arms (cg_drawArms 0: the weapon alone) and gun damage; the game saves them.
-        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(damagePercent)]
+        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(min(max(damagePercent, 5), 100))]
         if match {
             process.arguments! += matchArguments()
             // Join the team the friendly bots are on (allies); free-for-all has one.

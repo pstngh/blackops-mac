@@ -509,17 +509,20 @@ int __cdecl G_KbMohaaDamage(const WeaponVariantDef *weapVariantDef)
 }
 
 // kb_damagePercent: a bullet's damage (after kb_mohaaDamage and walls, before the hit location's multiplier)
-// times the percentage, rounded, for every gun but the sniper rifles.
+// times the percentage, rounded, for every gun but the sniper rifles; it only lowers (the user's choice: a value
+// from the command line or a config, set before the dvar's range exists, can be above 100).
 int __cdecl G_KbScaleGunDamage(const WeaponVariantDef *weapVariantDef, int damage)
 {
     int gun;
+    int percent;
 
-    if ( kb_damagePercent->current.integer == 100 || damage <= 0 )
+    percent = kb_damagePercent->current.integer;
+    if ( percent >= 100 || damage <= 0 )
         return damage;
     gun = G_KbGun(weapVariantDef);
     if ( gun < 0 || g_kbGuns[gun].sniper )
         return damage;
-    damage = (damage * kb_damagePercent->current.integer + 50) / 100;
+    damage = (damage * percent + 50) / 100;
     return damage > 0 ? damage : 1;
 }
 

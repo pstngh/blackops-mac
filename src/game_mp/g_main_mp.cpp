@@ -2115,9 +2115,9 @@ void G_RegisterDvars()
         "kb_damagePercent",
         100,
         1,
-        1000,
+        100,
         1u,
-        "Damage of every gun but the sniper rifles, in percent of what it does (100: unchanged), everyone's");
+        "Lowers the damage of every gun but the sniper rifles, in percent of what it does (100: unchanged), everyone's");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

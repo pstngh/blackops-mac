@@ -416,10 +416,11 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   session 32). The game folder has it (make_portable.sh at 34dbf1e8, the user's request); pushed.
 - **Gun damage setting** (session 32, the user: "can we have a setting for weapon damage? maybe percentage, 100 being
   current level (and it affects all mg/smg (non-snipers))"; asked, they chose every gun but the sniper rifles, in the
-  launcher and the console, bots' guns too): `kb_damagePercent`, archived, an int from 1 to 1000, default 100. Every
-  gun's bullet damage but the sniper rifles' (L96A1, WA2000, Dragunov, PSG1, Kar98k, Scoped Kar98k, Arisaka) is
-  multiplied by it, on top of kb_mohaaDamage, before the hit location's multiplier; everyone's guns. The launcher has
-  a "Gun damage" row (10-500% in steps of 10) and passes it at every start. Checked (Decisions session 32).
+  launcher and the console, bots' guns too; then "i dont need more than 100, the main goal of it is to lower it"):
+  `kb_damagePercent`, archived, an int from 1 to 100, default 100. Every gun's bullet damage but the sniper rifles'
+  (L96A1, WA2000, Dragunov, PSG1, Kar98k, Scoped Kar98k, Arisaka) is multiplied by it, on top of kb_mohaaDamage, before
+  the hit location's multiplier; everyone's guns; it only lowers. The launcher has a "Gun damage" row (5-100% in steps
+  of 5) and passes it at every start. Checked (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1242,9 +1243,13 @@ doesn't break `codesign --verify` or launching (checked: the installed app verif
   with its kb_mohaaDamage value (0 for the shotguns, which keep theirs) and whether it is a sniper rifle (Create a
   Class's sniper group). `G_KbScaleGunDamage`, called in Bullet_Process after the MoHAA substitution and the walls'
   share, returns `(damage * pct + 50) / 100` (whole numbers: 25 at 110% is 28, a float 0.01 gave 27) and at least 1,
-  for every gun in the table but the snipers; turrets, the Death Machine and vehicle guns aren't in it. Read per hit,
+  for every gun in the table but the snipers; turrets, the Death Machine and vehicle guns aren't in it. First built
+  for 1-1000% (launcher 10-500); the user wants it for lowering only: the dvar's range is 1-100, the function returns
+  the damage unchanged at 100 or more (a `+set` on the command line or a config line is set before the game registers
+  the dvar's range: a dedicated server with `+set kb_damagePercent 150` showed 150 until a map loaded, then 100), and
+  the launcher's Stepper is 5...100 step 5 and clamps what it passes. Read per hit,
   so the console value works mid-match. The launcher (tools/launcher/Launcher.swift): `@AppStorage("damagePercent")`,
-  a "Guns" section with a Stepper (10...500, step 10) and a footer, passed as `+set kb_damagePercent <n>` with
+  a "Guns" section with a Stepper and a one-line footer (two lines crowd objective modes), passed as `+set kb_damagePercent <n>` with
   cg_drawArms at every start (Play and Main Menu); the window is 720 high (690 clipped the last row in objective modes,
   whose bots section has a footer).
 - **Checked**: a scratch game folder (links to main, zone, lib; build_macos's blackops; a windowed config) with the
@@ -1254,7 +1259,8 @@ doesn't break `codesign --verify` or launching (checked: the installed app verif
   Trench Gun and double-barrel 48 a pellet (their 40), the Scoped Kar98k unchanged 106 (head 424). The launcher's
   window in TDM and in Domination (screenshots). The ASan client (7 managed bots, `kb_godMode 0`, 150%, then 30% and
   500% mid-match): no report. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
-  The test launcher's defaults domain was deleted afterwards.
+  The test launcher's defaults domain was deleted afterwards. After the 100% cap: the test launcher at 70% passed
+  `+set kb_damagePercent 70`, its window in Domination fits (screenshot).
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,
