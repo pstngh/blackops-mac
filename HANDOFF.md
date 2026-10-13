@@ -425,7 +425,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
 - **The launcher's icon** (session 32, the user: "id like to add an icon to the launcher"): the Black Ops cover art
   the user picked on SteamGridDB, in Apple's rounded-square icon shape. The picture stays out of git
   (`build_macos/launcher_icon.png`); tools/launcher/build.sh makes the app's AppIcon.icns from it with
-  tools/launcher/make_icon.swift, and make_portable.sh passes it. Checked (Decisions session 32).
+  tools/launcher/make_icon.swift, and make_portable.sh passes it. Checked (Decisions session 32). The game folder's
+  launcher has it (make_portable.sh at 5e3a856d, the user's request; macOS shows it); the code is pushed. Asked why the
+  picture can't go in the repo: the repository is public (a fork of riicchhaarrd/KisakBlack) and the picture is
+  Activision's cover art; the user agreed to keep it out.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -646,7 +649,7 @@ user's request; Status): installed and pushed at the user's request. Then the WW
 scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. Then no waiting at a
 round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. Then the gun damage
 setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): installed and pushed at the user's request. Then the
-launcher's icon (Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+launcher's icon (Status): installed and pushed at the user's request (the picture itself stays local). The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
