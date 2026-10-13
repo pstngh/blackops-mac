@@ -559,6 +559,8 @@ void __cdecl Bullet_Process(
     mohaaDamage = G_KbMohaaDamage(weapVariantDef);
     if ( mohaaDamage )
         damage = (int)(float)((float)mohaaDamage * bp->damageMultiplier);
+    // kb_damagePercent: every gun but the sniper rifles
+    damage = G_KbScaleGunDamage(weapVariantDef, damage);
     G_CheckHitTriggerDamage(attacker, bp->start, br->hitPos, damage, bp->methodOfDeath);
     bulletEffectTempEnt = 0;
     if ( processFx )

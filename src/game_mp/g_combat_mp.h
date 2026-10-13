@@ -33,6 +33,7 @@ void __cdecl G_DamageClient(
 unsigned int __cdecl G_GetWeaponIndexForEntity(const gentity_s *ent);
 bool __cdecl G_KbGodMode(const gentity_s *ent);
 int __cdecl G_KbMohaaDamage(const struct WeaponVariantDef *weapVariantDef);
+int __cdecl G_KbScaleGunDamage(const struct WeaponVariantDef *weapVariantDef, int damage);
 void __cdecl G_DamageActor(
                 gentity_s *targ,
                 gentity_s *inflictor,

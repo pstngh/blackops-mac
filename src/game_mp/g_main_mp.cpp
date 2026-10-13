@@ -129,6 +129,7 @@ const dvar_t *kb_noCountdown;
 const dvar_t *kb_allClassGuns;
 const dvar_t *kb_mohaaDamage;
 const dvar_t *kb_noRoundEndWait;
+const dvar_t *kb_damagePercent;
 const dvar_t *g_speed;
 const dvar_t *g_knockback;
 const dvar_t *g_maxDroppedWeapons;
@@ -2110,6 +2111,13 @@ void G_RegisterDvars()
         1,
         1u,
         "No waiting at a round's or match's end: no outcome screen delay or scoreboard, the next round or map at once");
+    kb_damagePercent = _Dvar_RegisterInt(
+        "kb_damagePercent",
+        100,
+        1,
+        1000,
+        1u,
+        "Damage of every gun but the sniper rifles, in percent of what it does (100: unchanged), everyone's");
 }
 
 //void(__cdecl *CreateDObj)(struct DObjModel_s *, unsigned __int16, XAnimTree_s *, int, int, clientInfo_t *);

@@ -7,6 +7,7 @@
 // sv_botsPressAttackBtn and sv_botsPressMeleeBtn default to off (the scripts turn
 // them on only in developer blocks), so the launcher sets them. Friendly bots are
 // on allies and the player joins allies through KB_CMDS (linux_main.cpp).
+// Gun damage is kb_damagePercent (every gun but the sniper rifles, everyone's).
 //
 // Build: tools/launcher/build.sh <game dir>
 import AppKit
@@ -105,6 +106,7 @@ struct LauncherView: View {
     @AppStorage("timeLimit") private var timeLimit = -1    // minutes; -1 the mode's default, 0 none
     @AppStorage("noScoreLimit") private var noScoreLimit = false
     @AppStorage("showArms") private var showArms = true     // cg_drawArms
+    @AppStorage("damagePercent") private var damagePercent = 100    // kb_damagePercent
     @State private var error: String?
 
     private let installedMapPackMaps: [GameMap] = {
@@ -159,6 +161,14 @@ struct LauncherView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                Section {
+                    Stepper("Gun damage: \(damagePercent)%", value: $damagePercent, in: 10...500, step: 10)
+                } header: {
+                    Text("Guns")
+                } footer: {
+                    Text("Every gun but the sniper rifles, yours and the bots'. 100% is normal.")
+                        .foregroundStyle(.secondary)
+                }
                 Section("View") {
                     Toggle("Show arms", isOn: $showArms)
                 }
@@ -176,7 +186,7 @@ struct LauncherView: View {
             .padding([.horizontal, .bottom], 20)
             .padding(.top, 4)
         }
-        .frame(width: 440, height: 600)
+        .frame(width: 440, height: 720)
         .alert("Can't start the game", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: {
@@ -246,8 +256,8 @@ struct LauncherView: View {
         process.executableURL = game
         process.currentDirectoryURL = folder
         var environment = ProcessInfo.processInfo.environment
-        // First-person arms (cg_drawArms 0: the weapon alone); the game saves it.
-        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0"]
+        // First-person arms (cg_drawArms 0: the weapon alone) and gun damage; the game saves them.
+        process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(damagePercent)]
         if match {
             process.arguments! += matchArguments()
             // Join the team the friendly bots are on (allies); free-for-all has one.

@@ -414,6 +414,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   next round starts, or the next map loads, at once (measured: 0.07 s between S&D rounds, 0.1 s from a TDM time limit
   to the map rotation; the load itself ~3-4.5 s). The match bonus and stats are still handled. Checked (Decisions
   session 32). The game folder has it (make_portable.sh at 34dbf1e8, the user's request); pushed.
+- **Gun damage setting** (session 32, the user: "can we have a setting for weapon damage? maybe percentage, 100 being
+  current level (and it affects all mg/smg (non-snipers))"; asked, they chose every gun but the sniper rifles, in the
+  launcher and the console, bots' guns too): `kb_damagePercent`, archived, an int from 1 to 1000, default 100. Every
+  gun's bullet damage but the sniper rifles' (L96A1, WA2000, Dragunov, PSG1, Kar98k, Scoped Kar98k, Arisaka) is
+  multiplied by it, on top of kb_mohaaDamage, before the hit location's multiplier; everyone's guns. The launcher has
+  a "Gun damage" row (10-500% in steps of 10) and passes it at every start. Checked (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -632,7 +638,8 @@ Installed in the game folder and pushed at the user's request. Then the Thompson
 user's request; Status): installed and pushed at the user's request. Then the WWII guns' walking motion
 (`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
 scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. Then no waiting at a
-round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
+round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. Then the gun damage
+setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1229,6 +1236,25 @@ doesn't break `codesign --verify` or launching (checked: the installed app verif
   round: round 2 began 0.07 s after round 1 ended (screenshots: the player in round 1, then at round 2's spawn, no
   outcome screen), `map_rotate` right at round 2's end, three maps in a row. The ASan client (S&D, 30 s rounds, 3 test
   bots, `kb_godMode 0`): 3 round restarts and 2 map rotations, no report. check_file.py natively and `--i386`.
+
+**Gun damage setting (`kb_damagePercent`)**, the user's request (Status).
+- **How**: g_combat_mp.cpp's gun table (`g_kbGuns`, by the name's first token as before) now lists every infantry gun
+  with its kb_mohaaDamage value (0 for the shotguns, which keep theirs) and whether it is a sniper rifle (Create a
+  Class's sniper group). `G_KbScaleGunDamage`, called in Bullet_Process after the MoHAA substitution and the walls'
+  share, returns `(damage * pct + 50) / 100` (whole numbers: 25 at 110% is 28, a float 0.01 gave 27) and at least 1,
+  for every gun in the table but the snipers; turrets, the Death Machine and vehicle guns aren't in it. Read per hit,
+  so the console value works mid-match. The launcher (tools/launcher/Launcher.swift): `@AppStorage("damagePercent")`,
+  a "Guns" section with a Stepper (10...500, step 10) and a footer, passed as `+set kb_damagePercent <n>` with
+  cg_drawArms at every start (Play and Main Menu); the window is 720 high (690 clipped the last row in objective modes,
+  whose bots section has a footer).
+- **Checked**: a scratch game folder (links to main, zone, lib; build_macos's blackops; a windowed config) with the
+  launcher built there, re-identified (`local.kisakblack.launcher.test`) and its defaults set to 120% and TDM, run with
+  KB_LAUNCHER_TEST: the game's command line had `+set kb_damagePercent 120`; a temporary per-hit log (removed) showed
+  SMGs 30 (head 120), assault rifles 32 (head 128), HK21/RPK 36 (head 144), M14 and Carbine 58 (head 232), the
+  Trench Gun and double-barrel 48 a pellet (their 40), the Scoped Kar98k unchanged 106 (head 424). The launcher's
+  window in TDM and in Domination (screenshots). The ASan client (7 managed bots, `kb_godMode 0`, 150%, then 30% and
+  500% mid-match): no report. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+  The test launcher's defaults domain was deleted afterwards.
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,

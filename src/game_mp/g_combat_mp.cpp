@@ -442,51 +442,85 @@ bool __cdecl G_KbGodMode(const gentity_s *ent)
     return kb_godMode->current.enabled && ent->client && !SV_IsTestClient(ent->s.number);
 }
 
-// kb_mohaaDamage: what a bullet of an infantry gun does, everyone's guns, bots' too: the damage of the closest
-// Medal of Honor: Allied Assault gun (1.11's multiplayer values, its weapons' dmbulletdamage) at any distance
-// (HANDOFF, Decisions session 32). SMGs the Thompson's and MP40's 25, assault rifles the StG 44's 27, machine
-// guns the BAR's 30, semi-automatic rifles and snipers the M1 Garand's 48, the iron-sighted bolt-actions the
-// Kar98k's 90, the bolt-action sniper rifles the Springfield's 106, pistols the Colt's 30. A gun is known by
-// its name up to the first '_', so its attachment variants (mp5k_silencer_mp) and dual-wield halves (aspdw_mp)
-// count, an attachment's own weapon (gl_ak47_mp, mk_ak47_mp) doesn't. Shotguns (the user's choice), the Death
-// Machine, turrets and vehicle guns keep their damage: 0.
+// The infantry guns, everyone's, bots' too, known by the name up to the first '_' (a token that starts with a
+// table name counts: attachment variants like mp5k_silencer_mp and the dual-wield halves aspdw_mp; an attachment's
+// own weapon, gl_ak47_mp or mk_ak47_mp, doesn't), for two of the user's changes (HANDOFF, Decisions session 32):
+// - kb_mohaaDamage: what a bullet does is the closest Medal of Honor: Allied Assault gun's (1.11's multiplayer
+//   values, its weapons' dmbulletdamage) at any distance: SMGs the Thompson's and MP40's 25, assault rifles the
+//   StG 44's 27, machine guns the BAR's 30, semi-automatic rifles and snipers the M1 Garand's 48, the iron-sighted
+//   bolt-actions the Kar98k's 90, the bolt-action sniper rifles the Springfield's 106, pistols the Colt's 30;
+//   shotguns keep theirs (the user's choice): 0.
+// - kb_damagePercent: every gun's damage but the sniper rifles' (Create a Class's sniper group) scaled.
+// The Death Machine, turrets and vehicle guns are none of them.
 static const struct
 {
     const char *name;
-    int damage;
-} g_kbMohaaDamage[] =
+    int mohaaDamage;
+    bool sniper;
+} g_kbGuns[] =
 {
-    { "mp5k", 25 }, { "skorpion", 25 }, { "mac11", 25 }, { "ak74u", 25 }, { "uzi", 25 }, { "pm63", 25 },
-    { "mpl", 25 }, { "spectre", 25 }, { "kiparis", 25 }, { "thompson", 25 }, { "type100", 25 }, { "mp40", 25 },
-    { "ak47", 27 }, { "m16", 27 }, { "enfield", 27 }, { "famas", 27 }, { "galil", 27 }, { "aug", 27 },
-    { "commando", 27 }, { "g11", 27 }, { "stg44", 27 },
-    { "hk21", 30 }, { "rpk", 30 }, { "m60", 30 }, { "stoner63", 30 }, { "fg42", 30 }, { "bar", 30 },
-    { "bipodbar", 30 },
-    { "m14", 48 }, { "fnfal", 48 }, { "m1garand", 48 }, { "gewehr43", 48 }, { "m1carbine", 48 },
-    { "wa2000", 48 }, { "dragunov", 48 }, { "psg1", 48 },
-    { "kar98k", 90 }, { "type99", 90 },
-    { "l96a1", 106 }, { "scopedkar98k", 106 },
-    { "asp", 30 }, { "m1911", 30 }, { "makarov", 30 }, { "python", 30 }, { "cz75", 30 },
+    { "mp5k", 25, false }, { "skorpion", 25, false }, { "mac11", 25, false }, { "ak74u", 25, false },
+    { "uzi", 25, false }, { "pm63", 25, false }, { "mpl", 25, false }, { "spectre", 25, false },
+    { "kiparis", 25, false }, { "thompson", 25, false }, { "type100", 25, false }, { "mp40", 25, false },
+    { "ak47", 27, false }, { "m16", 27, false }, { "enfield", 27, false }, { "famas", 27, false },
+    { "galil", 27, false }, { "aug", 27, false }, { "commando", 27, false }, { "g11", 27, false },
+    { "stg44", 27, false },
+    { "hk21", 30, false }, { "rpk", 30, false }, { "m60", 30, false }, { "stoner63", 30, false },
+    { "fg42", 30, false }, { "bar", 30, false }, { "bipodbar", 30, false },
+    { "m14", 48, false }, { "fnfal", 48, false }, { "m1garand", 48, false }, { "gewehr43", 48, false },
+    { "m1carbine", 48, false },
+    { "wa2000", 48, true }, { "dragunov", 48, true }, { "psg1", 48, true },
+    { "kar98k", 90, true }, { "type99", 90, true },
+    { "l96a1", 106, true }, { "scopedkar98k", 106, true },
+    { "asp", 30, false }, { "m1911", 30, false }, { "makarov", 30, false }, { "python", 30, false },
+    { "cz75", 30, false },
+    { "rottweil72", 0, false }, { "ithaca", 0, false }, { "spas", 0, false }, { "hs10", 0, false },
+    { "trenchgun", 0, false }, { "doublebarrel", 0, false }, { "sawedoff", 0, false },
 };
 
-int __cdecl G_KbMohaaDamage(const WeaponVariantDef *weapVariantDef)
+static int G_KbGun(const WeaponVariantDef *weapVariantDef)
 {
     const char *name;
     size_t nameLen;
     size_t len;
     unsigned int i;
 
-    if ( !kb_mohaaDamage->current.enabled || !weapVariantDef || weapVariantDef->weapDef->weapType != WEAPTYPE_BULLET )
-        return 0;
+    if ( !weapVariantDef || weapVariantDef->weapDef->weapType != WEAPTYPE_BULLET )
+        return -1;
     name = weapVariantDef->szInternalName;
     nameLen = strcspn(name, "_");
-    for ( i = 0; i < ARRAY_COUNT(g_kbMohaaDamage); ++i )
+    for ( i = 0; i < ARRAY_COUNT(g_kbGuns); ++i )
     {
-        len = strlen(g_kbMohaaDamage[i].name);
-        if ( len <= nameLen && !strncmp(name, g_kbMohaaDamage[i].name, len) )
-            return g_kbMohaaDamage[i].damage;
+        len = strlen(g_kbGuns[i].name);
+        if ( len <= nameLen && !strncmp(name, g_kbGuns[i].name, len) )
+            return i;
     }
-    return 0;
+    return -1;
+}
+
+int __cdecl G_KbMohaaDamage(const WeaponVariantDef *weapVariantDef)
+{
+    int gun;
+
+    if ( !kb_mohaaDamage->current.enabled )
+        return 0;
+    gun = G_KbGun(weapVariantDef);
+    return gun < 0 ? 0 : g_kbGuns[gun].mohaaDamage;
+}
+
+// kb_damagePercent: a bullet's damage (after kb_mohaaDamage and walls, before the hit location's multiplier)
+// times the percentage, rounded, for every gun but the sniper rifles.
+int __cdecl G_KbScaleGunDamage(const WeaponVariantDef *weapVariantDef, int damage)
+{
+    int gun;
+
+    if ( kb_damagePercent->current.integer == 100 || damage <= 0 )
+        return damage;
+    gun = G_KbGun(weapVariantDef);
+    if ( gun < 0 || g_kbGuns[gun].sniper )
+        return damage;
+    damage = (damage * kb_damagePercent->current.integer + 50) / 100;
+    return damage > 0 ? damage : 1;
 }
 
 void __cdecl G_DamageClient(

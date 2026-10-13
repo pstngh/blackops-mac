@@ -61,7 +61,7 @@ make_portable.sh or `tools/launcher/build.sh <game dir>`) starts matches with th
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
-normal` (easy/normal/hard/fu; the bots arrive ~10 s in). `KB_LAUNCHER_TEST=<dir>`
+normal` (easy/normal/hard/fu; the bots arrive ~10 s in), and `+set kb_damagePercent <n>` ("Gun damage", every start). `KB_LAUNCHER_TEST=<dir>`
 makes the app save its window as `<dir>/launcher.png` and press Play itself; run it
 in a scratch copy of the game folder (links to `main`, `zone`, `lib` and a copy of
 `blackops`), as the app starts the `blackops` next to it with that folder's profile.
@@ -112,7 +112,8 @@ first-person WWII Thompson is held closer, where the MP40 is, a little lower; a 
 `kb_wwiiGunMovement` (the first-person WWII guns move like Black Ops' while walking: no drop, a 2 degree tilt),
 `kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in),
 `kb_noRoundEndWait` (no outcome screen delay between rounds or after a match and no 30 s scoreboard: the next round
-or map at once). Tests
+or map at once), `kb_damagePercent` (an int, default 100: every gun's damage but the sniper rifles', everyone's, in percent;
+the launcher's "Gun damage" passes it). Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own
