@@ -477,8 +477,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   4,508 images the zones do name (~750 MB the game needs; Decisions session 35). 24 archives rebuilt, iw_21 emptied; the
   map packs' and Rezurrection's archives lose nothing. Checked on scratch copies, all passing (Decisions session 35):
   no removed file requested in any run, the same misses with and without them, screenshots of every map and of Create
-  a Class within run-to-run noise, the WWII guns file rebuilt from the backup byte-identical. Waiting for the user's OK
-  before the real folder is touched (their list: build_macos/strip_unused/removal_list.txt, git-ignored).
+  a Class within run-to-run noise, the WWII guns file rebuilt from the backup byte-identical. Applied to the game folder
+  with the user's "yes" after seeing the list (build_macos/strip_unused/removal_list.txt, git-ignored): main/ 5.1 -> 3.4 GB,
+  the folder 7.3 -> 5.6 GB; the 25 originals (4.06 GB) are in the iCloud Drive Trash (Put Back works; the user empties
+  it); a server start and a short game from the folder are clean.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -667,26 +669,23 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next (the user's decision, 2026-10-13, session 34): strip what nothing uses from the archives, then all of zombies.**
+**Next (the user's decision, 2026-10-13, session 34): all of zombies (job B, session 36). Job A, the archive files nothing names, is done (session 35).**
 Asked "what is the biggest next thing we can strip from the game to save space", the user was shown the measurement
 (Decisions session 34, "What is left to strip") and answered "i approve both, in a fresh session for each. please make
 ABSOLUTELY sure ur not deleting anything we'll need by mistkae. can you also FULLY backup the gun files from rez first
 somewhere?". The backup is done (below). Two jobs, each in its own session, in this order:
-- **A (session 35): the archive files nothing names: scratch checks done, waiting for the user's OK** (Status,
-  Decisions session 35). tools/strip_unused.py: 3,894 files, 1,783 MB (not 2.66 GB: session 34's scan missed 4,508
-  images the zones name). The rebuilt archives are in session 35's scratchpad; rebuild them for the real folder with
-  `python3 tools/strip_unused.py /Users/pstn/Documents/Games/codbo <out dir>` (~3 minutes, checks each archive; the plan is
-  deterministic: same zones, archives and executables give the same list). With the user's OK: originals to the Trash
-  through Finder, the rebuilt ones in as `.iwd.new`, checked by checksum, renamed right after each original leaves;
-  iw_21.iwd only to the Trash; then `tools/strip_unused.py <game dir> - --check`, a server start and a short client run
-  from the real folder (build_macos/blackops, scratch fs_h, windowed). Then remove the temporary KB_FSLOG logging from
-  com_files.cpp (never committed) and rebuild.
+- **A (session 35): the archive files nothing names: done** (Status, Decisions session 35). 3,894 files, 1,783 MB, by
+  tools/strip_unused.py (not 2.66 GB: session 34's scan missed 4,508 images the zones name); applied with the user's OK.
 - **B (session 36): all of zombies, ~1.9 GB**: the 10 zombie maps (zombie_theater, zombie_pentagon, zombie_cosmodrome,
   zombie_coast, zombie_temple, zombie_moon, zombie_cod5_prototype/asylum/sumpf/factory) and Dead Ops Arcade (zombietron),
   each with its _patch and en_ zones, common_zombie(_patch) and en_common_zombie (615 MB of zones), and the archive files
   only zombie zones name (session 35's count: 1,245 MB, 4,143 files, mostly iw_38, iw_36 and the map packs' iw_26, 29,
   33; session 34's 967 MB had missed the images whose names follow a printable hash, Decisions session 35;
-  tools/strip_unused.py's list gives each file's naming groups: `zombie` alone is B's). This
+  tools/strip_unused.py's list gives each file's naming groups: `zombie` alone is B's; run on a scratch game folder
+  without the zombie zones, it lists exactly the files only they named, as it scans the zones present). Session 35's
+  tests can be repeated: re-add the KB_FSLOG logging for the tests only (a wrapper around FS_FOpenFileReadForThread and
+  FS_ListFilteredFiles writing each distinct request once with where it was found; Decisions session 35), and pass
+  `+set r_fullscreen 0 +set r_mode 1024x768` to every client (the scratch folder's config is a copy of the user's). This
   multiplayer executable can't play zombies (Black Ops runs zombies in its campaign executable). This replaces the
   Rezurrection item below (its facts still hold: the guns need from Rezurrection only files kb_dlc_weapons.ff names,
   which the usage rule keeps wherever they are, so no separate iw_kb_dlc_weapons.iwd is needed; still do its first step,
@@ -1058,6 +1057,10 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 35: the game folder holds a `Black Ops Launcher 2.app` (Oct 12 21:09, the same bundle identifier as
+`Black Ops Launcher.app`, not made by make_portable.sh; most likely a copy macOS or iCloud made); left alone, the user
+was told. KB_CMDS and KB_MENU_CMDS keep only 4 KB and 64 entries (linux_main.cpp): longer lists are cut silently.
+
 Seen in session 34 (kb_blockGuns, kb_noMelee): the wager modes' fixed weapons follow the blocks: Gun Game's ladder gives
 an AK-47 for its M14, HK21, M60 and WA2000 tiers (and its M72 LAW, kb_noLaunchers) and nothing for the China Lake,
 crossbow and Ballistic Knife tiers; Sticks and Stones (hlnd: crossbow, Ballistic Knife, tomahawk, knife) leaves a player
@@ -1358,6 +1361,16 @@ then two scratch game folders, then the real one with the user's OK.
   - **The WWII guns file**: tools/make_dlc_weapons.sh on a scratch game folder with B's archives and the backup's
     zombie zones (codbo_wwii_guns_backup) wrote kb_dlc_weapons.ff byte-identical to the installed one and the backup's
     (SHA-256 0cc7b4ae...).
+- **Applied to the game folder** (the user's "yes" after the list and these results): nothing running (pgrep); the
+  tool rerun on the folder gave the same plan and byte-identical archives (so the originals hadn't changed); the 24
+  rebuilt archives copied in as `.iwd.new` and checked by SHA-256; then one at a time the original to the Trash through
+  Finder (`osascript ... delete`, into ~/Library/Mobile Documents/.Trash: the iCloud Drive Trash) and the `.new` renamed
+  right after; iw_21.iwd to the Trash only. After: 46 archives, SHA-256 equal to the rebuilt ones, `--check` all 25,499
+  files ok, the 25 originals in the Trash at their sizes (4.06 GB). From the folder (build_macos/blackops, scratch fs_h,
+  still with the logging): a dedicated server on mp_nuked with 4 test clients and a windowed client game (join, class,
+  the Thompson fired, 3,897 files read): no removed file asked for, the misses the untouched copy has (dev .cfg files,
+  ban.txt); then the logging removed (git checkout of com_files.cpp; never committed), rebuilt, and the server again:
+  the same messages, the bots join.
 - **Test harness notes**: the game reads the game folder's players/config_mp.cfg, never the profile's (only the base
   path's players/ is a search path): the first rotations ran fullscreen 1920x1080 from the scratch folders' copy of the
   user's config (CLAUDE.md corrected; the scratch folders then got a windowed copy and every run passes `+set
