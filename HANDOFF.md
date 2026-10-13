@@ -697,6 +697,12 @@ files stored in more than one archive. The user: "yeah sure, in a fresh session"
   of each name: 112.7 MB (an upper bound of the saving). Most are between the map packs, which each shipped shared
   textures again (iw_29/iw_33 77 names, iw_26/iw_29 67, iw_26/iw_30 61, iw_30/iw_34 59, iw_33/iw_36 56, iw_30/iw_33 41),
   and iw_01/localized_English_iw00 (character textures). Like jobs A and B: only images and sounds should go.
+- **Only byte-identical copies** (the user asked "is it safe"; told the version below is safe by construction, end of
+  session 36): remove only copies whose content is identical to a copy that stays (same uncompressed size and CRC,
+  confirmed by SHA-256 of the unpacked bytes): 669 names (616 images, 53 sounds), 111.7 MB; leave the 19 names whose
+  copies differ (1.0 MB) alone. FS_FOpenFileReadForThread goes on to the next search path when an archive lacks the
+  name, so the game reads the same bytes whichever copy remains; still keep the copy the engine opens today, and prefer
+  a copy in an `iw_` archive over a localized one (localized paths are skipped for other languages).
 - **The plan**: first work out exactly which copy the engine opens for each name. In com_files.cpp,
   FS_AddIwdFilesForGameDirectory sorts the archive names with iwdsort (localized_ ones as ten spaces, English before
   other languages) and adds each with FS_AddSearchPath (check whether it inserts at the head, so the last added is
@@ -705,7 +711,7 @@ files stored in more than one archive. The user: "yeah sure, in a fresh session"
   confirm it on the running game: the KB_FSLOG logging records the archive each file was found in (saved as
   build_macos/strip_zombies/test_scripts/kb_fslog.patch; `git apply` for the tests only, never commit). Remove only
   copies the engine never opens; for the 19 names whose copies differ, keep the opened copy (when in doubt, keep
-  all). The tool: tools/strip_unused.py (a mode for duplicates) or a new one, writing archives the same way (kept
+  all; with the rule above they are left anyway). The tool: tools/strip_unused.py (a mode for duplicates) or a new one, writing archives the same way (kept
   entries byte for byte, checked) and a list with each removed copy and the copy that stays. Checks as in sessions
   35-36 (Decisions sessions 35 and 36; the scripts: build_macos/strip_zombies/test_scripts, README.txt there): scratch
   folders A (untouched) and B (deduplicated); every request logged, not one removed copy asked for, and every file
