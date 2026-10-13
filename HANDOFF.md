@@ -455,8 +455,9 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   steps): `kb_blockGuns` and `kb_noMelee`, archived, default 1. Nobody gets the FN FAL, Galil, M14, Olympia, HS-10, HK21,
   RPK, M60, Stoner63, Dragunov, WA2000, PSG1 or the Ballistic Knife, in any variant (attachments, camo, dual wield); the
   L96A1 and all 16 WWII guns stay (the WWII double-barrel too). A class's blocked gun comes as an AK-47 (with the class's
-  camo), a blocked HS-10 or Ballistic Knife as nothing (so an HS-10 class spawns with its pistol only: the HS-10 is a
-  primary, a shotgun, not a second gun); the bots pick only from the other guns. Nobody melees: the melee button does
+  camo; the HS-10 too, the user's later answer: "give it any other weapon"), a blocked Ballistic Knife as nothing; the
+  bots pick only from the other guns, and their second gun is always a pistol (the user: "bot's secondary should be a
+  pistol"; before, a bot's launcher came as an AK-47 and its crossbow as nothing). Nobody melees: the melee button does
   nothing and the bots shoot instead. Create a Class no longer lists the blocked guns, the launchers or the explosive
   crossbow, and has no Lethal, Tactical and Equipment rows (nor those items in the class's summary); the secondary
   offers only Pistols. With `kb_cleanHud`, the teammates' death skull and every other world marker (objective markers)
@@ -658,12 +659,10 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 **Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
 (Status, Decisions session 34; installed in the game folder at the user's request, not pushed). Then never reload
-(`kb_infiniteClip` and the launcher's switch; Status): committed, not installed, not pushed. Next: ask the user whether to
-install it (make_portable.sh) and push; then two questions for them (asked once in session 34, not answered yet), in plain words: (a) the HS-10 turned out to be a main
-gun (a shotgun, like the Olympia), so a class with it now spawns with only its pistol, as they asked ("leaves the slot
-empty"): keep that, or give an AK-47 like the other blocked main guns? (b) bots that pick a launcher as their second gun
-still get an AK-47 there (session 23's kb_noLaunchers; the user's answer then): have them pick a pistol instead? Then the
-Rezurrection item below (check git log first).
+(`kb_infiniteClip` and the launcher's switch; Status), then the user's answers to the two questions (the HS-10 comes as
+an AK-47, "give it any other weapon"; the bots' second gun is a pistol, "bot's secondary should be a pistol"): committed,
+not installed, not pushed. Next: ask the user whether to install them (make_portable.sh) and push; then the Rezurrection
+item below (check git log first).
 The request as it was (session 33). The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
 dual wield/launcher block ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine
 guns / ALL snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS THOUGH. i will go
@@ -674,7 +673,7 @@ M60, Stoner63; Dragunov, WA2000, PSG1 (L96A1 stays); lethal, tactical and equipm
 (kb_noGrenades). The user's answers (asked in plain words): (1) "Double-Barreled Shotgun" means only the Olympia, not
 the WWII double-barrel; (2) knives: none at all, the Ballistic Knife and melee too, for everyone, "so bots dont even try
 to melee" (the launcher passes sv_botsPressMeleeBtn 1); (3) a blocked primary comes as an AK-47 (as a launcher does), a
-blocked HS-10 or Ballistic Knife leaves the slot empty; (4) Create a Class hides the blocked guns and the lethal, tactical
+blocked HS-10 or Ballistic Knife leaves the slot empty (later: the HS-10 comes as an AK-47 too, session 34); (4) Create a Class hides the blocked guns and the lethal, tactical
 and equipment items; (5) bots pick only from the allowed guns (not AK-47s in place of blocked ones). Every WWII gun
 (kb_dlc_weapons.ff) stays as it is. Like the other changes: kb_* dvars, archived, default 1.
 With it (the user's "yes", session 33): no teammate death skull. The user: "theres a skull icon that appears on screen
@@ -1238,8 +1237,8 @@ user's answers in Next steps). Both new dvars archived, default 1; 0 gives the o
   The list (BG_KbBlockedGunRef, bg_unlockable_items.cpp): fnfal, galil, m14, rottweil72 (Olympia), hs10, hs10dw, hk21, rpk,
   m60, stoner63, dragunov, wa2000, psg1, knife_ballistic. G_KbBlockedGunWeapon (g_weapon.cpp) takes a weapon's reference
   (parentWeaponName, else the name without `_mp`; an alt mode's gun's) and G_GivePlayerWeapon refuses a match, on every
-  path. The HS-10 is a primary (statsTable slot `primary`, group weapon_cqb); the user's answer (empty slot) was kept, so
-  an HS-10 class spawns with its secondary only (asked again: Next steps).
+  path. The HS-10 is a primary (statsTable slot `primary`, group weapon_cqb); the user's answer (empty slot) was kept at first;
+  asked again, they chose "give it any other weapon": it comes as an AK-47 (below).
 - **Classes**: PlayerCmd_giveWeapon gives a blocked gun as `ak47_mp` with the class's weapon options (camo, ...), the
   HS-10 and the Ballistic Knife as nothing (G_KbForBlockedGun); PlayerCmd_setSpawnWeapon takes the same replacement, so
   the class spawns holding the AK-47 (or, with an HS-10, the pistol). Order in giveWeapon: launcher, blocked gun, dual
@@ -1284,6 +1283,26 @@ user's answers in Next steps). Both new dvars archived, default 1; 0 gives the o
   Specials. A dedicated server with 4 test clients (75 s): 100 gives, no blocked gun, no melee. The launcher's FFA with 16
   bots (95 s): no error beyond the usual map-load effect warnings, no script patch warning. check_file.py natively and
   `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
+
+**The user's two answers** (asked at the end of the block above): "give it any other weapon" (the HS-10) and "bot's
+secondary should be a pistol".
+- **HS-10**: G_KbForBlockedGun gives it (and `hs10dw`) as `ak47_mp` like the other blocked guns; only the Ballistic Knife
+  comes as nothing.
+- **Bots' secondary**: the `_bot.gsc` list patch now asks `kbIsBlockedWeapon(<ref>)` (renamed from kbIsBlockedGun), true
+  for BG_KbBlockedWeaponRef's weapons: the blocked guns, the launchers `m72_law`, `rpg`, `strela` (kb_noLaunchers), the
+  `china_lake` and `crossbow_explosive` (kb_noGrenades). The secondary slot's rows (statsTable) are the 5 pistols, their
+  dual wields (never rolled with kb_noDualWield), those 5 and the Ballistic Knife, so a bot's secondary is a pistol while
+  the three dvars are on; turning kb_noLaunchers/kb_noGrenades off brings the bots' launchers back. The grenade and
+  equipment slots are left to the give's refusal: excluding all of a slot's rows would leave bot_give_random_weapon's
+  retry loop with nothing to find (only the equipment slot has a tries limit). Create a Class uses the same list
+  (BG_UnlockablesKbHidesItem: those weapons plus the lethal/tactical/equipment slots); the launchers are matched by
+  reference now, not by the launcher group (the same four rows). A human player's launcher still comes as an AK-47.
+- **Checked** (release client, mp_nuked TDM, 7 managed bots, temporary logging of every script giveWeapon, removed):
+  Custom 1 with HS-10 + Ballistic Knife: `hs10_mp -> ak47_mp` (screenshot: the AK-47 in hand), no secondary; 35 bot
+  spawns, 35 secondaries, all pistols (ASP, M1911, Makarov, Python with attachments). `kb_noLaunchers 0` and
+  `kb_noGrenades 0`: 34 bot spawns got 18 launchers, China Lakes and crossbows (as the original game), no Ballistic
+  Knife. Create a Class (screenshots): the class screen without the three rows, the secondary with Pistols only, as
+  before. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 **Never reload (`kb_infiniteClip`)** (Status).
 - **Where**: every shot's ammo goes through PM_WeaponUseAmmo (bg_weapons_ammo.cpp; guns, both hands of a dual wield, and

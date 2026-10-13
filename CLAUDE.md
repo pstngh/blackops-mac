@@ -119,7 +119,7 @@ first-person WWII Thompson is held closer, where the MP40 is, a little lower; a 
 or map at once), `kb_damagePercent` (an int 1-100, default 100: lowers every gun's damage but the sniper rifles', everyone's, in
 percent; 100 or more changes nothing; the launcher's "Gun damage" passes it), `kb_blockGuns` (nobody gets the FN FAL, Galil,
 M14, Olympia, HS-10, HK21, RPK, M60, Stoner63, Dragunov, WA2000, PSG1 or Ballistic Knife, any variant: a class's comes as an
-AK-47, the HS-10 and the knife as nothing; bots pick others; the WWII guns stay; Create a Class lists none of them, nor
+AK-47, the knife as nothing; bots pick others and, with kb_noLaunchers and kb_noGrenades, always a pistol second; the WWII guns stay; Create a Class lists none of them, nor
 launchers, the crossbow or the lethal/tactical/equipment rows), `kb_noMelee` (the melee button does nothing, bots don't
 melee). With kb_cleanHud the world markers (the teammates' death skull, objective markers) are hidden too. Tests
 where the player should die pass

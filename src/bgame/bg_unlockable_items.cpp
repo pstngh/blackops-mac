@@ -211,29 +211,39 @@ bool __cdecl BG_KbBlockedGunRef(const char *reference)
     return 0;
 }
 
-// The Create-a-Class lists leave out what a kb_* dvar keeps from players: the blocked guns (kb_blockGuns), the
-// rocket launchers (kb_noLaunchers), and the lethal, tactical and equipment items, the China Lake and the
-// explosive crossbow (kb_noGrenades).
+// The weapons a kb_* dvar keeps from players, by statsTable reference: the blocked guns (kb_blockGuns), the rocket
+// launchers (kb_noLaunchers), the China Lake and the explosive crossbow (kb_noGrenades). Create a Class lists none of
+// them, and the bots' weapon lists leave them out (kbIsBlockedWeapon), so a bot's secondary is a pistol.
+bool __cdecl BG_KbBlockedWeaponRef(const char *reference)
+{
+    if ( !reference )
+        return 0;
+    if ( BG_KbBlockedGunRef(reference) )
+        return 1;
+    if ( kb_noLaunchers
+        && kb_noLaunchers->current.enabled
+        && (!I_stricmp(reference, "m72_law") || !I_stricmp(reference, "rpg") || !I_stricmp(reference, "strela")) )
+    {
+        return 1;
+    }
+    return kb_noGrenades
+        && kb_noGrenades->current.enabled
+        && (!I_stricmp(reference, "china_lake") || !I_stricmp(reference, "crossbow_explosive"));
+}
+
+// The Create-a-Class lists leave out those weapons and, with kb_noGrenades, the lethal, tactical and equipment
+// items.
 static bool BG_UnlockablesKbHidesItem(const itemInfo_t *itemInfo)
 {
     if ( !itemInfo->reference )
         return 0;
-    if ( BG_KbBlockedGunRef(itemInfo->reference) )
+    if ( BG_KbBlockedWeaponRef(itemInfo->reference) )
         return 1;
-    if ( kb_noGrenades
+    return kb_noGrenades
         && kb_noGrenades->current.enabled
         && (itemInfo->loadoutSlot == LOADOUTSLOT_PRIMARY_GRENADE
             || itemInfo->loadoutSlot == LOADOUTSLOT_SPECIAL_GRENADE
-            || itemInfo->loadoutSlot == LOADOUTSLOT_EQUIPMENT
-            || !I_stricmp(itemInfo->reference, "china_lake")
-            || !I_stricmp(itemInfo->reference, "crossbow_explosive")) )
-    {
-        return 1;
-    }
-    return kb_noLaunchers
-        && kb_noLaunchers->current.enabled
-        && itemInfo->group == ITEMGROUP_LAUNCHER
-        && I_stricmp(itemInfo->reference, "china_lake");
+            || itemInfo->loadoutSlot == LOADOUTSLOT_EQUIPMENT);
 }
 
 // A weapon group of Create a Class with nothing left to offer (the secondary's launchers and specials).
@@ -4048,7 +4058,7 @@ void __cdecl BG_UnlockableItemsInit()
         1,
         1u,
         "Nobody gets the FN FAL, Galil, M14, Olympia, HS-10, light machine guns, sniper rifles but the L96A1, or the "
-        "Ballistic Knife: a class's blocked primary comes as an AK-47 (the HS-10 as nothing); the WWII guns stay");
+        "Ballistic Knife: a class's blocked gun comes as an AK-47 (the knife as nothing); the WWII guns stay");
     ui_currentWeaponOptionGroup = _Dvar_RegisterInt(
                                                                     "ui_currentWeaponOptionGroup",
                                                                     0,

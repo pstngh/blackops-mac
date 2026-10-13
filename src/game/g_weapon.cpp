@@ -1785,7 +1785,7 @@ static bool G_KbWeaponReference(unsigned int weaponIndex, char *reference, int r
 }
 
 // kb_blockGuns: no variant of the user's blocked guns (BG_KbBlockedGunRef) is given, to anyone.
-// PlayerCmd_giveWeapon gives a class's blocked primary as an AK-47 (G_KbForBlockedGun); the bots
+// PlayerCmd_giveWeapon gives a class's blocked gun as an AK-47 (G_KbForBlockedGun); the bots
 // never pick one (Scr_KbPatchSource).
 bool __cdecl G_KbBlockedGunWeapon(unsigned int weaponIndex)
 {
@@ -1805,7 +1805,7 @@ bool __cdecl G_KbBlockedGunWeapon(unsigned int weaponIndex)
 }
 
 // What a class gets in a blocked gun's place: a gun comes as an AK-47 (as a launcher does), the
-// HS-10 and the ballistic knife as nothing (the user's answers, HANDOFF Decisions session 34).
+// ballistic knife as nothing (the user's answers, HANDOFF Decisions session 34).
 unsigned int __cdecl G_KbForBlockedGun(unsigned int weaponIndex)
 {
     char reference[64];
@@ -1813,7 +1813,7 @@ unsigned int __cdecl G_KbForBlockedGun(unsigned int weaponIndex)
     if ( !G_KbBlockedGunWeapon(weaponIndex) )
         return weaponIndex;
     G_KbWeaponReference(weaponIndex, reference, sizeof(reference));
-    if ( !I_stricmp(reference, "hs10") || !I_stricmp(reference, "hs10dw") || !I_stricmp(reference, "knife_ballistic") )
+    if ( !I_stricmp(reference, "knife_ballistic") )
         return 0;
     return G_GetWeaponIndexForName((char *)"ak47_mp");
 }

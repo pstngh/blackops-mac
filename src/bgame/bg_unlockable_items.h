@@ -423,4 +423,5 @@ extern const dvar_t *kb_noLaunchers;
 extern const dvar_t *kb_blockGuns;
 
 bool __cdecl BG_KbBlockedGunRef(const char *reference);
+bool __cdecl BG_KbBlockedWeaponRef(const char *reference);
 bool __cdecl BG_UnlockablesKbHidesGroup(itemGroup_t group);

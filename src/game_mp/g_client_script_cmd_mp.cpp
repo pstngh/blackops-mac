@@ -415,7 +415,7 @@ void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
         hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
     }
     // kb_blockGuns: a class's blocked gun comes as an AK-47, with its camo and options and the AK-47's
-    // ammo; the HS-10 and the ballistic knife as nothing
+    // ammo; the ballistic knife as nothing
     if ( G_KbBlockedGunWeapon(weaponIndex) )
     {
         weaponIndex = G_KbForBlockedGun(weaponIndex);

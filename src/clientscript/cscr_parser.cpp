@@ -1154,12 +1154,13 @@ static const ScrKbPatch scrKbPatches[] =
         "if ( RandomInt( 100 ) > 20 )",
         "if ( GetDvarInt( \"kb_noDualWield\" ) || RandomInt( 100 ) > 20 )"
     },
-    // kb_blockGuns: the bots' weapon lists (built once a map from the statsTable's rows) leave the blocked
-    // guns out, so a bot picks among the others (kbIsBlockedGun, g_scr_main_mp.cpp)
+    // kb_blockGuns, kb_noLaunchers, kb_noGrenades: the bots' weapon lists (built once a map from the statsTable's
+    // rows) leave out the blocked guns, the launchers, the China Lake and the crossbow, so a bot picks among the
+    // others and its secondary is a pistol (kbIsBlockedWeapon, g_scr_main_mp.cpp)
     {
         "maps/mp/gametypes/_bot.gsc",
         "if ( id[ \"reference\" ] == \"weapon_null\" )",
-        "if ( id[ \"reference\" ] == \"weapon_null\" || kbIsBlockedGun( id[ \"reference\" ] ) )"
+        "if ( id[ \"reference\" ] == \"weapon_null\" || kbIsBlockedWeapon( id[ \"reference\" ] ) )"
     },
     // kb_noHitMarker: a hit leaves the hit marker (the hud element every hit flashes around the
     // crosshair) hidden; the hit sound still plays
