@@ -468,7 +468,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the launcher"): `kb_infiniteClip`, archived, default 1, and the launcher's "Never reload" switch (in Guns, on until
   turned off; passed at every start like Gun damage). Firing takes nothing from a human player's magazine, so a gun never
   needs a reload; the bots' guns empty and reload as before; grenades and equipment (blocked anyway) still use theirs up.
-  Checked (Decisions session 34). Not installed in the game folder yet.
+  Checked (Decisions session 34). The game folder has it (make_portable.sh at 28f22cab, the user's request, with the
+  answers below; the launcher with the switch); pushed at the user's request.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -658,11 +659,11 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
-(Status, Decisions session 34; installed in the game folder at the user's request, not pushed). Then never reload
+(Status, Decisions session 34; installed in the game folder and pushed at the user's request). Then never reload
 (`kb_infiniteClip` and the launcher's switch; Status), then the user's answers to the two questions (the HS-10 comes as
-an AK-47, "give it any other weapon"; the bots' second gun is a pistol, "bot's secondary should be a pistol"): committed,
-not installed, not pushed. Next: ask the user whether to install them (make_portable.sh) and push; then the Rezurrection
-item below (check git log first).
+an AK-47, "give it any other weapon"; the bots' second gun is a pistol, "bot's secondary should be a pistol"): installed
+in the game folder (make_portable.sh at 28f22cab) and pushed (GitHub mac-port at 28f22cab), at the user's request. Next:
+the Rezurrection item below (check git log first), unless the user brings something new.
 The request as it was (session 33). The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
 dual wield/launcher block ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine
 guns / ALL snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS THOUGH. i will go
