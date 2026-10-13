@@ -58,8 +58,8 @@ crashed the old code within a minute on mp_nuked with bots.
 
 The game folder's `Black Ops Launcher.app` (tools/launcher, built by
 make_portable.sh or `tools/launcher/build.sh <game dir> [icon picture]`; its icon is made by
-tools/launcher/make_icon.swift from `build_macos/launcher_icon.png`, game art kept out of git: HANDOFF,
-Decisions session 32) starts matches with the
+tools/launcher/make_icon.swift from `build_macos/launcher_icon.png`, game art kept out of git; the app keeps
+the picture in Contents/Resources and a rebuild without one reuses it: HANDOFF, Decisions session 32) starts matches with the
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
