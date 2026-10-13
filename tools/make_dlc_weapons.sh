@@ -7,6 +7,12 @@
 # folder's zone/Common).
 #
 # usage: tools/make_dlc_weapons.sh [--no-parents] <game dir> <out .ff> [build dir, default build_macos]
+#        tools/make_dlc_weapons.sh --sources <game dir>
+#
+# --sources only checks that the game folder has the source zones (the four World at War zombie maps,
+# their patch zones and common_zombie): it names the missing ones and fails. The user's game folder no
+# longer has them (session 36: zombies removed); the backup folder next to it does
+# (codbo_wwii_guns_backup, its README.txt). make_portable.sh keeps the installed zone then.
 #
 # Each weapon's parentWeaponName is its statsTable reference (the zone's copy of the table has the
 # rows); the client stops with "Parent weapon ... not found" for a weapon whose reference the table
@@ -22,34 +28,25 @@
 # mp/weaponOptions.csv (tools/dlc_weapons_options.csv, camo; the zone replaces the tables when it
 # loads) and adds their descriptions (tools/dlc_weapons_strings.txt): Create a
 # Class, the weapon table and the bots read the tables (HANDOFF, Decisions session 27).
+# The zone also keeps a few suppressed shot sounds no gun uses yet (keep, below).
 set -euo pipefail
 
+usage="usage: tools/make_dlc_weapons.sh [--no-parents] <game dir> <out .ff> [build dir] | --sources <game dir>"
 noparents=0
+sourcesonly=0
 if [ "${1:-}" = --no-parents ]; then
     noparents=1
     shift
+elif [ "${1:-}" = --sources ]; then
+    sourcesonly=1
+    shift
 fi
-game=${1:?usage: tools/make_dlc_weapons.sh <game dir> <out .ff> [build dir]}
-out=${2:?usage: tools/make_dlc_weapons.sh <game dir> <out .ff> [build dir]}
+game=${1:?$usage}
+[ $sourcesonly = 1 ] || out=${2:?$usage}
 root=$(cd "$(dirname "$0")/.." && pwd)
 build=${3:-$root/build_macos}
 [ -d "$game/main" ] && [ -d "$game/zone/Common" ] || { echo "$game has no main/ and zone/Common/" >&2; exit 1; }
 game=$(cd "$game" && pwd)
-build=$(cd "$build" && pwd)
-exe="$build/blackops"
-[ -f "$exe" ] || { echo "no $exe; build it first" >&2; exit 1; }
-work="$build/dlc_weapons"
-rm -rf "$work"
-mkdir -p "$work/game/zone/Common" "$work/home/main"
-ln -s "$game/main" "$work/game/main"
-for d in "$game"/zone/*; do
-    [ "$(basename "$d")" = Common ] || ln -s "$d" "$work/game/zone/$(basename "$d")"
-done
-for f in "$game"/zone/Common/*; do
-    # Not a zone this script wrote (make_portable.sh puts it in the game folder).
-    [ "$(basename "$f")" = kb_dlc_weapons.ff ] || ln -s "$f" "$work/game/zone/Common/$(basename "$f")"
-done
-zones="$work/game/zone/Common"
 
 # <source zones> <zone written> then weapon <zombie name>=<multiplayer name>[:<statsTable reference>]
 # (the reference defaults to the name without _mp). References are no prefix of another one or of a
@@ -69,6 +66,36 @@ maps=(
  zombie_type99_rifle=type99_mp"
 )
 
+# The source zones the game folder must have (the runs' first fields).
+missing=""
+for m in "${maps[@]}"; do
+    set -- $m
+    for z in ${1//,/ }; do
+        [ -f "$game/zone/Common/$z.ff" ] || [[ " $missing " == *" $z "* ]] || missing="$missing $z"
+    done
+done
+if [ -n "$missing" ]; then
+    echo "$game/zone/Common lacks the source zones:$missing" >&2
+    exit 1
+fi
+[ $sourcesonly = 1 ] && exit 0
+
+build=$(cd "$build" && pwd)
+exe="$build/blackops"
+[ -f "$exe" ] || { echo "no $exe; build it first" >&2; exit 1; }
+work="$build/dlc_weapons"
+rm -rf "$work"
+mkdir -p "$work/game/zone/Common" "$work/home/main"
+ln -s "$game/main" "$work/game/main"
+for d in "$game"/zone/*; do
+    [ "$(basename "$d")" = Common ] || ln -s "$d" "$work/game/zone/$(basename "$d")"
+done
+for f in "$game"/zone/Common/*; do
+    # Not a zone this script wrote (make_portable.sh puts it in the game folder).
+    [ "$(basename "$f")" = kb_dlc_weapons.ff ] || ln -s "$f" "$work/game/zone/Common/$(basename "$f")"
+done
+zones="$work/game/zone/Common"
+
 # The multiplayer gun whose damage each gun takes (the closest: kind, fire mode and rate).
 damage=(
  thompson_mp=mp5k_mp type100_mp=ak74u_mp mp40_mp=mp5k_mp
@@ -77,6 +104,15 @@ damage=(
  kar98k_mp=l96a1_mp scopedkar98k_mp=l96a1_mp type99_mp=l96a1_mp
  trenchgun_mp=ithaca_mp doublebarrel_mp=rottweil72_mp sawedoff_mp=rottweil72_mp
 )
+
+# Sound aliases no gun names yet, kept for suppressed versions of the guns (HANDOFF, Decisions
+# session 36): World at War's suppressed Thompson and Type 100 shots (their own recordings) and the
+# Black Ops-era Thompson and MP40 silencer shots (the AUG's suppressed recordings); their secondaries
+# (sweet, bass) come along. The factory run's sources hold them all; every merge passes them on, as a
+# merge cuts its bank again from what the zone names.
+keep=(weap_thompson_fire_plr_sil weap_type100_fire_plr_act_sil weap_type100_act_sil
+ wpn_thompson_silencer_fire_plr wpn_thompson_silencer_fire_npc wpn_mp40_silencer_fire_plr wpn_mp40_silencer_fire_npc)
+keepfrom=kb_dlc_factory
 
 cfg="$work/home/main/kb_dlc_weapons.cfg"
 : > "$cfg"
@@ -91,6 +127,11 @@ for m in "${maps[@]}"; do
         [ $noparents = 1 ] && w="${w%%:*}:"
         line="$line weapon $w"
     done
+    if [ "$name" = $keepfrom ]; then
+        for k in "${keep[@]}"; do
+            line="$line alias $k"
+        done
+    fi
     echo "$line" >> "$cfg"
     written+=("$name")
 done
@@ -105,6 +146,9 @@ while [ $i -lt ${#written[@]} ]; do
     i=$((i + 2))
     [ $i -ge ${#written[@]} ] && next=kb_dlc_weapons
     line="writezone $zones/$next.ff $sources all"
+    for k in "${keep[@]}"; do
+        line="$line alias $k"
+    done
     if [ $next = kb_dlc_weapons ]; then
         for d in "${damage[@]}"; do
             line="$line damage $d"
@@ -127,6 +171,6 @@ if grep -a -q "^Error: writezone:" "$log" || ! grep -a -q "^writezone: wrote '$z
     echo "writing the zone failed; see $log" >&2
     exit 1
 fi
-grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset\|takes the damage\|rows from" "$log" || true
+grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset\|takes the damage\|rows from\|multiplayer has the sound alias" "$log" || true
 cp "$zones/kb_dlc_weapons.ff" "$out"
 echo "wrote $out"

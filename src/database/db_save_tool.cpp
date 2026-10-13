@@ -47,7 +47,7 @@
 //   - effects named by effects become root assets;
 //   - the sound aliases the zone names (weapon sounds, notetrack sounds, an
 //     alias's secondary) are cut from the source banks into one bank, unless
-//     multiplayer has them;
+//     multiplayer has them; `alias <name>` adds one nothing names yet;
 //   - the localized strings it names (display names) come along, the source
 //     zones' localized zone's (English here).
 
@@ -72,6 +72,7 @@ static char s_bankName[64];
 static SndBank *s_bank;
 static std::set<std::string> s_bankAliases;
 static std::set<std::string> s_wantedAliases;
+static std::set<std::string> s_keptAliases;
 static std::set<std::string> s_unresolved;
 static std::set<std::string> s_wantedLocalize;
 static std::set<std::string> s_multiplayerAliases;
@@ -109,6 +110,7 @@ static void DB_SaveTool_FreeAll()
     s_bank = NULL;
     s_bankAliases.clear();
     s_wantedAliases.clear();
+    s_keptAliases.clear();
     s_unresolved.clear();
     s_multiplayerAliases.clear();
     s_wantedLocalize.clear();
@@ -1015,6 +1017,8 @@ static bool DB_SaveTool_DryRun(XAsset *roots, int *rootCount, int maxRoots)
     }
 
     DB_SaveStringsSeen(DB_SaveTool_WantString, NULL);
+    // The aliases asked for by name (their secondaries come as strings of the bank).
+    s_wantedAliases.insert(s_keptAliases.begin(), s_keptAliases.end());
     for (std::set<std::string>::const_iterator it = s_wantedLocalize.begin(); it != s_wantedLocalize.end(); ++it)
     {
         if (DB_SaveTool_AddRoot(ASSET_TYPE_LOCALIZE_ENTRY, DB_SaveTool_Find(ASSET_TYPE_LOCALIZE_ENTRY, it->c_str())->header,
@@ -1196,7 +1200,8 @@ static void DB_SaveTool_WriteZone_f()
     if (Cmd_Argc() < 4 || ((Cmd_Argc() - firstPair) & 1))
     {
         Com_Printf(0, "usage: writezone <output .ff> <source zone>[,<zone>...] [all] <type> <name> [<type> <name> ...]\n");
-        Com_Printf(0, "       (types: asset types, damage <weapon>=<mp weapon>, rows/addrows <table>=<file>, strings <file>)\n");
+        Com_Printf(0, "       (types: asset types, damage <weapon>=<mp weapon>, rows/addrows <table>=<file>, strings <file>,\n");
+        Com_Printf(0, "        alias <sound alias>: one no asset names)\n");
         return;
     }
     // A client would create the source zones' shaders and world vertex buffers.
@@ -1251,6 +1256,19 @@ static void DB_SaveTool_WriteZone_f()
         if (!I_stricmp(Cmd_Argv(argIndex), "strings"))
         {
             ok = DB_SaveTool_AddStrings(Cmd_Argv(argIndex + 1), s_roots, &rootCount);
+            continue;
+        }
+        if (!I_stricmp(Cmd_Argv(argIndex), "alias"))
+        {
+            if (!s_toolAliases.count(DB_SaveTool_Key(name)))
+            {
+                Com_PrintError(16, "writezone: no sound alias '%s' in '%s'\n", name, zones);
+                ok = false;
+            }
+            else if (DB_SaveTool_MultiplayerHasAlias(name))
+                Com_Printf(0, "writezone: multiplayer has the sound alias '%s'\n", name);
+            else
+                s_keptAliases.insert(DB_SaveTool_Key(name));
             continue;
         }
         type = DB_SaveTool_TypeForName(Cmd_Argv(argIndex));
@@ -1581,13 +1599,14 @@ static void DB_SaveTool_PrintSoundBank(const SndBank *bank, const SndDriverGloba
             if (alias->soundFile && alias->soundFile->u.loadSnd)
                 file = alias->soundFile->type == 1 ? (const char *)alias->soundFile->u.loadSnd->name
                                                    : (const char *)alias->soundFile->u.streamSnd->filename;
-            Com_Printf(0, "listzone: alias %s group %s %s %s%s %s\n", (const char *)alias->name,
+            Com_Printf(0, "listzone: alias %s group %s %s %s%s %s%s%s\n", (const char *)alias->name,
                        group ? group->name : "?",
                        group && (unsigned int)group->category < 4 ? categories[group->category] : "?",
                        !alias->soundFile ? "none" : alias->soundFile->type == 1 ? "loaded" : "streamed",
                        alias->soundFile && alias->soundFile->type != 1 && alias->soundFile->u.streamSnd
                            && alias->soundFile->u.streamSnd->primeSnd ? "+primed" : "",
-                       file ? file : "");
+                       file ? file : "", alias->secondaryname ? " secondary " : "",
+                       alias->secondaryname ? (const char *)alias->secondaryname : "");
         }
     }
 }

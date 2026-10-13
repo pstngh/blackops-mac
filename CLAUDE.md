@@ -135,7 +135,9 @@ moves the enemy bots to the player; `setviewpos` back ~130 units facing them and
 
 Playing without a keyboard: `KB_CMDS` runs console commands at times (seconds) after
 the client becomes active in a map (again after each map change), `|`-separated;
-entries after `loop@<start>/<period>` repeat. `+set scr_tdm_timelimit 1` ends a
+entries after `loop@<start>/<period>` repeat. It (and KB_MENU_CMDS below) keeps 64 entries and 4 KB, dropping the rest silently: a
+longer sequence steps through dvars from a cfg, `set g1 "give thompson_mp;set wn vstr g2"`, ..., with `vstr wn` in
+the loop (session 36). `+set scr_tdm_timelimit 1` ends a
 match after a minute, to test the end of a match and map rotation. This joins, picks a class and fights:
 
 ```sh
@@ -202,7 +204,8 @@ multiplayer has, a cut sound bank, localized names); write to a scratch dir. `we
 renames (the statsTable reference, parentWeaponName, defaults to `<new>` without `_mp`; `:` alone
 leaves none); `damage <weapon>=<mp weapon>` copies a multiplayer gun's damage, `rows`/`addrows
 <table>=<file>` put rows into a copy of a string table (into its empty rows by index / at the end),
-`strings <file>` adds localized strings (`NAME text` lines). Source zones load by name from `zone/`
+`strings <file>` adds localized strings (`NAME text` lines), `alias <name>` keeps a sound alias no asset names (with its
+secondaries; a merge's bank is cut again from what the zone names, so each merge passes it on). Source zones load by name from `zone/`
 of the install path, so a written zone is a source only from a scratch game folder; tool runs pass
 `+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
 `listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold,
@@ -214,8 +217,11 @@ rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a 
 for the command line (1 KB) go in a cfg under `<fs_h>/main` (`+exec`).
 `tools/make_dlc_weapons.sh <game dir> <out.ff>` writes the DLC weapons' zone, kb_dlc_weapons.ff (16
 WWII guns with multiplayer damage and their rows of mp/statsTable.csv, mp/attributesTable.csv and
-mp/weaponOptions.csv from tools/dlc_weapons_*; ~10 s, in build_macos/dlc_weapons); make_portable.sh
-runs it into the game folder's zone/Common. The game loads it at startup after common_mp; to try a
+mp/weaponOptions.csv from tools/dlc_weapons_*, and 7 suppressed shot sounds no gun uses yet; ~10 s, in
+build_macos/dlc_weapons) from the World at War zombie maps; `--sources <game dir>` checks a folder has them. The user's
+game folder has no zombie zones since session 36 (HANDOFF, Decisions session 36): make_portable.sh keeps its installed
+zone, and a new one is written from a scratch game folder with the zombie zones of the backup folder
+/Users/pstn/Documents/Games/codbo_wwii_guns_backup (README.txt there; read only). The game loads it at startup after common_mp; to try a
 new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (links to `main`,
 `zone/English` and every `zone/Common` file). Create a Class from KB_MENU_CMDS: HANDOFF, Decisions
 session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then

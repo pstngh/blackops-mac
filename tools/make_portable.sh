@@ -93,5 +93,14 @@ fi
 # The DLC weapons (tools/make_dlc_weapons.sh; the kb_dlcWeapons dvar): zone/Common/kb_dlc_weapons.ff,
 # written from the game's zombie maps by this build in ~10 s, every time (the writer or the rows may
 # have changed). The script copies the zone in only when it was written, so a failure leaves the old one.
-"$(dirname "$0")/make_dlc_weapons.sh" "$game" "$game/zone/Common/kb_dlc_weapons.ff" "$build" \
-    || echo "(no DLC weapons zone: see above)"
+# A game folder without the zombie maps (the user's, since session 36; the backup folder has them)
+# keeps its installed zone as it is.
+if "$(dirname "$0")/make_dlc_weapons.sh" --sources "$game" 2>/dev/null; then
+    "$(dirname "$0")/make_dlc_weapons.sh" "$game" "$game/zone/Common/kb_dlc_weapons.ff" "$build" \
+        || echo "(no DLC weapons zone: see above)"
+elif [ -f "$game/zone/Common/kb_dlc_weapons.ff" ]; then
+    echo "kept the installed zone/Common/kb_dlc_weapons.ff: the game folder has no zombie maps to write it from"
+else
+    "$(dirname "$0")/make_dlc_weapons.sh" --sources "$game" || true
+    echo "(no DLC weapons zone: the game folder has no zombie maps to write it from)"
+fi
