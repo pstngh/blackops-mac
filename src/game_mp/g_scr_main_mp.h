@@ -347,6 +347,7 @@ void __cdecl GScr_SetScanningPitch(scr_entref_t entref);
 void GScr_WeaponFireTime();
 void GScr_WeaponReloadTime();
 void GScr_IsWeaponClipOnly();
+void GScr_KbIsBlockedGun();
 void GScr_IsWeaponDetonationTimed();
 void GScr_PrecacheLocationSelector();
 int __cdecl GScr_GetLocSelIndex(const char *mtlName);

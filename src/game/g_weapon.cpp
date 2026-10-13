@@ -1759,6 +1759,65 @@ bool __cdecl G_KbNoLauncherWeapon(unsigned int weaponIndex)
     return 1;
 }
 
+// A weapon's statsTable reference: parentWeaponName, else the name without "_mp" (the ballistic
+// knife's weapons name no parent); for an alt mode (a gl_, mk_ or ft_ attachment's), its gun's.
+static bool G_KbWeaponReference(unsigned int weaponIndex, char *reference, int referenceSize)
+{
+    const WeaponDef *weapDef;
+    const char *weaponName;
+    int nameLen;
+
+    weapDef = BG_GetWeaponDef(weaponIndex);
+    if ( weapDef->inventoryType == WEAPINVENTORY_ALTMODE && BG_GetWeaponVariantDef(weaponIndex)->altWeaponIndex )
+        weapDef = BG_GetWeaponDef(BG_GetWeaponVariantDef(weaponIndex)->altWeaponIndex);
+    if ( weapDef->parentWeaponName && *weapDef->parentWeaponName )
+    {
+        I_strncpyz(reference, weapDef->parentWeaponName, referenceSize);
+        return 1;
+    }
+    weaponName = BG_WeaponName(weaponIndex);
+    nameLen = strlen(weaponName);
+    if ( nameLen < 3 || I_stricmp(&weaponName[nameLen - 3], "_mp") || nameLen - 3 >= referenceSize )
+        return 0;
+    memcpy(reference, weaponName, nameLen - 3);
+    reference[nameLen - 3] = 0;
+    return 1;
+}
+
+// kb_blockGuns: no variant of the user's blocked guns (BG_KbBlockedGunRef) is given, to anyone.
+// PlayerCmd_giveWeapon gives a class's blocked primary as an AK-47 (G_KbForBlockedGun); the bots
+// never pick one (Scr_KbPatchSource).
+bool __cdecl G_KbBlockedGunWeapon(unsigned int weaponIndex)
+{
+    static unsigned char reported[ARRAY_COUNT(bg_weaponVariantDefs) / 8];
+    char reference[64];
+
+    if ( !kb_blockGuns->current.enabled || !weaponIndex )
+        return 0;
+    if ( !G_KbWeaponReference(weaponIndex, reference, sizeof(reference)) || !BG_KbBlockedGunRef(reference) )
+        return 0;
+    if ( weaponIndex < ARRAY_COUNT(bg_weaponVariantDefs) && (reported[weaponIndex >> 3] & (1 << (weaponIndex & 7))) == 0 )
+    {
+        reported[weaponIndex >> 3] |= 1 << (weaponIndex & 7);
+        Com_DPrintf(17, "kb_blockGuns: not giving %s\n", BG_WeaponName(weaponIndex));
+    }
+    return 1;
+}
+
+// What a class gets in a blocked gun's place: a gun comes as an AK-47 (as a launcher does), the
+// HS-10 and the ballistic knife as nothing (the user's answers, HANDOFF Decisions session 34).
+unsigned int __cdecl G_KbForBlockedGun(unsigned int weaponIndex)
+{
+    char reference[64];
+
+    if ( !G_KbBlockedGunWeapon(weaponIndex) )
+        return weaponIndex;
+    G_KbWeaponReference(weaponIndex, reference, sizeof(reference));
+    if ( !I_stricmp(reference, "hs10") || !I_stricmp(reference, "hs10dw") || !I_stricmp(reference, "knife_ballistic") )
+        return 0;
+    return G_GetWeaponIndexForName((char *)"ak47_mp");
+}
+
 // kb_noDualWield: no dual-wield weapon (either hand) is given, to anyone. The class and bot
 // scripts ask for the single gun (Scr_KbPatchSource); PlayerCmd_giveWeapon and
 // PlayerCmd_setSpawnWeapon take any other dual-wield name as its single gun.
@@ -1819,8 +1878,11 @@ int __cdecl G_GivePlayerWeapon(
         return 0;
     if ( !weapDef->gunXModel[altModelIndex] )
         return 0;
-    if ( G_KbNoGrenadeWeapon(iWeaponIndex) || G_KbNoLauncherWeapon(iWeaponIndex) || G_KbNoDualWieldWeapon(iWeaponIndex) )
+    if ( G_KbNoGrenadeWeapon(iWeaponIndex) || G_KbNoLauncherWeapon(iWeaponIndex) || G_KbNoDualWieldWeapon(iWeaponIndex)
+        || G_KbBlockedGunWeapon(iWeaponIndex) )
+    {
         return 0;
+    }
     if ( level.clientIsSpawning )
     {
         WeaponVariantDef = BG_GetWeaponVariantDef(iWeaponIndex);

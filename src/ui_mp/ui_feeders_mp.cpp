@@ -278,13 +278,18 @@ int __cdecl UI_GetBasicTrainingGameTypeCount()
 int __cdecl UI_FeederCount_WeaponGroups()
 {
     const char *loadoutName; // [esp+0h] [ebp-4h]
+    int count;
 
     loadoutName = Dvar_GetString("selected_loadout_slot");
     if ( !I_stricmp(loadoutName, "primary") )
         return 5;
     if ( I_stricmp(loadoutName, "secondary") )
         return 0;
-    return 3;
+    // kb_noLaunchers, kb_noGrenades, kb_blockGuns: the secondary's Specials and Launchers go when Create a
+    // Class has nothing left in them (the rows are the groups in order, so only the last ones can go)
+    for ( count = 3; count > 1 && BG_UnlockablesKbHidesGroup((itemGroup_t)(ITEMGROUP_PISTOL + count - 1)); --count )
+        ;
+    return count;
 }
 
 int __cdecl UI_FeederCount_CustomClasses(int localClientNum)

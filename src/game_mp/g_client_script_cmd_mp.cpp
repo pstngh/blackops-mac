@@ -313,7 +313,8 @@ int __cdecl BG_PlayerWeaponSetBlockPickupWeapon(playerState_s *ps, unsigned int 
 // the frag's and the tactical's after giving them).
 static bool G_KbBlockedWeaponNotHeld(const playerState_s *ps, unsigned int weaponIndex)
 {
-    return (G_KbNoGrenadeWeapon(weaponIndex) || G_KbNoLauncherWeapon(weaponIndex) || G_KbNoDualWieldWeapon(weaponIndex))
+    return (G_KbNoGrenadeWeapon(weaponIndex) || G_KbNoLauncherWeapon(weaponIndex) || G_KbNoDualWieldWeapon(weaponIndex)
+            || G_KbBlockedGunWeapon(weaponIndex))
         && !BG_PlayerHasWeapon(ps, weaponIndex);
 }
 
@@ -411,6 +412,16 @@ void __cdecl PlayerCmd_giveWeapon(scr_entref_t entref)
             return;
         weaponModel = 0;
         weaponOptions.i = 0;
+        hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
+    }
+    // kb_blockGuns: a class's blocked gun comes as an AK-47, with its camo and options and the AK-47's
+    // ammo; the HS-10 and the ballistic knife as nothing
+    if ( G_KbBlockedGunWeapon(weaponIndex) )
+    {
+        weaponIndex = G_KbForBlockedGun(weaponIndex);
+        if ( !weaponIndex )
+            return;
+        weaponModel = 0;
         hadWeapon = BG_PlayerHasWeapon(ps, weaponIndex);
     }
     // kb_noDualWield: a dual wield comes as its single gun, with its camo and options
@@ -3393,7 +3404,8 @@ void __cdecl PlayerCmd_setSpawnWeapon(scr_entref_t entref)
     }
     pszWeaponName = Scr_GetString(0, SCRIPTINSTANCE_SERVER);
     iWeaponIndex = G_GetWeaponIndexForName(pszWeaponName);
-    // kb_noDualWield: the single gun giveWeapon gave in a dual wield's place
+    // kb_blockGuns, kb_noDualWield: the gun giveWeapon gave in a blocked gun's or a dual wield's place
+    iWeaponIndex = G_KbForBlockedGun(iWeaponIndex);
     iWeaponIndex = G_KbSingleForDualWield(iWeaponIndex);
     if ( BG_IsWeaponValid(&pSelf->client->ps, iWeaponIndex) )
     {

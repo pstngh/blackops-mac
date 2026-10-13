@@ -426,6 +426,7 @@ const dvar_s *kb_noAds;
 const dvar_s *kb_sprintFire;
 const dvar_s *kb_aaLean;
 const dvar_s *kb_noProne;
+const dvar_s *kb_noMelee;
 const dvar_s *kb_wwiiGunMovement;
 const dvar_s *kb_sniperScope;
 const dvar_s *player_clipSizeMultiplier;
@@ -1064,6 +1065,12 @@ void __cdecl BG_RegisterDvars()
         1,
         1u,
         "Nobody goes prone or dives to prone; the prone keys crouch instead");
+    // The user's change (HANDOFF, Decisions session 34); 0 gives the original game.
+    kb_noMelee = _Dvar_RegisterBool(
+        "kb_noMelee",
+        1,
+        1u,
+        "Nobody melees (knife): the melee button does nothing, and bots don't try");
     // The user's change (HANDOFF, Decisions session 32); 0 gives the original game.
     kb_wwiiGunMovement = _Dvar_RegisterBool(
         "kb_wwiiGunMovement",

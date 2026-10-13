@@ -2423,7 +2423,8 @@ LABEL_95:
 char __cdecl Bot_UpdateMelee(bot_info_t *botInfo, const client_t *bot, usercmd_s *cmd)
 {
     //PIXBeginNamedEvent(-1, "Bot_UpdateMelee");
-    if ( sv_botsPressMeleeBtn->current.enabled )
+    // kb_noMelee: a bot near its enemy keeps shooting instead of pressing melee
+    if ( sv_botsPressMeleeBtn->current.enabled && !kb_noMelee->current.enabled )
     {
         if ( botInfo->sightHitNum )
         {

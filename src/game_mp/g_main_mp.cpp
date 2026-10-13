@@ -119,10 +119,8 @@ const dvar_t *g_logSync;
 const dvar_t *g_password;
 const dvar_t *g_banIPs;
 const dvar_t *kb_godMode;
-const dvar_t *kb_noGrenades;
 const dvar_t *kb_noLastStand;
 const dvar_t *kb_noDeathCam;
-const dvar_t *kb_noLaunchers;
 const dvar_t *kb_noKillstreaks;
 const dvar_t *kb_noHitMarker;
 const dvar_t *kb_noCountdown;
@@ -2068,23 +2066,14 @@ void G_RegisterDvars()
         0x80u,
         "Offset bipod mount position on gun by this distance");
     // The user's gameplay changes (HANDOFF, Decisions session 16); 0 gives the original game.
+    // kb_noGrenades and kb_noLaunchers are registered with the items (BG_UnlockableItemsInit).
     kb_godMode = _Dvar_RegisterBool("kb_godMode", 1, 1u, "Human players take no damage (bots do)");
-    kb_noGrenades = _Dvar_RegisterBool(
-        "kb_noGrenades",
-        1,
-        1u,
-        "Nobody gets lethal, tactical or equipment offhands, grenade launchers or the explosive crossbow");
     kb_noLastStand = _Dvar_RegisterBool("kb_noLastStand", 1, 1u, "Nobody goes into last stand (Second Chance)");
     kb_noDeathCam = _Dvar_RegisterBool(
         "kb_noDeathCam",
         1,
         1u,
         "No killcam, final killcam or death view: respawn right after dying");
-    kb_noLaunchers = _Dvar_RegisterBool(
-        "kb_noLaunchers",
-        1,
-        1u,
-        "Nobody gets a rocket launcher: a class's RPG, M72 LAW or Strela-3 comes as an AK-47");
     kb_noKillstreaks = _Dvar_RegisterBool("kb_noKillstreaks", 1, 1u, "Nobody earns killstreaks");
     kb_noHitMarker = _Dvar_RegisterBool(
         "kb_noHitMarker",

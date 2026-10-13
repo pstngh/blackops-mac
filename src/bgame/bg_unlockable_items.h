@@ -418,3 +418,9 @@ extern const dvar_t *itemSellFactor;
 extern const dvar_t *ui_currentWeaponOptionGroup;
 extern const dvar_t *bodyTypeFromGun;
 extern const dvar_t *kb_noDualWield;
+extern const dvar_t *kb_noGrenades;
+extern const dvar_t *kb_noLaunchers;
+extern const dvar_t *kb_blockGuns;
+
+bool __cdecl BG_KbBlockedGunRef(const char *reference);
+bool __cdecl BG_UnlockablesKbHidesGroup(itemGroup_t group);

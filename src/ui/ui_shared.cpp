@@ -11075,6 +11075,79 @@ static bool UI_KbIsTextExp(const ExpressionStatement *exp, const char *text)
         && !I_stricmp(exp->rpn[0].data.constant.internals.string, text);
 }
 
+// kb_noGrenades (HANDOFF, Decisions session 34): Create a Class shows no lethal, tactical or equipment row
+// (their lists would be empty: BG_UnlockablesKbHidesItem) and none of those items in the class's summary
+// while the dvar is on. The items get the menus' own hideDvar test (Item_EnableShowViaDvar), so the dvar
+// is read as they draw: the rows' buttons and lists by name, the summary's names and pictures by the slot
+// their expressions read.
+static bool UI_KbExpNamesGrenadeSlot(const ExpressionStatement *exp)
+{
+    int i;
+    const char *string;
+
+    if ( !exp->filename || !exp->rpn )
+        return 0;
+    for ( i = 0; i < exp->numRpn; ++i )
+    {
+        if ( exp->rpn[i].type != 0 || exp->rpn[i].data.constant.dataType != VAL_STRING )
+            continue;
+        string = exp->rpn[i].data.constant.internals.string;
+        if ( string
+            && (!I_stricmp(string, "primarygrenade") || !I_stricmp(string, "specialgrenade") || !I_stricmp(string, "equipment")) )
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void UI_KbHideCacGrenadeRows(menuDef_t *menu)
+{
+    static const char *rowNames[] =
+    {
+        "grid_button_3",
+        "grid_button_4",
+        "grid_button_5",
+        "grid_dropdown_list_3",
+        "grid_dropdown_list_4",
+        "grid_dropdown_list_5"
+    };
+    int i;
+    unsigned int nameNum;
+    itemDef_s *item;
+    bool hide;
+
+    for ( i = 0; i < menu->itemCount; ++i )
+    {
+        item = menu->items[i];
+        hide = 0;
+        for ( nameNum = 0; nameNum < ARRAY_COUNT(rowNames) && item->window.name; ++nameNum )
+        {
+            if ( !I_stricmp(item->window.name, rowNames[nameNum]) )
+                hide = 1;
+        }
+        if ( UI_KbExpNamesGrenadeSlot(&item->visibleExp) )
+            hide = 1;
+        if ( (item->type == 1 || item->type == 3) && item->typeData.textDef && item->typeData.textDef->textExpData
+            && UI_KbExpNamesGrenadeSlot(&item->typeData.textDef->textExpData->textExp) )
+        {
+            hide = 1;
+        }
+        if ( item->type == 2 && item->typeData.imageDef && UI_KbExpNamesGrenadeSlot(&item->typeData.imageDef->materialExp) )
+            hide = 1;
+        if ( !hide )
+            continue;
+        if ( (item->dvarFlags & 0xC) != 0 || item->dvarTest && *item->dvarTest || item->enableDvar && *item->enableDvar )
+        {
+            Com_PrintWarning(13, "kb_noGrenades: %s item %i has a dvar test of its own, left as it is\n", (const char *)menu->window.name, i);
+            continue;
+        }
+        item->dvarTest = "kb_noGrenades";
+        item->enableDvar = "1";
+        item->dvarFlags |= 8;
+    }
+}
+
 static void UI_KbPatchMenu(menuDef_t *menu)
 {
     int i;
@@ -11083,6 +11156,8 @@ static void UI_KbPatchMenu(menuDef_t *menu)
     GenericEventHandler *handler;
     GenericEventScript *eventScript;
 
+    if ( !I_stricmp(menu->window.name, "menu_cac_custom") )
+        UI_KbHideCacGrenadeRows(menu);
     if ( !kb_cacButton->current.enabled || I_stricmp(menu->window.name, "main_text") )
         return;
     for ( i = 0; i < menu->itemCount; ++i )

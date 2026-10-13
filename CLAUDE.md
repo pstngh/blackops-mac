@@ -89,7 +89,7 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23, 26, 27, 28, 29, 31 and 32): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32 and 34): `kb_godMode` (human players take no damage), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
@@ -115,11 +115,15 @@ first-person WWII Thompson is held closer, where the MP40 is, a little lower; a 
 `kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in),
 `kb_noRoundEndWait` (no outcome screen delay between rounds or after a match and no 30 s scoreboard: the next round
 or map at once), `kb_damagePercent` (an int 1-100, default 100: lowers every gun's damage but the sniper rifles', everyone's, in
-percent; 100 or more changes nothing; the launcher's "Gun damage" passes it). Tests
+percent; 100 or more changes nothing; the launcher's "Gun damage" passes it), `kb_blockGuns` (nobody gets the FN FAL, Galil,
+M14, Olympia, HS-10, HK21, RPK, M60, Stoner63, Dragunov, WA2000, PSG1 or Ballistic Knife, any variant: a class's comes as an
+AK-47, the HS-10 and the knife as nothing; bots pick others; the WWII guns stay; Create a Class lists none of them, nor
+launchers, the crossbow or the lethal/tactical/equipment rows), `kb_noMelee` (the melee button does nothing, bots don't
+melee). With kb_cleanHud the world markers (the teammates' death skull, objective markers) are hidden too. Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own
-damage `+set kb_mohaaDamage 0`, of the round/match outcome screens and scoreboard `+set kb_noRoundEndWait 0`; a scratch profile keeps whatever a run set
+damage `+set kb_mohaaDamage 0`, of the blocked guns or melee `+set kb_blockGuns 0` / `+set kb_noMelee 0`, of the round/match outcome screens and scoreboard `+set kb_noRoundEndWait 0`; a scratch profile keeps whatever a run set
 (they are written to its config_mp.cfg). `+leanleft`/`+leanright` lean in `KB_CMDS`; `viewpos` prints the
 eye position (60 above the feet standing, 40 crouched, 11 prone). Hits on demand: with `+set
 developer_script 1 +set scr_testclients 4 +set sv_botsAllowMovement 0`, `set scr_playerwarp enemies_host`

@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-12, session 33)
+## Status (2026-10-12, session 34)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -449,6 +449,19 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the user's iCloud Drive Trash (Finder's Trash), 3.94 GB. ~190 short voice sounds inside multiplayer's own zones (pain
   grunts, burning screams, a gas cough, Nuketown's loudspeaker) can't be reached that way; offered a mute setting, no
   answer yet. Steam doesn't manage the folder (this Mac's Steam has only Counter-Strike), so nothing brings the files back.
+- **More guns blocked, no melee, no death skull** (session 34, the user's request in session 33: "fully disable some
+  weapons ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine guns / ALL
+  snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS", and their answers in Next
+  steps): `kb_blockGuns` and `kb_noMelee`, archived, default 1. Nobody gets the FN FAL, Galil, M14, Olympia, HS-10, HK21,
+  RPK, M60, Stoner63, Dragunov, WA2000, PSG1 or the Ballistic Knife, in any variant (attachments, camo, dual wield); the
+  L96A1 and all 16 WWII guns stay (the WWII double-barrel too). A class's blocked gun comes as an AK-47 (with the class's
+  camo), a blocked HS-10 or Ballistic Knife as nothing (so an HS-10 class spawns with its pistol only: the HS-10 is a
+  primary, a shotgun, not a second gun); the bots pick only from the other guns. Nobody melees: the melee button does
+  nothing and the bots shoot instead. Create a Class no longer lists the blocked guns, the launchers or the explosive
+  crossbow, and has no Lethal, Tactical and Equipment rows (nor those items in the class's summary); the secondary
+  offers only Pistols. With `kb_cleanHud`, the teammates' death skull and every other world marker (objective markers)
+  are hidden during play too: session 29 hid them in a drawing path the game doesn't use. Checked in play and in the
+  menus (Decisions session 34). Not installed in the game folder yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -637,8 +650,14 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next (the user's request, 2026-10-12, session 33): block more weapons, like kb_noLaunchers and
-kb_noDualWield.** The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
+**Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
+(Status, Decisions session 34; committed, not installed in the game folder, not pushed). Next: ask the user whether to
+install it (make_portable.sh) and push; then two questions for them, in plain words: (a) the HS-10 turned out to be a main
+gun (a shotgun, like the Olympia), so a class with it now spawns with only its pistol, as they asked ("leaves the slot
+empty"): keep that, or give an AK-47 like the other blocked main guns? (b) bots that pick a launcher as their second gun
+still get an AK-47 there (session 23's kb_noLaunchers; the user's answer then): have them pick a pistol instead? Then the
+Rezurrection item below (check git log first).
+The request as it was (session 33). The user: "i would like to fully disable some weapons (delete even if thats safe) - add these to the
 dual wield/launcher block ... olympia, FN FAL, galil, m14, hs-10, Double-Barreled Shotgun, all knives / ALL light machine
 guns / ALL snipers except : L96A1 / All lethal and tactical equipement / DO NOT TOUCH WW2 WEAPONS THOUGH. i will go
 through those separately". Told: deleting isn't safe (the guns are in common_mp.ff with everything else; anything naming
@@ -659,7 +678,8 @@ when `GetDvar( #"ui_hud_showdeathicons" ) == "0"` or in hardcore; the only other
 crate (killstreaks are off). Built in, as part of kb_cleanHud (the user chose that over typing `seta
 ui_hud_showdeathicons 0`): find why kb_cleanHud doesn't already hide it (CG_KbHideHudElems skips the scripts' hud
 elements and CG_AddDrawSurfsFor3dHudElems while matchUIVisibilityFlags 0x800 is set; not reproduced yet), then e.g. a
-scrKbPatch so addDeathIcon returns while kb_cleanHud is on.
+scrKbPatch so addDeathIcon returns while kb_cleanHud is on. (Found in session 34: the waypoints are drawn by
+RB_DrawWaypoints, which kb_cleanHud didn't check; fixed there, no script patch needed.)
 On hold (the user: "hold on all this for now"; nothing done, don't start): more than one attachment per gun without
 Warlord (each combination is a separate weapon variant: only the 2-attachment combinations Warlord allows exist, not
 checked yet which), and every perk at once (a class saves exactly 3; the offer was a setting giving every Pro perk at
@@ -984,6 +1004,16 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 34 (kb_blockGuns, kb_noMelee): the wager modes' fixed weapons follow the blocks: Gun Game's ladder gives
+an AK-47 for its M14, HK21, M60 and WA2000 tiers (and its M72 LAW, kb_noLaunchers) and nothing for the China Lake,
+crossbow and Ballistic Knife tiers; Sticks and Stones (hlnd: crossbow, Ballistic Knife, tomahawk, knife) leaves a player
+with no usable weapon; One in the Chamber's knife can't be used. They need the online wager setup anyway (not offered
+offline). A Create-a-Class class that already holds a blocked gun still shows it in the class's summary (the stats keep it);
+it spawns as an AK-47. kb_allClassGuns gives an AK-47 for a blocked primary of classes 1-5 (when no AK-47 is held). A
+`waypoint_second_chance` waypoint (alpha 0?) was among the script waypoints in every team match with kb_cleanHud 0; not
+looked at (kb_noLastStand is on). Keyboard navigation of Create a Class (arrow keys) may still focus a hidden Lethal row
+(Item_SetFocus checks the window's flag, not the hideDvar test); the mouse can't.
+
 Seen in session 32 (kb_mohaaDamage): Create a Class's damage and range bars still show Black Ops' numbers
 (mp/attributesTable.csv); the bots still choose their fighting distances by Black Ops' damage ranges
 (sv_bot_mp.cpp reads fMinDamageRange/fMaxDamageRange); the scripts' `getWeaponDamage`-style builtins return Black
@@ -1188,6 +1218,65 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 34)
+
+**Blocked guns (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (`kb_cleanHud`)** (Status; the request and the
+user's answers in Next steps). Both new dvars archived, default 1; 0 gives the original game.
+- **Which weapons** (`listzone - weapon`, `listzone - stringtable mp/statsTable.csv`): every variant of a multiplayer gun
+  names its statsTable reference as parentWeaponName (`fnfal_mk_silencer_mp` -> `fnfal`; `hs10dw_mp`/`hs10lh_mp` ->
+  `hs10`); the alt modes name the attachment's (`gl_fnfal_mp` -> `weapon_grenadelauncher`, `mk_` -> `weapon_masterkey`,
+  `ft_` -> `weapon_flamethrower`) and hold their gun as altWeapon; `knife_ballistic_mp` names none. The WWII guns' references
+  are their own (thompson, doublebarrel, bar, ...; `damage` copied from the multiplayer guns doesn't copy the reference).
+  The list (BG_KbBlockedGunRef, bg_unlockable_items.cpp): fnfal, galil, m14, rottweil72 (Olympia), hs10, hs10dw, hk21, rpk,
+  m60, stoner63, dragunov, wa2000, psg1, knife_ballistic. G_KbBlockedGunWeapon (g_weapon.cpp) takes a weapon's reference
+  (parentWeaponName, else the name without `_mp`; an alt mode's gun's) and G_GivePlayerWeapon refuses a match, on every
+  path. The HS-10 is a primary (statsTable slot `primary`, group weapon_cqb); the user's answer (empty slot) was kept, so
+  an HS-10 class spawns with its secondary only (asked again: Next steps).
+- **Classes**: PlayerCmd_giveWeapon gives a blocked gun as `ak47_mp` with the class's weapon options (camo, ...), the
+  HS-10 and the Ballistic Knife as nothing (G_KbForBlockedGun); PlayerCmd_setSpawnWeapon takes the same replacement, so
+  the class spawns holding the AK-47 (or, with an HS-10, the pistol). Order in giveWeapon: launcher, blocked gun, dual
+  wield (an `hs10dw` is a blocked gun first). The ammo commands skip a blocked gun not held (G_KbBlockedWeaponNotHeld).
+- **Bots**: `_bot.gsc`'s bot_give_random_weapon builds `level.bot_weapon_ids[slot]` once a map from the statsTable rows;
+  a Scr_KbPatchSource patch skips a row whose reference is blocked through a new script builtin, `kbIsBlockedGun(<ref>)`
+  (g_scr_main_mp.cpp, BG_KbBlockedGunRef), so the list has only one copy. The bots' launcher picks still come as an
+  AK-47 (kb_noLaunchers, unchanged).
+- **Melee**: PM_Weapon_CheckForMelee is the only start of a melee (knife swing, lunge; the melee button is bit 2) and
+  returns at once with `kb_noMelee` (bg_weapons.cpp; pmove runs on the server and in the client's prediction, the dvar is
+  with the other pmove ones in bg_misc.cpp). Bot_UpdateMelee (sv_bot_mp.cpp), which presses melee 75% of the time within
+  40 units of the enemy and then skips firing, answers 0, so the bots shoot instead. `knife_mp` is still given (the melee
+  weapon slot; nothing draws it without a melee). The user's config binds V to `+melee`: it does nothing now.
+- **Create a Class**: every list is built by `buildItemListForSlotName` (the class screen's rows) or
+  `buildItemListForSlotNameAndGroup` (the gun groups) (`listzone patch_ui_mp menu menu_cac_custom` / `cac_weapon`). Both skip
+  BG_UnlockablesKbHidesItem's items: the blocked guns (kb_blockGuns), the rocket launchers (kb_noLaunchers), the lethal,
+  tactical and equipment slots' items, the China Lake and the explosive crossbow (kb_noGrenades). The secondary's group
+  list (feeder 78, UI_FeederCount_WeaponGroups: rows = groups in order) drops trailing groups with nothing left
+  (BG_UnlockablesKbHidesGroup), so only Pistols remain. The class screen's Lethal/Tactical/Equipment rows
+  (`grid_button_3`-`5`, `grid_dropdown_list_3`-`5`) and the summary's items whose expressions name the
+  `primarygrenade`/`specialgrenade`/`equipment` slots get the menus' own hideDvar test as UI_AddMenu takes the menu
+  (UI_KbHideCacGrenadeRows, ui_shared.cpp: dvarTest `kb_noGrenades`, enableDvar `1`, dvarFlags 8, read as they draw).
+  kb_noGrenades and kb_noLaunchers moved from G_RegisterDvars (map start) to BG_UnlockableItemsInit (startup, as
+  kb_noDualWield), since the menus read them before any map.
+- **The death skull** (reproduced: mp_nuked TDM, 7 managed bots, temporary logging of the waypoints drawn): with
+  `r_highRezWaypoints` on (it is a constant true), CG_AddDrawSurfsFor3dHudElems draws nothing and the waypoints (hud
+  elements of type 15: `headicon_dead`, objective markers) are drawn by RB_DrawWaypoints, which session 29's
+  kb_cleanHud never checked. It returns now while CG_KbHideHudElems is true (a round on). So the skull's script and the
+  `ui_hud_showdeathicons` dvar are left alone.
+- **Checked** (release client, listen server on mp_nuked, TDM, the launcher's 7 managed bots with
+  sv_botsPressMeleeBtn 1, scripted player, scratch profiles, wave writer; temporary logging of every script giveWeapon,
+  every melee start and every waypoint drawn, removed): defaults, 100 s: the player's Custom 1 (FN FAL, Ballistic Knife)
+  got `ak47_mp` (screenshot: the AK-47 in hand) and no secondary, Custom 2 (HS-10, Python) only the Python (screenshot);
+  36 bot spawns, none with a blocked gun (WWII guns among them); 0 melee starts though the player pressed melee three
+  times; 0 waypoints drawn. All three dvars 0, same script: the player got the FN FAL, Ballistic Knife and HS-10
+  (screenshot), bots got 13 blocked guns (FN FAL, Galil x4, M60 x3, Ballistic Knife x5) in 60 gun gives, 17 melee starts logged
+  (the player and a bot), `headicon_dead` drawn (screenshot: the skull) and another waypoint, `waypoint_second_chance`.
+  Create a Class (KB_MENU_CMDS, screenshots): Custom 1 without the three rows and their summary items; LMG: FG42, BAR,
+  Deployable BAR; sniper: L96A1, Kar98k, Scoped Kar98k, Arisaka; assault: M16, Enfield, Famas, AUG, AK47, Commando, G11 and
+  the WWII rifles; shotguns: Stakeout, SPAS-12, Trench Gun, Double-Barreled (WWII), Sawed-Off; secondary: Pistols only.
+  With the three dvars 0: the rows with Frag and Willy Pete, the HK21, RPK, M60 and Stoner63, and Pistols, Launchers,
+  Specials. A dedicated server with 4 test clients (75 s): 100 gives, no blocked gun, no melee. The launcher's FFA with 16
+  bots (95 s): no error beyond the usual map-load effect warnings, no script patch warning. check_file.py natively and
+  `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 33)
 

@@ -170,8 +170,86 @@ const dvar_t *itemSellFactor;
 const dvar_t *ui_currentWeaponOptionGroup;
 const dvar_t *bodyTypeFromGun;
 const dvar_t *kb_noDualWield;
+const dvar_t *kb_noGrenades;
+const dvar_t *kb_noLaunchers;
+const dvar_t *kb_blockGuns;
 
 unlockableItemsData s_unlockableItems;
+
+// kb_blockGuns (the user's list, HANDOFF Decisions session 34): the statsTable references of the guns nobody
+// gets. Every variant of a gun (attachments, camo, dual wield) names its reference as parentWeaponName; the
+// ballistic knife's weapons name none. The WWII guns (kb_dlc_weapons.ff) have references of their own.
+static const char *s_kbBlockedGunRefs[] =
+{
+  "fnfal",
+  "galil",
+  "m14",
+  "rottweil72",
+  "hs10",
+  "hs10dw",
+  "hk21",
+  "rpk",
+  "m60",
+  "stoner63",
+  "dragunov",
+  "wa2000",
+  "psg1",
+  "knife_ballistic"
+};
+
+bool __cdecl BG_KbBlockedGunRef(const char *reference)
+{
+    unsigned int i;
+
+    if ( !kb_blockGuns || !kb_blockGuns->current.enabled || !reference )
+        return 0;
+    for ( i = 0; i < ARRAY_COUNT(s_kbBlockedGunRefs); ++i )
+    {
+        if ( !I_stricmp(reference, s_kbBlockedGunRefs[i]) )
+            return 1;
+    }
+    return 0;
+}
+
+// The Create-a-Class lists leave out what a kb_* dvar keeps from players: the blocked guns (kb_blockGuns), the
+// rocket launchers (kb_noLaunchers), and the lethal, tactical and equipment items, the China Lake and the
+// explosive crossbow (kb_noGrenades).
+static bool BG_UnlockablesKbHidesItem(const itemInfo_t *itemInfo)
+{
+    if ( !itemInfo->reference )
+        return 0;
+    if ( BG_KbBlockedGunRef(itemInfo->reference) )
+        return 1;
+    if ( kb_noGrenades
+        && kb_noGrenades->current.enabled
+        && (itemInfo->loadoutSlot == LOADOUTSLOT_PRIMARY_GRENADE
+            || itemInfo->loadoutSlot == LOADOUTSLOT_SPECIAL_GRENADE
+            || itemInfo->loadoutSlot == LOADOUTSLOT_EQUIPMENT
+            || !I_stricmp(itemInfo->reference, "china_lake")
+            || !I_stricmp(itemInfo->reference, "crossbow_explosive")) )
+    {
+        return 1;
+    }
+    return kb_noLaunchers
+        && kb_noLaunchers->current.enabled
+        && itemInfo->group == ITEMGROUP_LAUNCHER
+        && I_stricmp(itemInfo->reference, "china_lake");
+}
+
+// A weapon group of Create a Class with nothing left to offer (the secondary's launchers and specials).
+bool __cdecl BG_UnlockablesKbHidesGroup(itemGroup_t group)
+{
+    unsigned int itemNum;
+    const itemInfo_t *itemInfo;
+
+    for ( itemNum = 0; itemNum < ARRAY_COUNT(s_unlockableItems.itemTable); ++itemNum )
+    {
+        itemInfo = &s_unlockableItems.itemTable[itemNum];
+        if ( itemInfo->isValid && itemInfo->group == group && itemInfo->cost >= 0 && !BG_UnlockablesKbHidesItem(itemInfo) )
+            return 0;
+    }
+    return 1;
+}
 
 const char *__cdecl BG_UnlockablesGetCustomClassNameForInt(customClass_t customClassNum)
 {
@@ -3953,6 +4031,24 @@ void __cdecl BG_UnlockableItemsInit()
         1,
         1u,
         "No dual-wield weapons: Create a Class offers no Dual Wield, and a dual-wield pick comes as the single gun, for everyone");
+    // The user's gameplay changes (HANDOFF, Decisions sessions 16, 23 and 34), here for the same reason:
+    // Create a Class leaves out what they keep from players.
+    kb_noGrenades = _Dvar_RegisterBool(
+        "kb_noGrenades",
+        1,
+        1u,
+        "Nobody gets lethal, tactical or equipment offhands, grenade launchers or the explosive crossbow");
+    kb_noLaunchers = _Dvar_RegisterBool(
+        "kb_noLaunchers",
+        1,
+        1u,
+        "Nobody gets a rocket launcher: a class's RPG, M72 LAW or Strela-3 comes as an AK-47");
+    kb_blockGuns = _Dvar_RegisterBool(
+        "kb_blockGuns",
+        1,
+        1u,
+        "Nobody gets the FN FAL, Galil, M14, Olympia, HS-10, light machine guns, sniper rifles but the L96A1, or the "
+        "Ballistic Knife: a class's blocked primary comes as an AK-47 (the HS-10 as nothing); the WWII guns stay");
     ui_currentWeaponOptionGroup = _Dvar_RegisterInt(
                                                                     "ui_currentWeaponOptionGroup",
                                                                     0,
@@ -4965,7 +5061,10 @@ int __cdecl BG_UnlockablesBuildItemListForSlotName(int controllerIndex, const ch
             for ( itemNum = 0; itemNum <= 256; ++itemNum )
             {
                 itemInfo = &s_unlockableItems.itemTable[itemNum];
-                if ( itemInfo->isValid && itemInfo->loadoutSlot == loadoutSlot && itemInfo->cost >= 0 )
+                if ( itemInfo->isValid
+                    && itemInfo->loadoutSlot == loadoutSlot
+                    && itemInfo->cost >= 0
+                    && !BG_UnlockablesKbHidesItem(itemInfo) )
                 {
                     proItem = itemNum;
                     if ( itemInfo->group == ITEMGROUP_SPECIALTY )
@@ -5233,7 +5332,8 @@ int __cdecl BG_UnlockablesBuildItemListForSlotNameAndGroup(
                 if ( s_unlockableItems.itemTable[itemNum].isValid
                     && s_unlockableItems.itemTable[itemNum].loadoutSlot == loadoutSlot
                     && s_unlockableItems.itemTable[itemNum].group == group
-                    && s_unlockableItems.itemTable[itemNum].cost >= 0 )
+                    && s_unlockableItems.itemTable[itemNum].cost >= 0
+                    && !BG_UnlockablesKbHidesItem(&s_unlockableItems.itemTable[itemNum]) )
                 {
                     s_unlockableItems.itemsInSlot[s_unlockableItems.numItemsInSlot++] = &s_unlockableItems.itemTable[itemNum];
                 }

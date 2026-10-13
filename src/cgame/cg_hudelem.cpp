@@ -2477,6 +2477,12 @@ void __cdecl RB_DrawWaypoints(int localClientNum)
     {
         return;
     }
+    // kb_cleanHud: the waypoints (objective markers, the teammates' death skulls of _deathicons.gsc) are
+    // script hud elements too, drawn here since r_highRezWaypoints is on, not by CG_AddDrawSurfsFor3dHudElems
+    if ( CG_KbHideHudElems(localClientNum) )
+    {
+        return;
+    }
     if ( Demo_IsPlaying() && (Demo_IsMovieCamera() || Demo_IsGameHudHidden()) )
     {
         return;

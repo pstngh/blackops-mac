@@ -3797,6 +3797,10 @@ void __cdecl PM_Weapon_CheckForMelee(pmove_t *pm, pml_t *pml, int delayedAction)
     ps = pm->ps;
     if ( !pm->ps && !Assert_MyHandler("C:\\projects_pc\\cod\\codsrc\\src\\bgame\\bg_weapons.cpp", 3802, 0, "%s", "ps") )
         __debugbreak();
+    // kb_noMelee: the melee button starts nothing, for anyone (pmove runs on the server and in the client's
+    // prediction, both read the dvar), so no knife swing, lunge or melee hit
+    if ( kb_noMelee->current.enabled )
+        return;
     if ( (ps->pm_flags & 8) == 0 && (ps->pm_flags & 0x2000) == 0 && (ps->weapFlags & 0x80) == 0 )
     {
         primaryWeapDef = BG_GetWeaponDef(ps->weapon);

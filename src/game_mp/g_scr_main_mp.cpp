@@ -6287,6 +6287,13 @@ void GScr_IsWeaponClipOnly()
     }
 }
 
+// kbIsBlockedGun( <statsTable reference> ): kb_blockGuns keeps the gun from players (BG_KbBlockedGunRef);
+// the bots' weapon picks skip it (Scr_KbPatchSource).
+void GScr_KbIsBlockedGun()
+{
+    Scr_AddBool(BG_KbBlockedGunRef(Scr_GetString(0, SCRIPTINSTANCE_SERVER)), SCRIPTINSTANCE_SERVER);
+}
+
 void GScr_IsWeaponDetonationTimed()
 {
     char *weapName; // [esp+0h] [ebp-Ch]
@@ -15901,6 +15908,7 @@ BuiltinFunctionDef functions[] =
   { "weaponfiretime", GScr_WeaponFireTime, 0 },
   { "weaponreloadtime", GScr_WeaponReloadTime, 0 },
   { "isweaponcliponly", GScr_IsWeaponClipOnly, 0 },
+  { "kbisblockedgun", GScr_KbIsBlockedGun, 0 },
   { "isweapondetonationtimed", GScr_IsWeaponDetonationTimed, 0 },
   { "weaponclipsize", GScr_WeaponClipSize, 0 },
   { "weaponissemiauto", GScr_WeaponIsSemiAuto, 0 },
