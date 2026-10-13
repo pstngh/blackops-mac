@@ -620,6 +620,32 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
+**Next (the user's decision, 2026-10-12, session 32): strip the campaign's levels and all voices from the game folder,
+in a fresh session, safely.** The user: "id like to strip the single player stuff SAFELY, like maps, videos,
+voices/sounds"; shown the inventory below, they chose: the campaign levels, the campaign menu and briefings, and
+"i dont want the voices", which they confirmed means ALL voices (the campaign's dialogue, multiplayer's battle chatter
+and announcer recordings, the zombies' voices). Not chosen, so they stay: music and sound effects, textures, the zombie
+maps (common_zombie and the cod5 maps also feed the WWII guns file), the small shared campaign zones (code_pre_gfx,
+code_post_gfx, common, patch and their en_ files, 24 MB). Videos: the folder has none (no .bik anywhere).
+Measured (read-only, session 32; the game folder is 11 GB): zone/ campaign levels 1.6 GB, 36 files (creek_1, cuba,
+flashpoint, fullahead, hue_city, int_escape, khe_sanh, kowloon, outro, pentagon, pow, rebirth, river, terminal,
+underwaterbase, vorkuta, wmd, wmd_sr71 and their en_ files); campaign menu and briefings 58 MB, 14 files (frontend,
+so_narrative1-6_frontend and en_). Voices live inside the archives, mixed with other files: localized_English_iw01-14
+hold english/sound/vox/scripted 1.41 GB (18788 files), vox/mpl 200 MB (the multiplayer announcer), dds/us, rn, br 66 MB
+(battle chatter), vox/dds 10 MB, vox/mp 4 MB, vox/contextual_melee 4 MB, voiceovers/zmb 2 MB, mid/int_hudson_explains_*
+(campaign), but also images 40 MB (localized_English_iw00, iw12: keep), mus/licensed 55 MB and evt/front_end 3 MB
+(not voices: keep); the plain archives hold sound/vox/dds 55 MB and vox/scripted 46 MB (iw_23, iw_24), vox/zmb (iw_32)
+and more to find. The plan agreed with the user: (1) the whole zone files; (2) rebuild the archives without the voice
+files (keep every other file; an archive left empty can go), deciding what is a voice by folder (vox, dds, voiceovers,
+mid dialogue) and checking the list before removing; (3) test everything on a scratch game folder (links, plus the
+rebuilt archives) before touching the real one: every multiplayer map and several modes, the main menu, Create a Class,
+the launcher, the WWII guns rebuild (tools/make_dlc_weapons.sh), the sound console channel (`+con_showchannel sound`)
+and main/missingasset.csv for errors from the missing voices, and that a match doesn't stall on failed sound opens (a
+kb_* mute for voice aliases, like kb_noAnnouncer, if it does); (4) then move the removed zone files and the original
+archives to the Trash (never delete; the user empties it) and put the rebuilt archives in. Don't run this at the same
+time as the Rezurrection removal below (both change the game folder and its archives). If the folder came from Steam,
+Steam's file check would bring the files back.
+
 **Next (the user's decision, 2026-10-12, in session 31's conversation): remove Rezurrection from the game folder,
 keep the 16 WWII guns.** Facts found (read-only): each DLC added its own map files and numbered archives (dates and
 contents): First Strike `iw_26`-`28` + mp_berlinwall2, mp_discovery, mp_kowloon, mp_stadium, zombie_cosmodrome;
