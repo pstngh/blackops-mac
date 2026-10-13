@@ -420,7 +420,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   `kb_damagePercent`, archived, an int from 1 to 100, default 100. Every gun's bullet damage but the sniper rifles'
   (L96A1, WA2000, Dragunov, PSG1, Kar98k, Scoped Kar98k, Arisaka) is multiplied by it, on top of kb_mohaaDamage, before
   the hit location's multiplier; everyone's guns; it only lowers. The launcher has a "Gun damage" row (5-100% in steps
-  of 5) and passes it at every start. Checked (Decisions session 32).
+  of 5) and passes it at every start. Checked (Decisions session 32). The game folder has it (make_portable.sh at
+  c8a862fc, the user's request; the launcher with the new row); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -640,7 +641,7 @@ user's request; Status): installed and pushed at the user's request. Then the WW
 (`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
 scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. Then no waiting at a
 round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. Then the gun damage
-setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
