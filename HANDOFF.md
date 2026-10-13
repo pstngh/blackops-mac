@@ -430,7 +430,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   picture can't go in the repo: the repository is public (a fork of riicchhaarrd/KisakBlack) and the picture is
   Activision's cover art; the user agreed to keep it out. Then "my gamefolder has to be fully portable": the launcher
   now also keeps the picture (Contents/Resources/launcher_icon.png), and build.sh reuses the installed app's copy when
-  it gets no picture, so the game folder carries everything, even for a rebuild elsewhere.
+  it gets no picture, so the game folder carries everything, even for a rebuild elsewhere. The game folder has it
+  (make_portable.sh at 6fb3d477, the user's request); pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -652,7 +653,7 @@ scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at th
 round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. Then the gun damage
 setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): installed and pushed at the user's request. Then the
 launcher's icon (Status): installed and pushed at the user's request (the picture itself stays local). Then the
-picture kept inside the launcher (Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
+picture kept inside the launcher (Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
