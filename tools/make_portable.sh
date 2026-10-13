@@ -78,9 +78,10 @@ left=$( { external_deps "$game/blackops"; for name in "${copied[@]}"; do externa
 [ -z "$left" ] || { echo "still linked outside the folder:" >&2; echo "$left" >&2; exit 1; }
 echo "installed $game/blackops and ${#copied[@]} libraries in $lib: ${copied[*]}"
 
-# The launcher app (tools/launcher: map, mode and bots, then Play).
+# The launcher app (tools/launcher: map, mode and bots, then Play), with its icon when the build
+# folder has the picture (launcher_icon.png; game art, so not in git).
 if command -v swiftc >/dev/null; then
-    "$(dirname "$0")/launcher/build.sh" "$game"
+    "$(dirname "$0")/launcher/build.sh" "$game" "$build/launcher_icon.png"
 fi
 
 # The shader library (tools/make_shaderlib.sh): kb_shaders.metallib, rebuilt only when the

@@ -422,6 +422,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the hit location's multiplier; everyone's guns; it only lowers. The launcher has a "Gun damage" row (5-100% in steps
   of 5) and passes it at every start. Checked (Decisions session 32). The game folder has it (make_portable.sh at
   c8a862fc, the user's request; the launcher with the new row); pushed.
+- **The launcher's icon** (session 32, the user: "id like to add an icon to the launcher"): the Black Ops cover art
+  the user picked on SteamGridDB, in Apple's rounded-square icon shape. The picture stays out of git
+  (`build_macos/launcher_icon.png`); tools/launcher/build.sh makes the app's AppIcon.icns from it with
+  tools/launcher/make_icon.swift, and make_portable.sh passes it. Checked (Decisions session 32).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -641,7 +645,8 @@ user's request; Status): installed and pushed at the user's request. Then the WW
 (`kb_wwiiGunMovement`; Status): installed and pushed at the user's request. Then classes 1-5's primaries only and the sniper
 scopes (`kb_allClassGuns`, `kb_sniperScope`; Status): installed and pushed at the user's request. Then no waiting at a
 round's or match's end (`kb_noRoundEndWait`; Status): installed and pushed at the user's request. Then the gun damage
-setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): installed and pushed at the user's request. The user also asked how recoil and spread compare
+setting (`kb_damagePercent`, the launcher's "Gun damage"; Status): installed and pushed at the user's request. Then the
+launcher's icon (Status): committed, not installed or pushed: ask. The user also asked how recoil and spread compare
 with MoHAA's (answered, facts in Decisions session 32); offered to make the guns spray and kick like MoHAA's, they
 chose only the damage. Next: ask how the damage plays; the Rezurrection item above was approved by the user in
 another conversation for a fresh session (check git log and ask whether it is done or under way before starting it);
@@ -1262,6 +1267,29 @@ doesn't break `codesign --verify` or launching (checked: the installed app verif
   500% mid-match): no report. check_file.py natively and `--i386`, audit_splitlocals.py 0, gen_db_save.py `--check`.
   The test launcher's defaults domain was deleted afterwards. After the 100% cap: the test launcher at 70% passed
   `+set kb_damagePercent 70`, its window in Domination fits (screenshot).
+
+**The launcher's icon**, the user's request (Status).
+- **Official images offered first**: the game folder has no Windows program (so no Black Ops app icon). Menu art is in
+  main/*.iwd as `images/<name>.iwi` (the UI zones only name them; their GfxImage has no pixels in tool mode): new
+  tools/iwi_to_png.py (the IWI header, mips smallest first so the full image is the file's last bytes; formats 1-5 and
+  DXT1/3/5, as r_image_load_obj.cpp's Image_LoadFromData) made a numbered sheet for the user: menu_mp_background_logo
+  (the white "BLACK OPS" text), logo_small_cod5 (despite the name, "CALL OF DUTY BLACK OPS"), the faction logos
+  menu_mp_lobby_ops/spets/sog/nva/op40/tropas, playlist_prestige, rank_comm_128, rank_gen1_128, rank_prestige_1..15_128.
+  The `em_*_full` emblem layers came out blank (not looked into).
+- **The user's pick**: SteamGridDB's Call of Duty: Black Ops icon 81254 by BELWOUAKES (the cover art, square), 256x256
+  PNG, https://cdn2.steamgriddb.com/icon/285d6d711add325920ca8caff4d8020f/32/256x256.png (downloaded at the user's
+  word; the largest size the user found). The built-in browser was refused steamgriddb.com's pages; the user copied the
+  image address. It is in build_macos/launcher_icon.png only (game art: not in git); to rebuild elsewhere, download it
+  there again.
+- **The shape** (asked "what shape should it be?"): Apple's app icon grid, a 1024 canvas with an 824-pixel rounded
+  square of continuous corners (SwiftUI's `Path(roundedRect:cornerRadius:style: .continuous)`, radius 185.4) 100 pixels
+  in, a soft shadow (macOS 26 puts icons of other shapes on a gray square). make_icon.swift draws every .icns size from
+  the picture (cropped to its centre square) and runs `iconutil`; build.sh compiles it (without `-parse-as-library`: it
+  has top-level code) when given a picture, puts AppIcon.icns in Contents/Resources and adds CFBundleIconFile.
+- **Checked**: a launcher built into a scratch folder with the picture: Resources/AppIcon.icns with all ten sizes,
+  CFBundleIconFile AppIcon, the signature verifies, and `NSWorkspace.iconForFile` (what Finder and the Dock show)
+  returns the cover in the rounded square, not the gray one. The 256 picture is upscaled for the 512 and 1024 sizes
+  (slightly soft only in Finder's largest views).
 
 **MoHAA damage (`kb_mohaaDamage`)**, the user's request (Status). The user's answers (asked in plain words): each Black
 Ops gun gets its closest MoHAA gun's damage (SMGs the Thompson's, assault rifles the StG's, machine guns the BAR's,

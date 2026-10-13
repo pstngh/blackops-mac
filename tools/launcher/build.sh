@@ -1,11 +1,14 @@
 #!/bin/bash
 # Build "Black Ops Launcher.app" (Launcher.swift) into a game folder, next to the
-# blackops that tools/make_portable.sh installs there.
+# blackops that tools/make_portable.sh installs there. With a picture (a square PNG; the
+# user's is build_macos/launcher_icon.png, kept out of git: game art), the app gets an icon
+# made from it (make_icon.swift).
 #
-# usage: tools/launcher/build.sh <game dir>
+# usage: tools/launcher/build.sh <game dir> [icon picture]
 set -euo pipefail
 
-game=${1:?usage: tools/launcher/build.sh <game dir>}
+game=${1:?usage: tools/launcher/build.sh <game dir> [icon picture]}
+icon=${2:-}
 here=$(cd "$(dirname "$0")" && pwd)
 app="$game/Black Ops Launcher.app"
 work=$(mktemp -d)
@@ -42,6 +45,12 @@ cat > "$bundle/Contents/Info.plist" <<'EOF'
 </dict>
 </plist>
 EOF
+if [ -n "$icon" ] && [ -f "$icon" ]; then
+    swiftc -O -target arm64-apple-macos13.0 "$here/make_icon.swift" -o "$work/make_icon"
+    mkdir -p "$bundle/Contents/Resources"
+    "$work/make_icon" "$icon" "$bundle/Contents/Resources/AppIcon.icns"
+    /usr/libexec/PlistBuddy -c 'Add :CFBundleIconFile string AppIcon' "$bundle/Contents/Info.plist"
+fi
 if ! err=$(codesign --force --sign - "$bundle" 2>&1); then
     echo "$err" >&2
     exit 1

@@ -57,7 +57,9 @@ threads build the same environment objects at once (HANDOFF, Decisions session 2
 crashed the old code within a minute on mp_nuked with bots.
 
 The game folder's `Black Ops Launcher.app` (tools/launcher, built by
-make_portable.sh or `tools/launcher/build.sh <game dir>`) starts matches with the
+make_portable.sh or `tools/launcher/build.sh <game dir> [icon picture]`; its icon is made by
+tools/launcher/make_icon.swift from `build_macos/launcher_icon.png`, game art kept out of git: HANDOFF,
+Decisions session 32) starts matches with the
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
@@ -210,7 +212,8 @@ new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (li
 session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then
 `give`) allows one such weapon per map load (a second: "Weapon index mismatch"). `src/database/db_save.cpp`
 is generated: rerun `tools/gen_db_save.py` after changing db_load.cpp. `tools/ff_info.py <zone.ff>`
-prints a zone's header.
+prints a zone's header. `tools/iwi_to_png.py <game dir> <out dir> <image>...` converts the game's images
+(`images/<name>.iwi` in main/*.iwd: menu art, emblems, rank and prestige icons) to PNGs.
 
 Metal: the macOS client renders through src/gfx_mtl (a D3D9 device on Metal);
 `KB_RENDERER=gl` picks the GL layer instead, the macOS fallback and Linux's renderer
