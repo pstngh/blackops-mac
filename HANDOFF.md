@@ -524,7 +524,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   random attachment of the row, more often at higher rank). Built into kb_dlc_weapons.ff by tools/make_dlc_weapons.sh
   (the zone writer's part/variant/hide/sound options); make_portable.sh now writes the zone with the zombie maps of the
   backup folder next to the game folder (codbo_wwii_guns_backup), as the game folder has none. Checked in play (Decisions
-  session 38). Not in the game folder yet (it has session 37's zone, f1b5ef98...).
+  session 38). The game folder has it (make_portable.sh at 18b837f7, the user's "yes"; the guns file 25db4b27...).
+  Undoing it (the user asked whether it can be reverted completely: yes): copy back the saved guns file
+  (build_macos/thompson_suppressor_s38/revert/kb_dlc_weapons.ff, f1b5ef98..., also in the backup folder's
+  new_guns_file_2026-10-13) as zone/Common/kb_dlc_weapons.ff and `git revert` the commit (after a revert
+  make_portable.sh keeps the installed guns file, so the copy is what removes it); the installed `blackops` differs from
+  session 34's only in the zone-writing tool (the old one saved there too, 601d9cc5...). A class saved with the
+  suppressor then gives the plain Thompson (BG_UnlockablesGetItemAttachment: an attachment number past the row's list
+  is "none", with a warning line).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -715,7 +722,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
 items 2-5 next (session 39 onwards, one piece of work each, with a hand-off)**:
-1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Not installed: the user decides.
+1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
+   user's "yes"); how to undo it is in Status. Pushing: asked again (the user's "yes" answered two questions at once).
    What the plan was ("please add a suppresor option to the thompsons"): most likely a Create a Class
    attachment for the WWII Thompson (thompson_mp) that fires the suppressed shots kb_dlc_weapons.ff keeps since session
    36 (`weap_thompson_fire_plr_sil`, World at War's own recording; `wpn_thompson_silencer_fire_plr/_npc`, the AUG's
@@ -1476,6 +1484,12 @@ Pre-existing (wrong on every build):
   - The ASan client (detect_stack_use_after_return; 7 managed bots, the suppressed Thompson in first and third person
     firing, the plain one, 113 s): no report.
   - check_file.py natively and `--i386` (db_save_tool.cpp), audit_splitlocals.py 0, gen_db_save.py `--check`.
+- **Installed** (the user's "yes"; nothing running): the game folder's guns file and `blackops` copied to
+  build_macos/thompson_suppressor_s38/revert first; make_portable.sh at 18b837f7 (log build_macos/make_portable_s38.log):
+  `blackops` and the libraries, the launcher (signature verifies), the shader library step still stops at the missing
+  Metal Toolchain, and "writing zone/Common/kb_dlc_weapons.ff with the zombie maps of .../codbo_wwii_guns_backup": the
+  guns file 25db4b27..., the tested one. From the folder (build_macos/blackops, scratch fs_h, windowed): mp_nuked, the
+  suppressed Thompson given, in view with its can, its shots heard (-2.2 dBFS, `silencer_fire` solo'd).
 
 ## Decisions (session 37)
 
