@@ -729,8 +729,9 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
-item 2 checked in session 39 (no fault found; the user's answer is pending), items 3-5 next (one piece of work each, with
-a hand-off)**:
+item 2 checked in session 39 (no fault found; the user's answer is pending), then the user's new scope request (2b) and
+items 3-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
+hand-off**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
    37's d2c71308).
@@ -749,7 +750,24 @@ a hand-off)**:
    was shown the two Kar98ks in Create a Class (same picture, no scope drawn) and asked what they saw. If they answer: a
    rename or hiding of the iron-sighted Kar98k/Arisaka in the sniper list is theirs to choose; a case that still fails
    needs their steps (the temporary aim-state log: build_macos/scope_s39/kb_adslog.patch, `KB_ADSLOG=1`).
-3. **Weapons held wrong** ("some weapons seem to have messed up views", the user's screenshots
+2b. **Sniper scopes like Medal of Honor's** (the user, 2026-10-14, end of session 39: "the sniper scoping should work
+   exactly the same way in black ops as it does in openmohaa (near instant scope in, and unscopes when i re-right-click)
+   does that make sense?"; told yes): with kb_sniperScope, the scoped rifles (L96A1, Scoped Kar98k; WA2000, Dragunov, PSG1
+   when unblocked) should go into the scope almost at once and out of it at once on the next right click (the user's
+   MOUSE2 `+toggleads_throw` already toggles). Measured in session 39 (Decisions session 39, the aim-state log): the Scoped
+   Kar98k takes ~0.32 s from the hip to fully scoped (fWeaponPosFrac 0 -> 1; the gun's ADS raise, the FOV narrowing with
+   it, the overlay at the end) and ~0.42 s back out. Look up in OpenMoHAA's code (GitHub, read with WebFetch as in session
+   32, not cloned) and the user's MoHAA install (/Users/pstn/Documents/Games/moh, main/pak*.pk3 `models/weapons/*.tik`,
+   read only; multiplayer's `dm` lines) what MoHAA's zoom does: how fast the FOV changes (instant?), whether firing, the
+   bolt, reloading, a weapon switch, jumping or taking damage end the zoom, and whether the view sways in the scope; then
+   make Black Ops' scoped rifles behave that way (likely a much shorter ADS transition for them in pmove, e.g. where
+   fWeaponPosFrac advances by fOOPosAnimLength, both directions, server and client prediction alike; keep the scope
+   overlay and zoom FOV). Ask the user in plain words about anything MoHAA does that Black Ops does differently and that
+   they didn't name (sway, what a shot does). Only the human players' guns? (kb_sniperScope applies to human players.)
+3. **Weapons held wrong** (the user, 2026-10-14, end of session 39: "you had fixed the ww2 gun views before, those look good.
+   the stock BO guns should be have their default view (stock view, unchanged)": so only Black Ops' own guns, which should
+   look exactly as in the original game; findings so far in Decisions session 39) ("some weapons seem to have messed up
+   views", the user's screenshots
    main/screenshots/shot0001.tga and shot0004.tga, 13 Oct 19:57, Havana, arms hidden: the launcher's "show arms" is
    off, cg_drawArms 0; the user then trashed that folder: PNG copies in build_macos/user_screens_s37, git-ignored):
    shot0001 a Black Ops bullpup rifle with a sight, held to the right; shot0004 the WWII FG42, centred and low, its
@@ -1471,6 +1489,22 @@ Pre-existing (wrong on every build):
   saw (the hand-off). Session 32's toggle out of step right after a `take all`/`give` swap in a test was not seen in
   these runs and not looked into further (the scripts' switchToWeapon reaches the client's selection through a server
   command, cg_servercmds_mp.cpp, so it resets `usingAds` too).
+
+**Weapons held wrong, started** (item 3; stopped at the user's word for a fresh session). Read only so far:
+- The user's classes (13 Oct, their stats): Custom 1 Thompson and M1911, 2 AK-47 with Suppressor (muzzle attachment 9 of
+  its statsTable list: extclip dualclip acog elbit reflex mk ft ir silencer), 3 AK74u with Suppressor (7 of extclip
+  dualclip acog elbit reflex grip silencer), 4 MP40, 5 STG-44. shot0001's gun (a bullpup with a box sight with a round
+  front lens on a rail) is most likely the FAMAS with an ACOG, not identified for sure; none of their classes holds it
+  (a class at the time, or a gun picked up).
+- FOV: the user's config has `cg_fov_default 80`, the default of the decompiled registration (80, range 65-80;
+  cg_fov 80 too). The view model's FOV compensation (CG_CalculateWeaponMovement_Debug: cg_gun_fovcomp_x -2 times
+  (cg_fov - cg_fov_default) / (cg_fovCompMax 85 - cg_fov_default), times 1 - fWeaponPosFrac) is 0 there, so their FOV
+  doesn't move the gun from the original's place.
+- What may differ from the original for Black Ops' guns: the hidden arms (cg_drawArms 0, the user's choice: the gun's
+  back end and grips show where hands normally cover them), kb_sprintFire (the gun stays up while sprinting), kb_aaLean
+  (the lean's roll), kb_noAds (always the hip pose). kb_gunPlacement and kb_wwiiGunMovement touch only WWII guns by name.
+  Next: screenshots of each Black Ops gun the user uses with every kb_ change off against their settings (and arms on
+  and off) to see whether anything of the port moves them; if nothing does, ask the user what looks wrong in plain words.
 
 ## Decisions (session 38)
 
