@@ -564,7 +564,8 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   line up with the port's at the same view within a few pixels (Decisions session 41). The original's options menu sets
   the same dvar as the port (cg_fov_default), so the user's FOV 80 places the gun as the original at 80 would. What makes
   the user's screenshot (the FAMAS with an ACOG) look odd is the hidden arms (the launcher's "Show arms" off): the back of
-  the gun and the grip that the hands normally cover show. Pictures sent to the user, asked what still looks wrong.
+  the gun and the grip that the hands normally cover show. Pictures sent to the user, asked what still looks wrong; the
+  user: "yes to all" (they look right; the notes pushed, b243a6e9). Closed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -804,7 +805,8 @@ hand-off**:
    build_macos/guns_s41/famas_original_vs_port.png, ak47_original_vs_port.png and your_guns_arms_hidden_and_shown.png and
    asked what still looks wrong. If they name a gun and what looks wrong, look at that (their settings, that gun, a
    picture); turning the arms on is their launcher's "Show arms"; moving a Black Ops gun as the Thompson was moved
-   (kb_gunPlacement's table) would no longer be the stock view, so only on their word.
+   (kb_gunPlacement's table) would no longer be the stock view, so only on their word. **The user's answer: "yes to
+   all" (the guns look right; push the notes): closed.**
 4. **The log** ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
    on by default in the first place"): the launcher sends the game's console output to `<game>/blackops.log`
    (Launcher.swift, made anew at each Play): 305 MB after one session, 1,915,571 of its 2,085,632 lines `ASSERT
