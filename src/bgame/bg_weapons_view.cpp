@@ -1357,6 +1357,9 @@ void __cdecl BG_CalculateViewMovement_IdleAngles(viewState_t *vs, float *angles)
 
     if (!weapDef->overlayReticle || ps->fWeaponPosFrac == 0.0f)
         return;
+    // kb_sniperScope: MoHAA's scope doesn't drift.
+    if (BG_KbMohaaScope(ps, weapIndex))
+        return;
 
     float fTargScale;
     float idleSpeed;
@@ -1439,7 +1442,8 @@ void __cdecl BG_CalculateViewMovement_BobAngles(viewState_t *vs, float *angles)
     ps = vs->ps;
     weapIndex = BG_GetViewmodelWeaponIndex(vs->ps);
     weapDef = BG_GetWeaponDef(weapIndex);
-    if ( weapDef->overlayReticle )
+    // kb_sniperScope: walking doesn't turn MoHAA's view (its bob moves only the eye, as Black Ops' camera bob does).
+    if ( weapDef->overlayReticle && !BG_KbMohaaScope(ps, weapIndex) )
     {
         fBobCycle = BG_GetBobCycle(ps);
         cycle = (float)((float)(3.1415927 * bg_weaponBobLag->current.value) + fBobCycle) + 6.2831855;
@@ -1482,7 +1486,7 @@ void __cdecl BG_CalculateViewMovement_AdsBob(viewState_t *vs, float *angles)
     {
         weapIndex = BG_GetViewmodelWeaponIndex(ps);
         weapDef = BG_GetWeaponDef(weapIndex);
-        if ( weapDef->fAdsViewBobMult > 0.0 )
+        if ( weapDef->fAdsViewBobMult > 0.0 && !BG_KbMohaaScope(ps, weapIndex) )  // kb_sniperScope: as above
         {
             adsBobFactor = ps->fWeaponPosFrac * weapDef->fAdsViewBobMult;
             bobCycle = BG_GetBobCycle(ps);

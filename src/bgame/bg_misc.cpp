@@ -1088,7 +1088,7 @@ void __cdecl BG_RegisterDvars()
         "kb_sniperScope",
         1,
         1u,
-        "With kb_noAds, the scoped sniper rifles can still look through their scope");
+        "The scoped sniper rifles look through their scope with kb_noAds too, as in Medal of Honor: in and out almost at once, no drift or walking sway, full walking speed");
     player_clipSizeMultiplier = _Dvar_RegisterFloat(
                                                                 "player_clipSizeMultiplier",
                                                                 1.0,

@@ -92,7 +92,7 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32 and 34): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32, 34 and 40): `kb_godMode` (human players take no damage), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;
@@ -116,7 +116,8 @@ top of the chosen class, whose pistol is the only one, up to the 15 held weapons
 27, ...; headshots 4x, body, arms and legs 1x; bots' guns too; shotguns keep theirs), `kb_gunPlacement` (the
 first-person WWII Thompson is held closer, where the MP40 is, a little lower; a table in cg_weapons.cpp),
 `kb_wwiiGunMovement` (the first-person WWII guns move like Black Ops' while walking: no drop, a 2 degree tilt),
-`kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in),
+`kb_sniperScope` (with kb_noAds, the scoped sniper rifles L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k still scope in;
+a human player's scope as MoHAA's: in and out in 0.05 s, no drift or walking sway, full walking speed scoped),
 `kb_noRoundEndWait` (no outcome screen delay between rounds or after a match and no 30 s scoreboard: the next round
 or map at once), `kb_damagePercent` (an int 1-100, default 100: lowers every gun's damage but the sniper rifles', everyone's, in
 percent; 100 or more changes nothing; the launcher's "Gun damage" passes it), `kb_blockGuns` (nobody gets the FN FAL, Galil,

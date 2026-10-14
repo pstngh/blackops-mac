@@ -969,6 +969,7 @@ void __cdecl PM_UpdateAimDownSightLerp(pmove_t *pm, pml_t *pml);
 bool __cdecl BG_UsingVehicleWeapon(const playerState_s *ps);
 bool __cdecl BG_ADSFullyUp(const playerState_s *ps);
 bool __cdecl BG_UsingSniperScope(const playerState_s *ps);
+bool __cdecl BG_KbMohaaScope(const playerState_s *ps, int weapIndex);
 int __cdecl PM_InteruptWeaponWithProneMove(playerState_s *ps);
 bool __cdecl BG_PlayerWeaponOverheating(const playerState_s *ps, unsigned int weapon);
 void __cdecl BG_PlayerWeaponOverheatUpdate(playerState_s *ps, unsigned int weapon, float amount);

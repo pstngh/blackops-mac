@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 39)
+## Status (2026-10-14, session 40)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -540,6 +540,18 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   Kar98k (iron sights) never aims with kb_noAds, as chosen in session 32. What the user most likely met: Create a Class
   lists "Kar98k" right above "Scoped Kar98k" with the same picture, a rifle without a scope (the World at War data has no
   picture of the scoped one). Asked the user at the hand-off (Decisions session 39); nothing changed in the code.
+- **Sniper scopes like Medal of Honor's** (session 40, the user: "the sniper scoping should work exactly the same way in
+  black ops as it does in openmohaa (near instant scope in, and unscopes when i re-right-click)"): with `kb_sniperScope`
+  (default 1) a human player's scoped sniper rifle (L96A1, Scoped Kar98k; WA2000, Dragunov, PSG1 when kb_blockGuns is
+  off) goes into the scope in 0.05 s and out of it in 0.05 s (Black Ops: 0.4 s in and 0.6 s out with the L96A1, 0.3 and
+  0.4 with the Scoped Kar98k; MoHAA sets its zoom at once and draws it across one 50 ms network frame); the right click
+  toggled already. Asked about the other ways MoHAA's scope differs, the user chose: the scope doesn't drift (Black Ops'
+  drifts up to 0.6 degrees, and the shot follows it) and walking scoped is at the normal speed (Black Ops: 40%, the
+  Scoped Kar98k 30%); and, as in MoHAA, walking doesn't turn the scoped view (Black Ops tilts it up to 0.3 degrees with
+  the steps; the eye's small up-down bob stays, as in both games). The same in both games, unchanged: the bolt after a
+  shot keeps the scope, a reload or a weapon switch ends it, the shot's kick (Black Ops ~3.5 degrees back in 0.75 s,
+  MoHAA 5 back in ~0.3 s), the zoom and scope picture. Bots and the other guns are unchanged. Checked (Decisions session
+  40). Not installed in the game folder (the installed `blackops` is session 38's); not pushed.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -729,8 +741,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
-item 2 checked in session 39 (no fault found; the user's answer is pending), then the user's new scope request (2b) and
-items 3-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
+item 2 checked in session 39 (no fault found; the user's answer is pending), the user's new scope request (2b) done in
+session 40, items 3-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
 hand-off**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
@@ -750,7 +762,8 @@ hand-off**:
    was shown the two Kar98ks in Create a Class (same picture, no scope drawn) and asked what they saw. If they answer: a
    rename or hiding of the iron-sighted Kar98k/Arisaka in the sniper list is theirs to choose; a case that still fails
    needs their steps (the temporary aim-state log: build_macos/scope_s39/kb_adslog.patch, `KB_ADSLOG=1`).
-2b. **Sniper scopes like Medal of Honor's** (the user, 2026-10-14, end of session 39: "the sniper scoping should work
+2b. **Sniper scopes like Medal of Honor's: done (session 40)** (Status, Decisions session 40; not installed, not pushed).
+   The plan was (the user, 2026-10-14, end of session 39: "the sniper scoping should work
    exactly the same way in black ops as it does in openmohaa (near instant scope in, and unscopes when i re-right-click)
    does that make sense?"; told yes): with kb_sniperScope, the scoped rifles (L96A1, Scoped Kar98k; WA2000, Dragunov, PSG1
    when unblocked) should go into the scope almost at once and out of it at once on the next right click (the user's
@@ -789,7 +802,7 @@ hand-off**:
 5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
    while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
    runs. The session 38 task card lists all five in this order (the user's requests first); session 38 did item 1 and
-   its task card lists 2-5.
+   its task card lists 2-5; session 40 did 2b and its task card lists 3-5.
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1451,6 +1464,65 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 40)
+
+**Sniper scopes like Medal of Honor's** (item 2b of Next steps; Status).
+- **MoHAA's zoom** (OpenMoHAA's code on GitHub, read through the GitHub API into the scratchpad, not cloned: fgame/player.cpp,
+  weapon.cpp, cgame/cg_predict.c, cg_view.c, cg_drawtools.cpp, cg_modelanim.c, cg_commands.cpp; the user's install,
+  main/pak7.pk3 `models/weapons/springfield.tik` and `KAR98sniper.tik`, Pak0.pk3 `global/mike_torso.st`, read only):
+  - The right click (`BUTTON_ATTACKRIGHT`, new presses only) on a weapon with `zoom` (both sniper rifles: `zoom 20`) runs
+    Player::ToggleZoom: zoomed, SetFov(selectedfov); else SetFov(20). Instant on the server; the client draws
+    `ps.fov` interpolated across one snapshot (OPM's cg_predict.c), 50 ms at sv_fps 20. The scope overlay fades in and
+    out at 0.015 a ms (67 ms, cg_drawtools.cpp); the gun and arms are hidden while zoomed (cg_modelanim.c).
+  - What ends the zoom: the torso state machine's `zoomoff` at RELOAD_RIFLE, RELOAD_SPRINGFIELD (the Kar98 sniper uses it
+    too) and PUTAWAY_MAIN (a weapon switch); Weapon::DetachGun; death (Player::Killed, Dead); leaving a vehicle. Not:
+    firing, the bolt (ATTACK_*_RECHAMBER's `safezoom 0` is commented out), jumping, damage, leaning.
+  - While zoomed: no drift (cg_view.c turns the view only by the lean's roll and the view kick); walking bobs only the eye
+    position, never the angles; speed: `zoommovement` isn't set for either rifle (1.0), so the weapon's own `dmmovementspeed`
+    0.8 applies zoomed or not; spread x `dmzoomspreadmult` 0.055. A shot: `viewkick` -4.5..-5 pitch (Springfield) / -5
+    (Kar98), returning at 12-25 degrees a second (cg_commands.cpp viewkickMinDecay/MaxDecay).
+- **Black Ops' scope** (a temporary per-frame log of the predicted aim state, FOV, overlay, view movement angles, kick and
+  speed: build_macos/scope_s40/kb_scopelog.patch with session 39's KB_ADSLOG, `git apply`, `KB_SCOPELOG=1`, never commit):
+  L96A1 iAdsTransInTime 400 / out 600 ms, fAdsZoomInFrac 0.3 (the FOV and overlay only in the last 120 ms), zoomOutFrac 0.05,
+  zoom FOV 15, fAdsIdleAmount 60 (a drift up to 0.6 degrees, which the server's shots follow: g_active_mp.cpp adds
+  BG_CalculateViewMovementAngles to the view angles), adsMoveSpeedScale 1; Scoped Kar98k 300 / 400, 0.42 / 0.08, FOV 10,
+  idle 30, adsMoveSpeedScale 0.75; Dragunov and PSG1 400 / 600 FOV 15, WA2000 FOV 20, idle 40. Scoped walking is the ADS
+  walk (pm_flags 0x40, PM_UpdatePlayerWalkingFlag: 0.4 of the speed, times adsMoveSpeedScale): 81 units/s (L96A1) and 60
+  (Kar98k) against 192 / 182 at the hip. Walking scoped turns the view by up to 0.3 degrees (BG_CalculateViewMovement_
+  BobAngles for overlay weapons times fWeaponPosFrac, and _AdsBob, fAdsViewBobMult 0.2 / 0.25). The same as MoHAA: the
+  bolt keeps the scope (bRechamberWhileAds), a reload ends it and clears the toggle (no scope after the reload), a
+  switch ends it, player_scopeExitOnDamage is 0, the kick (Scoped Kar98k -3.6 degrees, back in 0.75 s).
+- **The user's answers** (asked in plain words, the before/after pictures sent): the scope still, like MoHAA; walking
+  scoped at the normal speed, like MoHAA. Not asked, done as MoHAA does: no turning of the scoped view while walking (MoHAA
+  has no angular bob); the kick left as it is (session 32's choice: no MoHAA kick).
+- **How** (all BG code, so the server and the client's prediction agree): `BG_KbMohaaScope(ps, weapIndex)` (bg_weapons.cpp)
+  = BG_KbSniperScope (kb_sniperScope and the scoped rifles by name) and BG_KbHumanPlayer. PM_UpdateAimDownSightLerp sets
+  the rate to 1/50 ms each way (after the Quickdraw-style perk division: the time is fixed); the zoom FOV and overlay still
+  come in over the last fAdsZoomInFrac (the L96A1's last 15 ms). BG_CalculateViewMovement_IdleAngles returns (no drift),
+  _BobAngles and _AdsBob skip the scoped turning; PM_UpdatePlayerWalkingFlag doesn't set the ADS walk (full speed, the
+  normal leg animations and footsteps, the hip moveSpeedScale). Bots (test clients) keep Black Ops' scope.
+- **Checked** (release client unless said, a scratch game folder with links to the game folder and the user's config made
+  windowed, scratch profiles with a copy of the user's mpstats.dat, Custom 1's primary set with equipClassItem, mp_cairo dm;
+  the harness is in build_macos/scope_s40/harness, run_s40.sh: scope in with frames, walk, jump, fire, out, walk, in,
+  reload):
+  - L96A1 and Scoped Kar98k: full scope 76 ms after the press at 60 fps (4 frames; was 400 / 300 ms), out in 50-60 ms (was
+    600 / 400); the bolt keeps the scope; a reload takes it away and it stays away; no view angle movement in the scope
+    standing, walking or jumping (was up to 0.6 / 0.3 degrees); walking scoped 192 / 182 units/s (hip 195 / 184; with the
+    dvar off 81 / 60). Dragunov, PSG1, WA2000 (kb_blockGuns 0): 76 ms in, 50 out. AK-47 and AK74u (the user's guns): stay at
+    the hip with MOUSE2, fire. kb_sniperScope 0 with kb_noAds 0: Black Ops' 400 ms again; with kb_noAds 1: no scope.
+  - The launcher's command line (16 managed fu bots, FFA, cg_drawArms 0, kb_damagePercent 20, kb_infiniteClip 1), 120 s, the
+    L96A1: every press in 76-92 ms, out 76 ms, a press during a hip shot's bolt scopes in at once; no new error lines.
+  - A dedicated server and a client process (cg_showmiss 1, the L96A1, scope toggles, walking and firing scoped, 80 s): no
+    "Prediction miss" (over 0.1 units); 2 "prediction error" lines (smaller differences) while walking scoped, as walking
+    the same way at the hip gives (7, and 3 misses, walking into things); with the dvar off none (scoped walking at 76).
+  - The ASan client (detect_stack_use_after_return; 7 managed fu bots, kb_godMode 0, the L96A1 and the class guns, scope
+    toggles, walking and jumping scoped, shots, weapon switches while scoped, 150 s): no report.
+  - Pictures (build_macos/scope_s40, a frame every 50 ms from the press; top row before, bottom after):
+    l96_scope_in_before_after.png and l96_scope_out_before_after.png (sent to the user), kar_scope_in_before_final.png,
+    l96_scope_in_before_final.png (the final build).
+  - check_file.py natively and `--i386` (bg_weapons.cpp, bg_weapons_view.cpp, bg_pmove.cpp, bg_misc.cpp),
+    audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 39)
 

@@ -5296,7 +5296,8 @@ void __cdecl PM_UpdatePlayerWalkingFlag(pmove_t *pm)
                 && ps->weaponstate != 13
                 && ps->weaponstate != 11
                 && ps->weaponstate != 15
-                && ps->weaponstate != 16 )
+                && ps->weaponstate != 16
+                && !BG_KbMohaaScope(ps, ps->weapon) )  // kb_sniperScope: MoHAA walks at full speed in the scope
             {
                 ps->pm_flags |= 0x40u;
                 if ( (ps->otherFlags & 4) == 0

@@ -502,6 +502,19 @@ static bool BG_KbSniperScope(int weapIndex)
     return false;
 }
 
+// kb_sniperScope: a human player's scoped sniper rifle has Medal of Honor: Allied Assault's scope (OpenMoHAA; the
+// user's choices, HANDOFF, Decisions session 40): in and out of it almost at once (MoHAA sets the zoom FOV on the
+// right click's frame and draws it across one 50 ms snapshot; Black Ops takes 400 ms in and 600 ms out with the
+// L96A1, 300 and 400 with the Scoped Kar98k; the zoom FOV and overlay still come in over the last fAdsZoomInFrac of
+// the way), a scope that neither drifts nor turns with the steps (BG_CalculateViewMovement_IdleAngles, _BobAngles,
+// _AdsBob) and the normal walking speed while scoped (PM_UpdatePlayerWalkingFlag).
+#define KB_SCOPE_TRANS_MS 50.0f
+
+bool __cdecl BG_KbMohaaScope(const playerState_s *ps, int weapIndex)
+{
+    return BG_KbSniperScope(weapIndex) && BG_KbHumanPlayer(ps);
+}
+
 // kb_noAds: human players never raise the sights, not even with the weapons that raise them to
 // fire (launchers, the Death Machine), which fire from the hip; vehicle seats keep theirs, and the
 // scoped sniper rifles their scope (kb_sniperScope).
@@ -846,6 +859,8 @@ void __cdecl PM_UpdateAimDownSightLerp(pmove_t *pm, pml_t *pml)
                     }
                     lerpRate = lerpRate / perk_weapAdsMultiplier->current.value;
                 }
+                if ( BG_KbMohaaScope(ps, weapIndex) )
+                    lerpRate = adsRequested ? 1.0f / KB_SCOPE_TRANS_MS : -1.0f / KB_SCOPE_TRANS_MS;
             }
             v3 = (float)((float)pml->msec * lerpRate) + ps->fWeaponPosFrac;
             if ( (float)(v3 - 1.0) < 0.0 )
