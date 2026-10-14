@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 44)
+## Status (2026-10-14, session 45)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -626,6 +626,25 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   user's call; Decisions session 44). Found on the way: the 16-bot free-for-all on mp_nuked and mp_firingrange stops after
   about 5 minutes with "exceeded maximum number of script variables", also with the build the user played before today
   (Open items).
+- **The script variables limit** (session 45, a follow-up of session 44's find): measured, not a port bug; nothing
+  changed yet (the fix is the user's call). The launcher's 16-bot free-for-all with the user's settings (fu bots, gun damage
+  20%, no time or score limit) stops on mp_nuked after 4-5 minutes because the game's scripts build up a queue of waiting
+  threads: every hit on a bot starts a challenge thread (`_missions::playerDamaged`), every death up to two more (the kill's
+  medals, pro perks and challenges, and a bots-killed counter), and all of them wait their turn in
+  `WaitTillSlowProcessAllowed` (_globallogic_utils.gsc), which lets one through per server frame, 20 a second. Measured:
+  about 31 arrive a second, exactly 20 leave; the queue grows by 11-14 a second to ~2,930 threads holding ~15,500 script
+  objects, and the game stops when its objects pass their limit (29,566; the values, the other limit, were at 88K of 260K).
+  mp_cairo fills the same queue more slowly (~2 a second; at that pace about half an hour to the limit, not run that long);
+  at the launcher's default 100% damage mp_nuked still gained ~2 a second (fewer hits per kill, but twice the kills). The
+  port runs the scripts as written: the server keeps exactly 20 frames a second and one thread passes per frame, as the
+  script says. The cause is the original game's own one-a-frame throttle meeting 16 bots that need ~5 times the hits per
+  kill. The hit threads end up doing nothing: `_missions::mayProcessChallenges()` returns false in this game. Proposed fix
+  (asked, not done): a script patch so a hit starts that thread only when the challenges could run (never, in this game),
+  leaving the kills' threads (~4.5 a second) in the queue. A test build with it played 20 minutes of the same match on
+  mp_nuked (2,679 respawns): no stop, the objects between 13,757 and 14,131 throughout, the queue empty at every check
+  (Decisions session 45). The queue also held back the kills' medals, pro-perk progress, challenges and the "N kill streak"
+  message (it waits for them) while it was long (how long each waited was not measured); with the fix they run within a
+  frame or two of the kill.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -896,6 +915,17 @@ fresh session (the user: "well we should work in a fresh session"), one piece of
    spin should reproduce the crash under KB_PHYS_STRESS=2500, the fix not; then regression runs (dedicated server with
    bots, client matches with managed bots and the scripted player, KB_PHYS_STRESS 5 x 4 minutes, bench_views fps on
    mp_nuked).
+
+**Session 45: the script variables stop in the 16-bot free-for-all: explained, the fix waits for the user's answer**
+(Status, Decisions session 45). Not a port bug: the original scripts' one-a-frame challenge queue fills faster than it
+empties. Proposed (asked, not done): one more entry in cscr_parser.cpp's scrKbPatches (not a gameplay change, so no dvar;
+say so in the table's comment): in maps/mp/gametypes/_globallogic_player.gsc, `self thread
+maps\mp\gametypes\_missions::playerDamaged(eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, sHitLoc );` becomes
+`if ( maps\mp\gametypes\_missions::mayProcessChallenges() ) self thread ...` (the same line; the test build's patch,
+build_macos/scrvar_s45/kb_scrvar_probe.patch, KB_SLOWFIX, without its getenv). Then: the launcher's 16-bot FFA on mp_nuked
+(20 minutes) and mp_cairo with the probe, no "Script patch ... not applied" warning; a dedicated server rotation and the
+TDM series (session 43's harness); check_file.py on cscr_parser.cpp natively and `--i386`; HANDOFF; push and install only
+when the user asks.
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1317,15 +1347,13 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
-Seen in session 44: the launcher's 16-bot free-for-all (session 42's run_flood.sh: fu bots, no time or score limit, the
-user's config and stats, the scripted player) stops with Sys_Error "exceeded maximum number of script variables" on mp_nuked
-about 4.5-5 minutes in (3 runs of 3: the physics probe build, HEAD's build, and session 40's install,
-build_macos/log_s42/revert/blackops, the build the user played with before session 42) and on mp_firingrange about 6
-minutes in (1 run); mp_cairo and mp_kowloon played their 10 minutes without it. So it is older than session 42 and not
-from the probe. Session 42 saw the server's live script values grow over a match on mp_cairo (43,693 at 25 s, 54,671 at ~8
-minutes); on these two maps they reach the 259K limit within minutes. Not looked into (which scripts hold the values, and
-whether the original game does the same or a port bug keeps them alive); session 42's probe
-(build_macos/log_s42/kb_varmax.patch) counts them. A user playing those maps with 16 bots and no time limit would meet it.
+Seen in session 44, explained in session 45 (Status, Decisions session 45): the launcher's 16-bot free-for-all (fu bots,
+no time or score limit, gun damage 20%) stops with Sys_Error "exceeded maximum number of script variables" on mp_nuked
+after 4-5 minutes (mp_firingrange ~6; mp_cairo grows the same way, slower, about half an hour at its pace): the original
+scripts' challenge queue (`WaitTillSlowProcessAllowed`, one thread a server frame) gets ~31 threads a second, mostly one per
+hit, and keeps 11-14 a second; the game's live objects pass their limit (29,566). Not a port bug. The proposed fix (a hit
+starts no challenge thread when challenges can't run, which in this game is always; tested: 20 minutes, no growth) waits
+for the user's yes (Next steps).
 
 Seen in session 43: `KB_PHYS_STRESS=2500` on the launcher's 16-bot free-for-all (mp_cairo) crashes within ~30 s, with or
 without session 43's fix: the physics' transient allocator fails a request ("transient allocation too large, increase
@@ -1340,9 +1368,8 @@ to 98% within a second. Left as the original has it unless the user wants the nu
 Seen in session 42: "Item WEAPON_ASP does not have attachment number 4 it only has 2 attachments" 7 times at the first spawn
 with the user's stats (the class menu reads a class whose secondary is the ASP with an attachment number from another gun;
 harmless, not looked into). The server's live script values grow over a 16-bot match (43,693 25 s in, 54,671 at ~8 minutes in
-one run; not measured as a trend): if they kept growing, a match without a time limit (the user's) would one day stop with
-"exceeded maximum number of script variables" (259K values); worth a long soak with the probe (build_macos/log_s42/
-kb_varmax.patch). The brightness slider still does nothing (no fullscreen gamma ramp; Next steps 8).
+one run): explained in session 45 (the challenge queue above; the limit reached is the objects', 29,566). The brightness
+slider still does nothing (no fullscreen gamma ramp; Next steps 8).
 
 Seen in session 39: Create a Class's class list (cac_main, the summary on the right of Custom 1-10) still shows FRAG,
 WILLY PETE and SELECT EQUIPMENT icons with kb_noGrenades (session 34 hid them in the class's own screen, not there); the
@@ -1585,6 +1612,82 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 45)
+
+**"exceeded maximum number of script variables" in the 16-bot free-for-all** (session 44's find; Status, Open items).
+- **Which limit**: the VM checks two counts at every backward jump and every thread call (cscr_vm.cpp, OP_jumpback and the
+  VAR_PRECODEPOS case): the server's live values (child variables) over 0x3F37E (259,966 of 262,142) or its live objects
+  (parent variables: threads, structs, arrays, entities) over 0x737E (29,566 of 32,766), then Sys_Error (the dumps run
+  only with showError, which this game never has: Scr_Settings' assignments are `#if 0`'d, so developer stays 0). Every
+  stop measured here was the objects: 29,567, with the values at 88,185-88,496.
+- **The probe** (build_macos/scrvar_s45/kb_scrvar_probe.patch, test only, never committed; `git apply -p0` on HEAD
+  063929d0; it includes session 42's kb_varmax.patch): `KB_VARSTATS=<s>` prints every s seconds the server's values,
+  objects, threads, script frames (`gScrVarPub.time`, one per G_RunFrame) and its objects and values by type;
+  `KB_VARDUMP=<s>` dumps every s seconds (and at the limit, before the Sys_Error) the live objects and values grouped by the
+  code position that made them (gScrVarDebugPub->varUsage, with each object group's Scr_GetObjectUsage) and
+  Scr_DumpScriptThreads' waiting threads by call chain. The positions are byte offsets in the program buffer ("@ <n>": no
+  developer mode, so no source positions); at load (Scr_EndLoadScripts, before the compile strings are released) it prints
+  every compiled function's offset from the compiler's table (scriptsPos: file -> function -> codepos), `[kbfunc] <offset>
+  <file> <function>`, and harness/annotate.py and queue.py name the offsets (the common scripts compile first, so their
+  offsets are the same on every map and run). `KB_SLOWCOUNT=1` adds two script patches counting the threads entering and
+  leaving WaitTillSlowProcessAllowed (dvars kb_slowArrived, kb_slowPassed, in the stats line); `KB_SLOWFIX=1` applies the
+  candidate fix. Built in a scratch copy of HEAD outside the checkout; harness in build_macos/scrvar_s45/harness
+  (run_flood.sh is session 44's with the paths changed; batch1-5.sh the runs below); excerpts in
+  build_macos/scrvar_s45/excerpts.txt. The scripts' text: `listzone - rawfile <file>` on a dedicated server.
+- **The growth** (the launcher's 16-bot free-for-all: fu bots, dm, no limits, gun damage 20%, the user's config and a copy
+  of their stats, the scripted player; every 10 s):
+
+  | run | 60 s | 120 s | 180 s | 240 s | end |
+  |---|---|---|---|---|---|
+  | mp_nuked, 20% (objects) | 16,080 | 20,402 | 25,138 | 29,255 | the limit at 241-296 s (4 runs of 4) |
+  | mp_nuked, 20% (queue) | 427 | 1,223 | 2,106 | 2,906 | 2,926-2,945 at the stop |
+  | mp_nuked, 100% (objects) | 14,352 | 14,767 | 15,431 | 16,444 | 17,754 at 360 s, 17,269 at 410 s (the end) |
+  | mp_nuked, 100% (queue) | 132 | 168 | 290 | 460 | 696 at 360 s |
+  | mp_cairo, 20% (objects) | 13,963 | 14,899 | 15,309 | 15,733 | 18,581 at 590 s (the end) |
+  | mp_cairo, 20% (queue) | 135 | 291 | 369 | 455 | 997 at 540 s |
+  | mp_nuked, 20%, the fix (objects) | 13,876 | 14,068 | 13,945 | 14,029 | 13,757-14,131 to 1,190 s (the end) |
+  | mp_nuked, 20%, the fix (queue) | - | 0 | - | 0 | 0 at every dump (every 120 s) |
+
+  (mp_nuked 20% and 100%: batch4's runs; mp_cairo: batch2's; the fix: batch5's; the queue counted from each dump's thread
+  chains.) About 13,000-14,000 objects are the match's own once the bots are in (per-player threads, HUD elements, tables:
+  flat), as the fix's run shows; everything above that is the queue. At the limit on mp_nuked: 2,468 queued hit threads
+  (`_missions::playerDamaged`, 5 objects and ~11 values each: the thread, its endon bookkeeping, its call's locals), 317
+  kill threads (`_missions::waitAndProcessPlayerKilledCallback`) and 160 `updateGlobalBotKilledCounter`: ~15,500 of the
+  29,567 objects. No other group grew.
+- **The queue** (_globallogic_utils.gsc, the original's): `WaitTillSlowProcessAllowed() { while ( level.lastSlowProcessFrame
+  == gettime() ) wait .05; level.lastSlowProcessFrame = gettime(); }`: each frame every waiting thread wakes and the first
+  to run takes the frame. Callers: Callback_PlayerDamage threads `_missions::playerDamaged` after every hit the damage
+  callback runs for (with kb_godMode not the human player's: G_KbGodMode skips the callback); Callback_PlayerKilled threads
+  `updateGlobalBotKilledCounter` (level.globalLarrysKilled) on every death and `_missions::playerKilled` on every kill by
+  another player, whose waitAndProcessPlayerKilledCallback queues and then threads the medal, pro-perk and challenge
+  callbacks and notifies `playerKilledChallengesProcessed` (which _hardpoints' streakNotify waits for before the "N kill
+  streak" message); also `processAssist` (_globallogic_score) and `useKillstreak` (not seen in these runs).
+  `playerDamaged` builds a struct and calls doMissionCallback("playerDamaged"), which returns at once:
+  `mayProcessChallenges()` is `return false;` in this game (and no "playerDamaged" callback is ever registered).
+- **Measured directly** (KB_SLOWCOUNT, mp_nuked, 20%): passed exactly 200 per 10 s (one per frame; the script frames 200
+  per 10 s throughout, also at the limit), arrived 193-354 per 10 s (31 a second averaged over 30-290 s); queue = arrived -
+  passed, growing ~11 a second (14 in batch4's run), 2,926 at the stop (296 s). So the VM does what the script says;
+  nothing keeps threads alive that should have ended (every queued thread is in that wait, called from those three places;
+  the per-player groups stay at 19).
+- **Why this setup**: arrivals are hits plus two per death. Gun damage 20% (the user's launcher setting) takes ~5 times the
+  hits per kill (kb_mohaaDamage's 25-27 per bullet adds a little); 16 fu bots on a small map make many. At 100% mp_nuked
+  had twice the deaths (1,721 spawns in 410 s against 516 in 241 s) and arrivals near 20 a second: the queue still crept
+  up, ~2 a second. **Port bug or the original's**: the original's script and throttle; the port runs them at the original's
+  20 frames a second. The original game would queue the same at this rate of hits (assumed: the same script on the same
+  logic; not run). Its matches have time limits, and a map change frees everything.
+- **The candidate fix** (KB_SLOWFIX, a script patch in the scratch build's cscr_parser.cpp): in
+  _globallogic_player.gsc, `self thread maps\mp\gametypes\_missions::playerDamaged(...)` becomes `if (
+  maps\mp\gametypes\_missions::mayProcessChallenges() ) self thread ...`: the same behaviour (the thread did nothing),
+  checked at run time (were challenges ever on, it would still run), one line, no new lines. Measured (KB_SLOWFIX with
+  KB_SLOWCOUNT, mp_nuked, 20%, 1,190 s, 2,679 spawns): no stop, assert or signal, the patches applied (no "Script patch ...
+  not applied"); the objects 13,757-14,131 from 60 s to the end (values at most 49,341); arrived 5,310 and passed 5,310 (4.5
+  a second: the kills' threads, each through in its frame); the queue 0 at every dump; the script frames 200 per 10 s.
+- **Other fixes considered**: letting several threads through per frame (a counter in WaitTillSlowProcessAllowed) or none
+  (no throttle) also stops the growth and would cover any other flood, but changes when the kills' processing runs (all in
+  one frame); the hit threads would still be made and thrown away, ~30 a second. Skipping only bots' hits keeps a queue
+  that does nothing for the human. The proposed patch removes exactly the work that is wasted.
+- Only HANDOFF.md changed; no code.
 
 ## Decisions (session 44)
 
