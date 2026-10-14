@@ -17,6 +17,9 @@
 #include <universal/com_stringtable_obj.h>
 #include <universal/q_parse.h>
 #include <universal/q_shared.h>
+#include <xanim/dobj.h>
+#include <xanim/xanim.h>
+#include <xanim/xmodel.h>
 #include <zlib/zlib.h>
 
 #include <algorithm>
@@ -81,6 +84,34 @@ static std::map<std::string, std::string> s_weaponParents;
 static std::map<std::string, std::string> s_weaponDamage;
 static std::set<const void *> s_fullAssets;
 
+struct DBSaveToolPart
+{
+    std::string model;
+    std::string donor;
+    std::string bone;
+    float offset[3];
+};
+
+struct DBSaveToolVariant
+{
+    std::string name;
+    std::string base;
+    std::string from;
+    std::string displayName;
+};
+
+struct DBSaveToolSound
+{
+    std::string weapon;
+    std::string alias;
+    std::string newAlias;
+};
+
+static std::vector<DBSaveToolPart> s_modelParts;
+static std::vector<DBSaveToolSound> s_weaponSounds;
+static std::map<std::string, std::string> s_weaponHides;
+static std::vector<DBSaveToolVariant> s_weaponVariants;
+
 extern const char *g_defaultAssetName[43];
 
 static void *DB_SaveTool_Alloc(int size)
@@ -117,6 +148,10 @@ static void DB_SaveTool_FreeAll()
     s_weaponRenames.clear();
     s_weaponParents.clear();
     s_weaponDamage.clear();
+    s_modelParts.clear();
+    s_weaponHides.clear();
+    s_weaponVariants.clear();
+    s_weaponSounds.clear();
     s_fullAssets.clear();
 }
 
@@ -562,6 +597,499 @@ static bool DB_SaveTool_MatchDamage(XAsset *roots, int rootCount)
         Com_Printf(0, "writezone: %s takes the damage of %s: %i-%i, range %g-%g, %i pellets\n",
                    (const char *)roots[i].header.weapon->szInternalName, it->second.c_str(), def->damage,
                    def->minDamage, def->fMaxDamageRange, def->fMinDamageRange, def->shotCount);
+    }
+    return true;
+}
+
+static int DB_SaveTool_BoneIndex(const XModel *model, const char *name)
+{
+    int bone;
+
+    for (bone = 0; bone < model->numBones; ++bone)
+    {
+        if (!I_stricmp(SL_ConvertToString(model->boneNames[bone], SCRIPTINSTANCE_SERVER), name))
+            return bone;
+    }
+    return -1;
+}
+
+// A surface that follows only the bone (rigid vertex lists, no blended vertices).
+static bool DB_SaveTool_SurfaceFollowsBone(const XSurface *surf, int bone)
+{
+    int list;
+
+    if (!surf->verts0 || !surf->vertList || !surf->vertListCount || surf->vertInfo.vertCount[0]
+        || surf->vertInfo.vertCount[1] || surf->vertInfo.vertCount[2] || surf->vertInfo.vertCount[3])
+    {
+        return false;
+    }
+    for (list = 0; list < surf->vertListCount; ++list)
+    {
+        // A skinning matrix (DObjSkelMat) is 64 bytes (R_MarkFragments_AnimatedXModel: >> 6).
+        if (surf->vertList[list].boneOffset >> 6 != bone)
+            return false;
+    }
+    return true;
+}
+
+// part <model>=<donor model>:<bone>:<x>,<y>,<z>: the donor model's bone (an attachment's, e.g.
+// the MP40's tag_silencer) and the surfaces that follow only it are added to the zone's model, moved
+// by the offset: a new last bone, child of the model's root, and the surfaces in each LOD (from the
+// donor's LOD of that number, or its last). The donor is a model of the source zones, else
+// multiplayer's. Vertices are in model space
+// (the base pose: skinning uses the bone's pose times its inverse base pose), so they move with
+// the bone's base pose; only a translation, so normals and the bone's own bounds stay valid. The
+// gun models carry every attachment's parts; a weapon variant hides what it lacks (hideTags).
+static bool DB_SaveTool_AddModelPart(const DBSaveToolPart &part)
+{
+    std::vector<const XSurface *> donorSurfs[4];
+    std::vector<int> donorSurfIndices[4];
+    DBSaveToolAsset *asset;
+    XModel *model;
+    const XModel *donor;
+    XSurface *surfs;
+    XSurface *surf;
+    XRigidVertList *vertList;
+    XSurfaceCollisionTree *tree;
+    Ptr32<Material> *materials;
+    XModelHighMipBounds *highMipBounds;
+    unsigned __int16 *boneNames;
+    unsigned __int8 *parentList;
+    unsigned __int8 *partClassification;
+    __int16 *quats;
+    float *trans;
+    DObjAnimMat *baseMat;
+    XBoneInfo *boneInfo;
+    GfxPackedVertex *verts;
+    float donorTrans[3];
+    int donorBone;
+    int donorParent;
+    int donorNonRoot;
+    int nonRoot;
+    int newBone;
+    int lod;
+    int surfIndex;
+    int surfCount;
+    int added;
+    int out;
+    int i;
+    int k;
+
+    asset = DB_SaveTool_Find(ASSET_TYPE_XMODEL, part.model.c_str());
+    if (!asset)
+    {
+        Com_PrintError(16, "writezone: part: no xmodel '%s' in the source zones\n", part.model.c_str());
+        return false;
+    }
+    model = asset->header.model;
+    if (DB_SaveTool_Find(ASSET_TYPE_XMODEL, part.donor.c_str()))
+        donor = DB_SaveTool_Find(ASSET_TYPE_XMODEL, part.donor.c_str())->header.model;
+    else if (DB_SaveTool_MultiplayerHas(ASSET_TYPE_XMODEL, part.donor.c_str()))
+        donor = DB_FindXAssetHeader(ASSET_TYPE_XMODEL, (char *)part.donor.c_str(), 1, -1).model;
+    else
+    {
+        Com_PrintError(16, "writezone: part: no xmodel '%s' in the source zones or multiplayer\n", part.donor.c_str());
+        return false;
+    }
+    if (donor == model)
+    {
+        Com_PrintError(16, "writezone: part: '%s' is its own donor\n", part.model.c_str());
+        return false;
+    }
+    donorBone = DB_SaveTool_BoneIndex(donor, part.bone.c_str());
+    if (donorBone < donor->numRootBones || !donor->localParentList || !donor->localQuats || !donor->localTrans
+        || !donor->baseMat)
+    {
+        Com_PrintError(16, "writezone: part: '%s' has no child bone '%s'\n", part.donor.c_str(), part.bone.c_str());
+        return false;
+    }
+    if (DB_SaveTool_BoneIndex(model, part.bone.c_str()) >= 0)
+    {
+        Com_PrintError(16, "writezone: part: '%s' already has a bone '%s'\n", part.model.c_str(), part.bone.c_str());
+        return false;
+    }
+    // Both bones hang off a root bone (identity), so the local pose is the model-space one.
+    donorNonRoot = donorBone - donor->numRootBones;
+    donorParent = donorBone - donor->localParentList[donorNonRoot];
+    Vec3Copy(&donor->localTrans[3 * donorNonRoot], donorTrans);
+    if (donorParent >= donor->numRootBones || fabsf(donorTrans[0] - donor->baseMat[donorBone].trans[0]) > 0.001f
+        || fabsf(donorTrans[1] - donor->baseMat[donorBone].trans[1]) > 0.001f
+        || fabsf(donorTrans[2] - donor->baseMat[donorBone].trans[2]) > 0.001f)
+    {
+        Com_PrintError(16, "writezone: part: '%s' bone '%s' is not a root bone's child\n", part.donor.c_str(),
+                       part.bone.c_str());
+        return false;
+    }
+    if (!model->numRootBones || model->numBones >= 127 || !model->localParentList || !model->localQuats
+        || !model->localTrans || !model->baseMat || !model->surfs || !model->materialHandles || model->numLods < 1
+        || model->numLods > 4)
+    {
+        Com_PrintError(16, "writezone: part: can't add a bone to '%s'\n", part.model.c_str());
+        return false;
+    }
+    surfCount = 0;
+    for (lod = 0; lod < model->numLods; ++lod)
+        surfCount += model->lodInfo[lod].numsurfs;
+    if (surfCount != model->numsurfs)
+    {
+        Com_PrintError(16, "writezone: part: the LODs of '%s' share surfaces\n", part.model.c_str());
+        return false;
+    }
+
+    added = 0;
+    for (lod = 0; lod < model->numLods; ++lod)
+    {
+        k = lod < donor->numLods ? lod : donor->numLods - 1;
+        for (i = 0; i < donor->lodInfo[k].numsurfs; ++i)
+        {
+            surfIndex = donor->lodInfo[k].surfIndex + i;
+            if (DB_SaveTool_SurfaceFollowsBone(&donor->surfs[surfIndex], donorBone))
+            {
+                donorSurfs[lod].push_back(&donor->surfs[surfIndex]);
+                donorSurfIndices[lod].push_back(surfIndex);
+                ++added;
+            }
+        }
+    }
+    if (!added || model->numsurfs + added > 255)
+    {
+        Com_PrintError(16, "writezone: part: '%s' has %s surfaces that follow '%s' only\n", part.donor.c_str(),
+                       added ? "too many" : "no", part.bone.c_str());
+        return false;
+    }
+
+    // The bone.
+    newBone = model->numBones;
+    nonRoot = model->numBones - model->numRootBones;
+    boneNames = (unsigned __int16 *)DB_SaveTool_Alloc(2 * (newBone + 1));
+    memcpy(boneNames, model->boneNames, 2 * newBone);
+    boneNames[newBone] = donor->boneNames[donorBone];
+    parentList = (unsigned __int8 *)DB_SaveTool_Alloc(nonRoot + 1);
+    memcpy(parentList, model->localParentList, nonRoot);
+    parentList[nonRoot] = (unsigned __int8)newBone;
+    quats = (__int16 *)DB_SaveTool_Alloc(8 * (nonRoot + 1));
+    memcpy(quats, model->localQuats, 8 * nonRoot);
+    memcpy(&quats[4 * nonRoot], &donor->localQuats[4 * donorNonRoot], 8);
+    // The zone holds 4 floats a bone (Load_XModel); the code reads 3 (DObjCalcSkel).
+    trans = (float *)DB_SaveTool_Alloc(16 * (nonRoot + 1));
+    memset(trans, 0, 16 * (nonRoot + 1));
+    memcpy(trans, model->localTrans, 12 * nonRoot);
+    Vec3Add(donorTrans, part.offset, &trans[3 * nonRoot]);
+    baseMat = (DObjAnimMat *)DB_SaveTool_Alloc(sizeof(DObjAnimMat) * (newBone + 1));
+    memcpy(baseMat, model->baseMat, sizeof(DObjAnimMat) * newBone);
+    baseMat[newBone] = donor->baseMat[donorBone];
+    Vec3Add(baseMat[newBone].trans, part.offset, baseMat[newBone].trans);
+    model->localBoneNames = boneNames;
+    model->localParentList = parentList;
+    model->localQuats = quats;
+    model->localTrans = trans;
+    model->baseMat = baseMat;
+    if (model->partClassification)
+    {
+        partClassification = (unsigned __int8 *)DB_SaveTool_Alloc(newBone + 1);
+        memcpy(partClassification, model->partClassification, newBone);
+        partClassification[newBone] = donor->partClassification ? donor->partClassification[donorBone] : 0;
+        model->partClassification = partClassification;
+    }
+    if (model->localBoneInfo)
+    {
+        boneInfo = (XBoneInfo *)DB_SaveTool_Alloc(sizeof(XBoneInfo) * (newBone + 1));
+        memcpy(boneInfo, model->localBoneInfo, sizeof(XBoneInfo) * newBone);
+        memset(&boneInfo[newBone], 0, sizeof(XBoneInfo));
+        if (donor->localBoneInfo)
+            boneInfo[newBone] = donor->localBoneInfo[donorBone];
+        model->localBoneInfo = boneInfo;
+    }
+    ++model->numBones;
+
+    // The surfaces: each LOD's own, then the part's.
+    surfs = (XSurface *)DB_SaveTool_Alloc(sizeof(XSurface) * (model->numsurfs + added));
+    materials = (Ptr32<Material> *)DB_SaveTool_Alloc(sizeof(Ptr32<Material>) * (model->numsurfs + added));
+    highMipBounds = NULL;
+    if (model->streamInfo.highMipBounds)
+        highMipBounds = (XModelHighMipBounds *)DB_SaveTool_Alloc(sizeof(XModelHighMipBounds) * (model->numsurfs + added));
+    out = 0;
+    for (lod = 0; lod < model->numLods; ++lod)
+    {
+        surfIndex = model->lodInfo[lod].surfIndex;
+        for (i = 0; i < model->lodInfo[lod].numsurfs; ++i)
+        {
+            surfs[out + i] = model->surfs[surfIndex + i];
+            materials[out + i] = model->materialHandles[surfIndex + i];
+            if (highMipBounds)
+                highMipBounds[out + i] = model->streamInfo.highMipBounds[surfIndex + i];
+        }
+        model->lodInfo[lod].surfIndex = (unsigned __int16)out;
+        out += model->lodInfo[lod].numsurfs;
+        for (i = 0; i < (int)donorSurfs[lod].size(); ++i, ++out)
+        {
+            surf = &surfs[out];
+            *surf = *donorSurfs[lod][i];
+            verts = (GfxPackedVertex *)DB_SaveTool_Alloc(sizeof(GfxPackedVertex) * surf->vertCount);
+            for (k = 0; k < surf->vertCount; ++k)
+            {
+                verts[k] = surf->verts0[k];
+                Vec3Add(verts[k].xyz, part.offset, verts[k].xyz);
+                AddPointToBounds(verts[k].xyz, model->mins, model->maxs);
+                if (Vec3Length(verts[k].xyz) > model->radius)
+                    model->radius = Vec3Length(verts[k].xyz);
+            }
+            surf->verts0 = verts;
+            vertList = (XRigidVertList *)DB_SaveTool_Alloc(sizeof(XRigidVertList) * surf->vertListCount);
+            for (k = 0; k < surf->vertListCount; ++k)
+            {
+                vertList[k] = surf->vertList[k];
+                vertList[k].boneOffset = (unsigned __int16)(newBone << 6);
+                // Its boxes are quantized as (position + trans) * scale.
+                if (vertList[k].collisionTree)
+                {
+                    tree = (XSurfaceCollisionTree *)DB_SaveTool_Alloc(sizeof(XSurfaceCollisionTree));
+                    *tree = *vertList[k].collisionTree;
+                    tree->trans[0] -= part.offset[0];
+                    tree->trans[1] -= part.offset[1];
+                    tree->trans[2] -= part.offset[2];
+                    vertList[k].collisionTree = tree;
+                }
+            }
+            surf->vertList = vertList;
+            surf->vb0 = NULL;
+            surf->indexBuffer = NULL;
+            memset(surf->partBits, 0, sizeof(surf->partBits));
+            surf->partBits[newBone >> 5] |= 0x80000000 >> (newBone & 0x1F);
+            materials[out] = donor->materialHandles[donorSurfIndices[lod][i]];
+            if (highMipBounds)
+            {
+                if (donor->streamInfo.highMipBounds)
+                {
+                    highMipBounds[out] = donor->streamInfo.highMipBounds[donorSurfIndices[lod][i]];
+                    Vec3Add(highMipBounds[out].center, part.offset, highMipBounds[out].center);
+                }
+                else
+                {
+                    memset(&highMipBounds[out], 0, sizeof(XModelHighMipBounds));
+                }
+            }
+        }
+        if (!donorSurfs[lod].empty())
+            model->lodInfo[lod].partBits[newBone >> 5] |= 0x80000000 >> (newBone & 0x1F);
+        model->lodInfo[lod].numsurfs = (unsigned __int16)(model->lodInfo[lod].numsurfs + donorSurfs[lod].size());
+    }
+    model->surfs = surfs;
+    model->materialHandles = materials;
+    model->streamInfo.highMipBounds = highMipBounds;
+    model->numsurfs = (unsigned __int8)(model->numsurfs + added);
+    Com_Printf(0, "writezone: %s gets %s's %s (%i surfaces) at %g %g %g\n", part.model.c_str(), part.donor.c_str(),
+               part.bone.c_str(), added, baseMat[newBone].trans[0], baseMat[newBone].trans[1], baseMat[newBone].trans[2]);
+    return true;
+}
+
+static WeaponVariantDef *DB_SaveTool_RootWeapon(XAsset *roots, int rootCount, const char *name)
+{
+    int i;
+
+    for (i = 0; i < rootCount; ++i)
+    {
+        if (roots[i].type == ASSET_TYPE_WEAPON && !I_stricmp(roots[i].header.weapon->szInternalName, name))
+            return roots[i].header.weapon;
+    }
+    return NULL;
+}
+
+static bool DB_SaveTool_HidesTag(const WeaponVariantDef *weapon, unsigned int tag)
+{
+    int i;
+
+    for (i = 0; weapon->hideTags && i < 32 && weapon->hideTags[i]; ++i)
+    {
+        if (weapon->hideTags[i] == tag)
+            return true;
+    }
+    return false;
+}
+
+// hide <weapon>=<tag>[,<tag>...]: the parts the weapon hides (hideTags; a base weapon hides the
+// attachment parts its model got with "part"). Applied after the variants, which copy their base
+// weapon's list as it was, so a variant shows the part its base hides.
+static bool DB_SaveTool_HideTags(XAsset *roots, int rootCount)
+{
+    std::map<std::string, std::string>::const_iterator it;
+    WeaponVariantDef *weapon;
+    unsigned __int16 *tags;
+    char list[256];
+    char *tag;
+    char *next;
+    int count;
+
+    for (it = s_weaponHides.begin(); it != s_weaponHides.end(); ++it)
+    {
+        weapon = DB_SaveTool_RootWeapon(roots, rootCount, it->first.c_str());
+        if (!weapon)
+        {
+            Com_PrintError(16, "writezone: hide: no weapon '%s' in the zone\n", it->first.c_str());
+            return false;
+        }
+        tags = (unsigned __int16 *)DB_SaveTool_Alloc(2 * 32);
+        memset(tags, 0, 2 * 32);
+        I_strncpyz(list, it->second.c_str(), sizeof(list));
+        count = 0;
+        for (tag = list; tag && *tag && count < 32; tag = next)
+        {
+            next = strchr(tag, ',');
+            if (next)
+                *next++ = 0;
+            tags[count++] = (unsigned __int16)SL_GetString(tag, 0, SCRIPTINSTANCE_SERVER);
+        }
+        weapon->hideTags = tags;
+    }
+    return true;
+}
+
+// variant <new>=<base>:<multiplayer variant>:<display name>: a new weapon, the zone's base weapon
+// (by its new name) changed as the multiplayer variant differs from its own base weapon
+// (<parentWeaponName>_mp): the attachment flags, the sounds and effects (a suppressor's fire
+// sounds and muzzle flash) and the parts shown (a tag the multiplayer variant shows and its base
+// hides is shown, and the reverse). The statsTable row's attachment list (column 8) names the
+// attachment, so BG_LoadWeaponTable registers <reference>_<attachment>_mp. Damage: "damage
+// <new>=<multiplayer variant>".
+static bool DB_SaveTool_AddVariants(XAsset *roots, int *rootCount)
+{
+    std::vector<DBSaveToolVariant>::const_iterator it;
+    const WeaponVariantDef *base;
+    const WeaponVariantDef *mpVariant;
+    const WeaponVariantDef *mpBase;
+    WeaponVariantDef *weapon;
+    WeaponDef *def;
+    unsigned __int16 *tags;
+    Ptr32<const char> *sound;
+    const Ptr32<const char> *mpSound;
+    const Ptr32<const char> *mpBaseSound;
+    char sounds[512];
+    int effect;
+    int count;
+    int i;
+    static const size_t effects[] = {
+        offsetof(WeaponDef, viewFlashEffect),        offsetof(WeaponDef, worldFlashEffect),
+        offsetof(WeaponDef, viewShellEjectEffect),   offsetof(WeaponDef, worldShellEjectEffect),
+        offsetof(WeaponDef, viewLastShotEjectEffect), offsetof(WeaponDef, worldLastShotEjectEffect),
+    };
+
+    for (it = s_weaponVariants.begin(); it != s_weaponVariants.end(); ++it)
+    {
+        base = DB_SaveTool_RootWeapon(roots, *rootCount, it->base.c_str());
+        if (!base || DB_SaveTool_RootWeapon(roots, *rootCount, it->name.c_str()))
+        {
+            Com_PrintError(16, "writezone: variant: %s weapon '%s' in the zone\n", base ? "already a" : "no",
+                           base ? it->name.c_str() : it->base.c_str());
+            return false;
+        }
+        if (!DB_SaveTool_MultiplayerHas(ASSET_TYPE_WEAPON, it->from.c_str()))
+        {
+            Com_PrintError(16, "writezone: variant: multiplayer has no weapon '%s'\n", it->from.c_str());
+            return false;
+        }
+        mpVariant = DB_FindXAssetHeader(ASSET_TYPE_WEAPON, (char *)it->from.c_str(), 1, -1).weapon;
+        if (!DB_SaveTool_MultiplayerHas(ASSET_TYPE_WEAPON, va("%s_mp", (const char *)mpVariant->weapDef->parentWeaponName)))
+        {
+            Com_PrintError(16, "writezone: variant: multiplayer has no base weapon for '%s'\n", it->from.c_str());
+            return false;
+        }
+        mpBase = DB_FindXAssetHeader(ASSET_TYPE_WEAPON, va("%s_mp", (const char *)mpVariant->weapDef->parentWeaponName), 1, -1).weapon;
+
+        weapon = (WeaponVariantDef *)DB_SaveTool_Alloc(sizeof(WeaponVariantDef));
+        *weapon = *base;
+        def = (WeaponDef *)DB_SaveTool_Alloc(sizeof(WeaponDef));
+        *def = *base->weapDef;
+        weapon->weapDef = def;
+        weapon->szInternalName = DB_SaveTool_CopyString(it->name.c_str());
+        weapon->szDisplayName = DB_SaveTool_CopyString(it->displayName.c_str());
+        weapon->bSilenced = mpVariant->bSilenced;
+        weapon->bDualMag = mpVariant->bDualMag;
+        weapon->bFullMetalJacket = mpVariant->bFullMetalJacket;
+        weapon->bHollowPoint = mpVariant->bHollowPoint;
+        weapon->bRapidFire = mpVariant->bRapidFire;
+        // The sounds, pickupSound to adsZoomSound (alias names).
+        sound = &def->pickupSound;
+        mpSound = &mpVariant->weapDef->pickupSound;
+        mpBaseSound = &mpBase->weapDef->pickupSound;
+        sounds[0] = 0;
+        for (i = 0; &sound[i] <= &def->adsZoomSound; ++i)
+        {
+            if (I_stricmp(mpSound[i] ? (const char *)mpSound[i] : "", mpBaseSound[i] ? (const char *)mpBaseSound[i] : ""))
+            {
+                sound[i] = mpSound[i] ? DB_SaveTool_CopyString(mpSound[i]) : NULL;
+                I_strncat(sounds, sizeof(sounds), va(" %s", mpSound[i] ? (const char *)mpSound[i] : "-"));
+            }
+        }
+        for (effect = 0; effect < (int)(sizeof(effects) / sizeof(effects[0])); ++effect)
+        {
+            if (*(const Ptr32<const FxEffectDef> *)((const char *)(const WeaponDef *)mpVariant->weapDef + effects[effect])
+                != *(const Ptr32<const FxEffectDef> *)((const char *)(const WeaponDef *)mpBase->weapDef + effects[effect]))
+            {
+                *(Ptr32<const FxEffectDef> *)((char *)def + effects[effect])
+                    = *(const Ptr32<const FxEffectDef> *)((const char *)(const WeaponDef *)mpVariant->weapDef + effects[effect]);
+            }
+        }
+        tags = (unsigned __int16 *)DB_SaveTool_Alloc(2 * 32);
+        memset(tags, 0, 2 * 32);
+        count = 0;
+        for (i = 0; base->hideTags && i < 32 && base->hideTags[i]; ++i)
+        {
+            if (DB_SaveTool_HidesTag(mpVariant, base->hideTags[i]) || !DB_SaveTool_HidesTag(mpBase, base->hideTags[i]))
+                tags[count++] = base->hideTags[i];
+        }
+        for (i = 0; mpVariant->hideTags && i < 32 && mpVariant->hideTags[i] && count < 32; ++i)
+        {
+            if (!DB_SaveTool_HidesTag(mpBase, mpVariant->hideTags[i]) && !DB_SaveTool_HidesTag(base, mpVariant->hideTags[i]))
+                tags[count++] = mpVariant->hideTags[i];
+        }
+        weapon->hideTags = tags;
+        if (!DB_SaveTool_AddRoot(ASSET_TYPE_WEAPON, XAssetHeader(weapon), roots, rootCount, DB_SAVE_MAX_ROOTS))
+            return false;
+        Com_Printf(0, "writezone: %s is %s as %s is to %s (sounds%s)\n", it->name.c_str(), it->base.c_str(),
+                   it->from.c_str(), va("%s_mp", (const char *)mpVariant->weapDef->parentWeaponName),
+                   sounds[0] ? sounds : " the same");
+    }
+    return true;
+}
+
+// sound <weapon>=<alias>:<new alias>: every sound of the weapon (pickupSound to adsZoomSound) that
+// plays the alias plays the new one (a variant's suppressed shots: its multiplayer model's sounds,
+// "variant", replaced by the gun's own).
+static bool DB_SaveTool_ReplaceSounds(XAsset *roots, int rootCount)
+{
+    std::vector<DBSaveToolSound>::const_iterator it;
+    WeaponVariantDef *weapon;
+    WeaponDef *def;
+    Ptr32<const char> *sound;
+    int count;
+    int i;
+
+    for (it = s_weaponSounds.begin(); it != s_weaponSounds.end(); ++it)
+    {
+        weapon = DB_SaveTool_RootWeapon(roots, rootCount, it->weapon.c_str());
+        if (!weapon)
+        {
+            Com_PrintError(16, "writezone: sound: no weapon '%s' in the zone\n", it->weapon.c_str());
+            return false;
+        }
+        def = weapon->weapDef;
+        count = 0;
+        sound = &def->pickupSound;
+        for (i = 0; &sound[i] <= &def->adsZoomSound; ++i)
+        {
+            if (sound[i] && !I_stricmp(sound[i], it->alias.c_str()))
+            {
+                sound[i] = DB_SaveTool_CopyString(it->newAlias.c_str());
+                ++count;
+            }
+        }
+        if (!count)
+        {
+            Com_PrintError(16, "writezone: sound: weapon '%s' plays no '%s'\n", it->weapon.c_str(), it->alias.c_str());
+            return false;
+        }
+        Com_Printf(0, "writezone: %s plays %s for %s (%i sounds)\n", it->weapon.c_str(), it->newAlias.c_str(),
+                   it->alias.c_str(), count);
     }
     return true;
 }
@@ -1180,6 +1708,10 @@ static void DB_SaveTool_PrintZone(const char *path, const DBSaveStats *stats, in
 //   rows <string table>=<file>            rows put in a string table (DB_SaveTool_AddTableRows)
 //   addrows <string table>=<file>         rows added to a string table (likewise)
 //   strings <file>                        localized strings (DB_SaveTool_AddStrings)
+//   part <model>=<donor model>:<bone>:<x>,<y>,<z>  an attachment's part added to a model (DB_SaveTool_AddModelPart)
+//   hide <weapon>=<tag>[,<tag>...]        the parts a weapon hides (DB_SaveTool_HideTags)
+//   variant <new>=<base>:<mp variant>:<display name>  an attachment variant (DB_SaveTool_AddVariants)
+//   sound <weapon>=<alias>:<new alias>    a weapon's sound replaced (DB_SaveTool_ReplaceSounds)
 static void DB_SaveTool_WriteZone_f()
 {
     DBSaveStats stats;
@@ -1201,7 +1733,9 @@ static void DB_SaveTool_WriteZone_f()
     {
         Com_Printf(0, "usage: writezone <output .ff> <source zone>[,<zone>...] [all] <type> <name> [<type> <name> ...]\n");
         Com_Printf(0, "       (types: asset types, damage <weapon>=<mp weapon>, rows/addrows <table>=<file>, strings <file>,\n");
-        Com_Printf(0, "        alias <sound alias>: one no asset names)\n");
+        Com_Printf(0, "        alias <sound alias>: one no asset names,\n");
+        Com_Printf(0, "        part <model>=<donor model>:<bone>:<x>,<y>,<z>, hide <weapon>=<tags>, variant <new>=<base>:<mp variant>:<name>,\n");
+        Com_Printf(0, "        sound <weapon>=<alias>:<new alias>)\n");
         return;
     }
     // A client would create the source zones' shaders and world vertex buffers.
@@ -1240,7 +1774,9 @@ static void DB_SaveTool_WriteZone_f()
         if (newName)
             *newName++ = 0;
         if (!I_stricmp(Cmd_Argv(argIndex), "damage") || !I_stricmp(Cmd_Argv(argIndex), "rows")
-            || !I_stricmp(Cmd_Argv(argIndex), "addrows"))
+            || !I_stricmp(Cmd_Argv(argIndex), "addrows") || !I_stricmp(Cmd_Argv(argIndex), "part")
+            || !I_stricmp(Cmd_Argv(argIndex), "hide") || !I_stricmp(Cmd_Argv(argIndex), "variant")
+            || !I_stricmp(Cmd_Argv(argIndex), "sound"))
         {
             if (!newName)
             {
@@ -1249,6 +1785,69 @@ static void DB_SaveTool_WriteZone_f()
             }
             else if (!I_stricmp(Cmd_Argv(argIndex), "damage"))
                 s_weaponDamage[DB_SaveTool_Key(name)] = newName;
+            else if (!I_stricmp(Cmd_Argv(argIndex), "hide"))
+                s_weaponHides[name] = newName;
+            else if (!I_stricmp(Cmd_Argv(argIndex), "part"))
+            {
+                DBSaveToolPart part;
+                char *bone;
+                char *offset;
+
+                bone = strchr(newName, ':');
+                offset = bone ? strchr(bone + 1, ':') : NULL;
+                if (!offset || sscanf(offset + 1, "%f,%f,%f", &part.offset[0], &part.offset[1], &part.offset[2]) != 3)
+                {
+                    Com_PrintError(16, "writezone: part %s=%s: not <mp model>:<bone>:<x>,<y>,<z>\n", name, newName);
+                    ok = false;
+                    continue;
+                }
+                *bone++ = 0;
+                *offset = 0;
+                part.model = name;
+                part.donor = newName;
+                part.bone = bone;
+                s_modelParts.push_back(part);
+            }
+            else if (!I_stricmp(Cmd_Argv(argIndex), "sound"))
+            {
+                DBSaveToolSound sound;
+                char *newAlias;
+
+                newAlias = strchr(newName, ':');
+                if (!newAlias)
+                {
+                    Com_PrintError(16, "writezone: sound %s=%s: not <alias>:<new alias>\n", name, newName);
+                    ok = false;
+                    continue;
+                }
+                *newAlias++ = 0;
+                sound.weapon = name;
+                sound.alias = newName;
+                sound.newAlias = newAlias;
+                s_weaponSounds.push_back(sound);
+            }
+            else if (!I_stricmp(Cmd_Argv(argIndex), "variant"))
+            {
+                DBSaveToolVariant variant;
+                char *from;
+                char *displayName;
+
+                from = strchr(newName, ':');
+                displayName = from ? strchr(from + 1, ':') : NULL;
+                if (!displayName)
+                {
+                    Com_PrintError(16, "writezone: variant %s=%s: not <base>:<mp variant>:<display name>\n", name, newName);
+                    ok = false;
+                    continue;
+                }
+                *from++ = 0;
+                *displayName++ = 0;
+                variant.name = name;
+                variant.base = newName;
+                variant.from = from;
+                variant.displayName = displayName;
+                s_weaponVariants.push_back(variant);
+            }
             else
                 ok = DB_SaveTool_AddTableRows(name, newName, !I_stricmp(Cmd_Argv(argIndex), "addrows"), s_roots, &rootCount);
             continue;
@@ -1302,8 +1901,12 @@ static void DB_SaveTool_WriteZone_f()
             DB_SaveTool_AddWeaponRoots(asset->header.weapon, s_roots, &rootCount);
     }
 
+    for (unsigned int part = 0; ok && part < s_modelParts.size(); ++part)
+        ok = DB_SaveTool_AddModelPart(s_modelParts[part]);
     if (ok)
         ok = DB_SaveTool_AddLinkedWeapons(s_roots, &rootCount) && DB_SaveTool_RenameWeapons(s_roots, rootCount)
+             && DB_SaveTool_AddVariants(s_roots, &rootCount) && DB_SaveTool_HideTags(s_roots, rootCount)
+             && DB_SaveTool_ReplaceSounds(s_roots, rootCount)
              && DB_SaveTool_MatchDamage(s_roots, rootCount);
     if (ok)
     {
@@ -1374,6 +1977,28 @@ static void DB_SaveTool_PrintWeapon(const WeaponVariantDef *weapon)
                DB_SaveTool_String(def->reloadSoundPlayer),
                DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->projExplosionEffect),
                DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->projTrailEffect));
+    // The attachment parts the variant hides (bone names: the gun models carry every attachment's
+    // parts, BG/CG hide the variant's tags), its attachment flags and every model slot.
+    notes[0] = 0;
+    for (i = 0; weapon->hideTags && i < 32 && weapon->hideTags[i]; ++i)
+        I_strncat(notes, sizeof(notes), va(" %s", SL_ConvertToString(weapon->hideTags[i], SCRIPTINSTANCE_SERVER)));
+    Com_Printf(0, "listzone:   hide%s silenced %i dualmag %i rapid %i flash %s %s\n", notes[0] ? notes : " -",
+               weapon->bSilenced, weapon->bDualMag, weapon->bRapidFire,
+               DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->viewFlashEffect),
+               DB_SaveTool_HeaderName(ASSET_TYPE_FX, (const void *)def->worldFlashEffect));
+    notes[0] = 0;
+    for (i = 0; def->gunXModel && i < 16; ++i)
+    {
+        if (def->gunXModel[i])
+            I_strncat(notes, sizeof(notes), va(" %i:%s", i, DB_SaveTool_AssetName(ASSET_TYPE_XMODEL, (const void *)def->gunXModel[i])));
+    }
+    for (i = 0; def->worldModel && i < 16; ++i)
+    {
+        if (def->worldModel[i])
+            I_strncat(notes, sizeof(notes), va(" w%i:%s", i, DB_SaveTool_AssetName(ASSET_TYPE_XMODEL, (const void *)def->worldModel[i])));
+    }
+    Com_Printf(0, "listzone:   models%s hands %s\n", notes[0] ? notes : " -",
+               DB_SaveTool_HeaderName(ASSET_TYPE_XMODEL, (const void *)def->handXModel));
     // The notetrack sound map: script strings, of the loaded zone.
     notes[0] = 0;
     for (i = 0; def->notetrackSoundMapKeys && i < 20 && def->notetrackSoundMapKeys[i]; ++i)
@@ -1556,9 +2181,77 @@ static void DB_SaveTool_PrintMenu(const menuDef_t *menu)
     }
 }
 
+// Multiplayer's weapons whose names start with the prefix.
 static void DB_SaveTool_PrintMultiplayerWeapon(XAssetHeader header, void *data)
 {
-    DB_SaveTool_PrintWeapon(header.weapon);
+    if (!I_strncmp((const char *)header.weapon->szInternalName, (const char *)data, (int)strlen((const char *)data)))
+        DB_SaveTool_PrintWeapon(header.weapon);
+}
+
+// A model's bones (index, name, parent, base pose position in model space) and each LOD's surfaces
+// (material, vertices, triangles, the bones their rigid vertex lists follow).
+static void DB_SaveTool_PrintXModel(const XModel *model)
+{
+    char notes[1024];
+    const XSurface *surf;
+    const DObjAnimMat *mat;
+    float mins[3];
+    float maxs[3];
+    int bone;
+    int lod;
+    int surfIndex;
+    int list;
+
+    Com_Printf(0, "listzone: xmodel %s bones %i (roots %i) surfs %i lods %i radius %g mins %g %g %g maxs %g %g %g\n",
+               (const char *)model->name, model->numBones, model->numRootBones, model->numsurfs, model->numLods,
+               model->radius, model->mins[0], model->mins[1], model->mins[2], model->maxs[0], model->maxs[1], model->maxs[2]);
+    for (bone = 0; bone < model->numBones; ++bone)
+    {
+        mat = model->baseMat ? &model->baseMat[bone] : NULL;
+        Com_Printf(0, "listzone:   bone %i %s parent %i at %g %g %g quat %g %g %g %g\n", bone,
+                   SL_ConvertToString(model->boneNames[bone], SCRIPTINSTANCE_SERVER),
+                   bone < model->numRootBones ? -1 : bone - model->parentList[bone - model->numRootBones],
+                   mat ? mat->trans[0] : 0.0f, mat ? mat->trans[1] : 0.0f, mat ? mat->trans[2] : 0.0f,
+                   mat ? mat->quat[0] : 0.0f, mat ? mat->quat[1] : 0.0f, mat ? mat->quat[2] : 0.0f,
+                   mat ? mat->quat[3] : 0.0f);
+    }
+    for (lod = 0; lod < model->numLods && lod < 4; ++lod)
+    {
+        Com_Printf(0, "listzone:   lod %i dist %g surfs %i from %i\n", lod, model->lodInfo[lod].dist,
+                   model->lodInfo[lod].numsurfs, model->lodInfo[lod].surfIndex);
+        for (surfIndex = 0; surfIndex < model->lodInfo[lod].numsurfs; ++surfIndex)
+        {
+            surf = &model->surfs[model->lodInfo[lod].surfIndex + surfIndex];
+            notes[0] = 0;
+            for (list = 0; surf->vertList && list < surf->vertListCount; ++list)
+            {
+                // A skinning matrix (DObjSkelMat) is 64 bytes (R_MarkFragments_AnimatedXModel: >> 6).
+                bone = surf->vertList[list].boneOffset >> 6;
+                I_strncat(notes, sizeof(notes), va(" %s:%i",
+                                                 bone < model->numBones
+                                                     ? SL_ConvertToString(model->boneNames[bone], SCRIPTINSTANCE_SERVER)
+                                                     : "?",
+                                                 surf->vertList[list].vertCount));
+            }
+            for (list = 0; surf->verts0 && list < surf->vertCount; ++list)
+            {
+                if (!list)
+                {
+                    Vec3Copy(surf->verts0[0].xyz, mins);
+                    Vec3Copy(surf->verts0[0].xyz, maxs);
+                }
+                AddPointToBounds(surf->verts0[list].xyz, mins, maxs);
+            }
+            if (surf->verts0 && surf->vertCount)
+                I_strncat(notes, sizeof(notes), va(" box %g %g %g to %g %g %g", mins[0], mins[1], mins[2], maxs[0], maxs[1], maxs[2]));
+            Com_Printf(0, "listzone:     surf %i %s verts %i tris %i flags 0x%x blend %i/%i/%i/%i rigid%s\n", surfIndex,
+                       DB_SaveTool_HeaderName(ASSET_TYPE_MATERIAL, model->materialHandles
+                                                                     ? (const void *)model->materialHandles[model->lodInfo[lod].surfIndex + surfIndex]
+                                                                     : NULL),
+                       surf->vertCount, surf->triCount, surf->flags, surf->vertInfo.vertCount[0], surf->vertInfo.vertCount[1],
+                       surf->vertInfo.vertCount[2], surf->vertInfo.vertCount[3], notes[0] ? notes : " -");
+        }
+    }
 }
 
 static void DB_SaveTool_PrintLocalize(const LocalizeEntry *entry)
@@ -1666,10 +2359,12 @@ static void DB_SaveTool_PrintRawFile(const RawFile *rawFile)
 // the fields that name other assets for weapons), or the count of each type.
 // A string table's name prints its cells (multiplayer's if no source has it);
 // localized strings print their text, a menu's name its items and scripts
-// (DB_SaveTool_PrintMenu), a sound bank its aliases (DB_SaveTool_PrintSoundBank).
-// "listzone - weapon" lists multiplayer's weapons, "listzone - sound" its
-// sound aliases, "listzone - localize [<prefix>]" its localized strings,
-// "listzone - rawfile <name>" prints one of its raw files (scripts).
+// (DB_SaveTool_PrintMenu), a sound bank its aliases (DB_SaveTool_PrintSoundBank),
+// a model's name its bones and surfaces (DB_SaveTool_PrintXModel).
+// "listzone - weapon [<prefix>]" lists multiplayer's weapons, "listzone - sound"
+// its sound aliases, "listzone - localize [<prefix>]" its localized strings,
+// "listzone - rawfile <name>" prints one of its raw files (scripts),
+// "listzone - xmodel <name>" one of its models.
 static void DB_SaveTool_ListZone_f()
 {
     char zones[256];
@@ -1717,7 +2412,10 @@ static void DB_SaveTool_ListZone_f()
         else if (type == ASSET_TYPE_SNDDRIVER_GLOBALS && globals)
             DB_SaveTool_PrintSoundGroups(globals);
         else if (type == ASSET_TYPE_WEAPON)
-            DB_EnumXAssets(ASSET_TYPE_WEAPON, DB_SaveTool_PrintMultiplayerWeapon, NULL, 0);
+            DB_EnumXAssets(ASSET_TYPE_WEAPON, DB_SaveTool_PrintMultiplayerWeapon,
+                           (void *)(Cmd_Argc() == 4 ? Cmd_Argv(3) : ""), 0);
+        else if (Cmd_Argc() == 4 && type == ASSET_TYPE_XMODEL && DB_SaveTool_MultiplayerHas(ASSET_TYPE_XMODEL, Cmd_Argv(3)))
+            DB_SaveTool_PrintXModel(DB_FindXAssetHeader(ASSET_TYPE_XMODEL, (char *)Cmd_Argv(3), 1, -1).model);
         else if (type == ASSET_TYPE_LOCALIZE_ENTRY)
             DB_EnumXAssets(ASSET_TYPE_LOCALIZE_ENTRY, DB_SaveTool_PrintMultiplayerLocalize,
                            (void *)(Cmd_Argc() == 4 ? Cmd_Argv(3) : ""), 0);
@@ -1747,6 +2445,16 @@ static void DB_SaveTool_ListZone_f()
             DB_SaveTool_PrintMenu(asset->header.menu);
         else
             Com_PrintError(16, "listzone: no menu '%s'\n", Cmd_Argv(3));
+        type = -1;
+    }
+    if (Cmd_Argc() == 4 && type == ASSET_TYPE_XMODEL)
+    {
+        DB_SaveTool_IndexAssets();
+        asset = DB_SaveTool_Find(ASSET_TYPE_XMODEL, Cmd_Argv(3));
+        if (asset)
+            DB_SaveTool_PrintXModel(asset->header.model);
+        else
+            Com_PrintError(16, "listzone: no xmodel '%s'\n", Cmd_Argv(3));
         type = -1;
     }
     if (Cmd_Argc() == 4 && type == ASSET_TYPE_STRINGTABLE)

@@ -18,3 +18,5 @@ KB_DLC_DOUBLEBARREL_DESC Double-barreled shotgun. Effective at close range.
 KB_DLC_SAWEDOFF_DESC Sawed-off double-barreled shotgun. Effective at close range.
 # The sawed-off's name was "Sawed-Off Double-Barreled Shotgun w/ Grip" (too long for the lists).
 WAW_WEAPON_SHOTGUN_DOUBLE_BARRELED_SAWED_GRIP Sawed-Off Shotgun
+# The attachment variants' names (make_dlc_weapons.sh "variants"), as multiplayer's ("MP5K Suppressor").
+KB_DLC_THOMPSON_SILENCER Thompson Suppressor

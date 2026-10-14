@@ -3,8 +3,10 @@
 # them to kb_dlc_weapons.ff's copy of the table (writezone's "addrows"; HANDOFF, Decisions session 27).
 # Columns as the table's: group, reference, then the bars' values (columns 2-6, out of 100: the
 # multiplayer gun's whose damage the weapon takes, column 5 lower for the slow MP40 and BAR), the
-# magazine (the gun's own), the fire mode text and the parent (attachments only).
+# magazine (the gun's own), the fire mode text and the parent (attachments only). An attachment's row
+# (weapon_attachment, after its gun's) changes the bars as multiplayer's row for that attachment does.
 weapon_smg,thompson,50,60,60,50,100,20,MPUI_FULL_AUTO,
+weapon_attachment,silencer,0,0,-10,0,0,0,,thompson
 weapon_smg,type100,70,70,80,60,100,30,MPUI_FULL_AUTO,
 weapon_smg,mp40,50,60,60,30,100,32,MPUI_FULL_AUTO,
 weapon_assault,stg44,60,70,80,70,90,30,MPUI_FULL_AUTO,

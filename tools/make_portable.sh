@@ -8,10 +8,16 @@
 # started from. The folder can be moved or copied to another Apple Silicon Mac.
 # It also builds the launcher, the shader library and the DLC weapons' zone (below).
 #
-# usage: tools/make_portable.sh <game dir> [build dir, default build_macos]
+# usage: tools/make_portable.sh [--dlc-sources <dir>] <game dir> [build dir, default build_macos]
 set -euo pipefail
 
-game=${1:?usage: tools/make_portable.sh <game dir> [build dir]}
+usage="usage: tools/make_portable.sh [--dlc-sources <dir>] <game dir> [build dir]"
+dlcsources=""
+if [ "${1:-}" = --dlc-sources ]; then
+    dlcsources=${2:?$usage}
+    shift 2
+fi
+game=${1:?$usage}
 build=${2:-$(dirname "$0")/../build_macos}
 exe="$build/blackops"
 [ -d "$game/main" ] && [ -d "$game/zone" ] || { echo "$game has no main/ and zone/" >&2; exit 1; }
@@ -91,12 +97,19 @@ fi
 "$(dirname "$0")/make_shaderlib.sh" "$game" "$build" || echo "(no shader library: see above)"
 
 # The DLC weapons (tools/make_dlc_weapons.sh; the kb_dlcWeapons dvar): zone/Common/kb_dlc_weapons.ff,
-# written from the game's zombie maps by this build in ~10 s, every time (the writer or the rows may
-# have changed). The script copies the zone in only when it was written, so a failure leaves the old one.
-# A game folder without the zombie maps (the user's, since session 36; the backup folder has them)
-# keeps its installed zone as it is.
+# written from the game's zombie maps by this build in ~10 s, every time (the writer, the rows or the
+# attachments may have changed). The script copies the zone in only when it was written, so a failure
+# leaves the old one. A game folder without the zombie maps (the user's, since session 36) takes them from
+# --dlc-sources <dir>, by default the backup folder next to it (codbo_wwii_guns_backup, which has them;
+# Decisions session 38); without either it keeps its installed zone as it is.
+[ -n "$dlcsources" ] || [ ! -d "$(dirname "$game")/codbo_wwii_guns_backup/zone/Common" ] \
+    || dlcsources="$(dirname "$game")/codbo_wwii_guns_backup"
 if "$(dirname "$0")/make_dlc_weapons.sh" --sources "$game" 2>/dev/null; then
     "$(dirname "$0")/make_dlc_weapons.sh" "$game" "$game/zone/Common/kb_dlc_weapons.ff" "$build" \
+        || echo "(no DLC weapons zone: see above)"
+elif [ -n "$dlcsources" ] && "$(dirname "$0")/make_dlc_weapons.sh" --sources --extra-sources "$dlcsources" "$game" 2>/dev/null; then
+    echo "writing zone/Common/kb_dlc_weapons.ff with the zombie maps of $dlcsources"
+    "$(dirname "$0")/make_dlc_weapons.sh" --extra-sources "$dlcsources" "$game" "$game/zone/Common/kb_dlc_weapons.ff" "$build" \
         || echo "(no DLC weapons zone: see above)"
 elif [ -f "$game/zone/Common/kb_dlc_weapons.ff" ]; then
     echo "kept the installed zone/Common/kb_dlc_weapons.ff: the game folder has no zombie maps to write it from"

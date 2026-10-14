@@ -6,13 +6,15 @@
 # to the rest; the game loads it at startup (kb_dlcWeapons; make_portable.sh puts it in the game
 # folder's zone/Common).
 #
-# usage: tools/make_dlc_weapons.sh [--no-parents] <game dir> <out .ff> [build dir, default build_macos]
-#        tools/make_dlc_weapons.sh --sources <game dir>
+# usage: tools/make_dlc_weapons.sh [--no-parents] [--extra-sources <dir>] <game dir> <out .ff> [build dir, default build_macos]
+#        tools/make_dlc_weapons.sh --sources [--extra-sources <dir>] <game dir>
 #
 # --sources only checks that the game folder has the source zones (the four World at War zombie maps,
 # their patch zones and common_zombie): it names the missing ones and fails. The user's game folder no
 # longer has them (session 36: zombies removed); the backup folder next to it does
-# (codbo_wwii_guns_backup, its README.txt). make_portable.sh keeps the installed zone then.
+# (codbo_wwii_guns_backup, its README.txt). --extra-sources <dir> takes the zones a folder of the game
+# folder's layout has (zone/Common, zone/English) where the game folder lacks them: the backup folder
+# (make_portable.sh passes it; Decisions session 38). Without it make_portable.sh keeps the installed zone.
 #
 # Each weapon's parentWeaponName is its statsTable reference (the zone's copy of the table has the
 # rows); the client stops with "Parent weapon ... not found" for a weapon whose reference the table
@@ -27,26 +29,33 @@
 # mp/attributesTable.csv (tools/dlc_weapons_attributes.csv, Create a Class's bars) and
 # mp/weaponOptions.csv (tools/dlc_weapons_options.csv, camo; the zone replaces the tables when it
 # loads) and adds their descriptions (tools/dlc_weapons_strings.txt): Create a
-# Class, the weapon table and the bots read the tables (HANDOFF, Decisions session 27).
-# The zone also keeps a few suppressed shot sounds no gun uses yet (keep, below).
+# Class, the weapon table and the bots read the tables (HANDOFF, Decisions session 27). It also makes the
+# attachments (parts, variants, hides, sounds below: the Thompson's suppressor, HANDOFF, Decisions session 38).
+# The zone also keeps a few suppressed shot sounds for suppressed versions of the guns (keep, below).
 set -euo pipefail
 
-usage="usage: tools/make_dlc_weapons.sh [--no-parents] <game dir> <out .ff> [build dir] | --sources <game dir>"
+usage="usage: tools/make_dlc_weapons.sh [--no-parents] [--extra-sources <dir>] <game dir> <out .ff> [build dir] | --sources [--extra-sources <dir>] <game dir>"
 noparents=0
 sourcesonly=0
-if [ "${1:-}" = --no-parents ]; then
-    noparents=1
-    shift
-elif [ "${1:-}" = --sources ]; then
-    sourcesonly=1
-    shift
-fi
+extra=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --no-parents) noparents=1; shift ;;
+    --sources) sourcesonly=1; shift ;;
+    --extra-sources) extra=${2:?$usage}; shift 2 ;;
+    *) break ;;
+    esac
+done
 game=${1:?$usage}
 [ $sourcesonly = 1 ] || out=${2:?$usage}
 root=$(cd "$(dirname "$0")/.." && pwd)
 build=${3:-$root/build_macos}
 [ -d "$game/main" ] && [ -d "$game/zone/Common" ] || { echo "$game has no main/ and zone/Common/" >&2; exit 1; }
 game=$(cd "$game" && pwd)
+if [ -n "$extra" ]; then
+    [ -d "$extra/zone/Common" ] || { echo "$extra has no zone/Common/" >&2; exit 1; }
+    extra=$(cd "$extra" && pwd)
+fi
 
 # <source zones> <zone written> then weapon <zombie name>=<multiplayer name>[:<statsTable reference>]
 # (the reference defaults to the name without _mp). References are no prefix of another one or of a
@@ -66,16 +75,17 @@ maps=(
  zombie_type99_rifle=type99_mp"
 )
 
-# The source zones the game folder must have (the runs' first fields).
+# The source zones the game folder (or the extra sources) must have (the runs' first fields).
 missing=""
 for m in "${maps[@]}"; do
     set -- $m
     for z in ${1//,/ }; do
-        [ -f "$game/zone/Common/$z.ff" ] || [[ " $missing " == *" $z "* ]] || missing="$missing $z"
+        [ -f "$game/zone/Common/$z.ff" ] || { [ -n "$extra" ] && [ -f "$extra/zone/Common/$z.ff" ]; } \
+            || [[ " $missing " == *" $z "* ]] || missing="$missing $z"
     done
 done
 if [ -n "$missing" ]; then
-    echo "$game/zone/Common lacks the source zones:$missing" >&2
+    echo "$game/zone/Common${extra:+ and $extra/zone/Common} lack the source zones:$missing" >&2
     exit 1
 fi
 [ $sourcesonly = 1 ] && exit 0
@@ -87,12 +97,13 @@ work="$build/dlc_weapons"
 rm -rf "$work"
 mkdir -p "$work/game/zone/Common" "$work/home/main"
 ln -s "$game/main" "$work/game/main"
-for d in "$game"/zone/*; do
-    [ "$(basename "$d")" = Common ] || ln -s "$d" "$work/game/zone/$(basename "$d")"
-done
-for f in "$game"/zone/Common/*; do
-    # Not a zone this script wrote (make_portable.sh puts it in the game folder).
-    [ "$(basename "$f")" = kb_dlc_weapons.ff ] || ln -s "$f" "$work/game/zone/Common/$(basename "$f")"
+# Links to the game folder's zones, then to the extra sources' zones it lacks; not a zone this script wrote
+# (make_portable.sh puts it in the game folder).
+for f in "$game"/zone/*/* ${extra:+"$extra"/zone/*/*}; do
+    rel=$(basename "$(dirname "$f")")/$(basename "$f")
+    [ "$(basename "$f")" = kb_dlc_weapons.ff ] || [ -e "$work/game/zone/$rel" ] && continue
+    mkdir -p "$work/game/zone/$(dirname "$rel")"
+    ln -s "$f" "$work/game/zone/$rel"
 done
 zones="$work/game/zone/Common"
 
@@ -103,11 +114,42 @@ damage=(
  fg42_mp=stoner63_mp bar_mp=m60_mp bipodbar_mp=m60_mp
  kar98k_mp=l96a1_mp scopedkar98k_mp=l96a1_mp type99_mp=l96a1_mp
  trenchgun_mp=ithaca_mp doublebarrel_mp=rottweil72_mp sawedoff_mp=rottweil72_mp
+ thompson_silencer_mp=mp5k_silencer_mp
 )
 
-# Sound aliases no gun names yet, kept for suppressed versions of the guns (HANDOFF, Decisions
+# Attachments (HANDOFF, Decisions session 38): a suppressor for the Thompson, made only of what the game has
+# (the user's answer in session 31). Multiplayer's gun models carry every attachment's parts and each
+# variant hides the ones it lacks (hideTags); of the WWII guns only the MP40's view model has parts (World at
+# War's silencer, aperture sight and drum; its world model none). "part" copies a model's part (its bone and
+# the surfaces that follow it) into another model, moved by an offset: here the MP40's silencer onto both
+# Thompson models, its collar 0.05 over the muzzle, centred on the bore (measured from slices of the models'
+# vertices, a temporary listing in session 38). The MP40's silencer: collar from x 15.262, the can's axis y 0.490 z 0.950 (view
+# model). The Thompson's muzzle: view model x 18.174, bore y 0.139 z 1.805; world model x 11.542, y 0.003
+# z 1.145. The world model gets the view model's part too (the MP40's world model has none).
+parts=(
+ viewmodel_zombie_thompson_smg=viewmodel_mp_mp40:tag_silencer:2.862,-0.351,0.855
+ weapon_zombie_thompson_smg=viewmodel_mp_mp40:tag_silencer:-3.770,-0.487,0.195
+)
+# Each variant is its base gun as a multiplayer variant is to its own base (the suppressor's sounds, muzzle
+# flash and flags), with a localized name (tools/dlc_weapons_strings.txt); it copies its base's hidden parts
+# before "hide", so the base guns hide the new part and the variant shows it. "sound" gives the variant the
+# gun's own suppressed shots: the Black Ops-era Thompson silencer aliases (the AUG's suppressed recordings,
+# the user's pick in session 31). The statsTable row lists the attachment (tools/dlc_weapons_stats.csv).
+variants=(
+ thompson_silencer_mp=thompson_mp:mp5k_silencer_mp:KB_DLC_THOMPSON_SILENCER
+)
+hides=(
+ thompson_mp=tag_silencer
+)
+sounds=(
+ thompson_silencer_mp=wpn_mp5_silencer_fire_plr:wpn_thompson_silencer_fire_plr
+ thompson_silencer_mp=wpn_mp5_silencer_fire_npc:wpn_thompson_silencer_fire_npc
+)
+
+# Sound aliases kept for suppressed versions of the guns, whether a gun names them or not (HANDOFF, Decisions
 # session 36): World at War's suppressed Thompson and Type 100 shots (their own recordings) and the
-# Black Ops-era Thompson and MP40 silencer shots (the AUG's suppressed recordings); their secondaries
+# Black Ops-era Thompson and MP40 silencer shots (the AUG's suppressed recordings; the Thompson's are the
+# Thompson Suppressor's since session 38); their secondaries
 # (sweet, bass) come along. The factory run's sources hold them all; every merge passes them on, as a
 # merge cuts its bank again from what the zone names.
 keep=(weap_thompson_fire_plr_sil weap_type100_fire_plr_act_sil weap_type100_act_sil
@@ -153,6 +195,18 @@ while [ $i -lt ${#written[@]} ]; do
         for d in "${damage[@]}"; do
             line="$line damage $d"
         done
+        for p in ${parts[@]+"${parts[@]}"}; do
+            line="$line part $p"
+        done
+        for v in ${variants[@]+"${variants[@]}"}; do
+            line="$line variant $v"
+        done
+        for h in ${hides[@]+"${hides[@]}"}; do
+            line="$line hide $h"
+        done
+        for o in ${sounds[@]+"${sounds[@]}"}; do
+            line="$line sound $o"
+        done
         line="$line rows \"mp/statsTable.csv=$root/tools/dlc_weapons_stats.csv\""
         line="$line addrows \"mp/attributesTable.csv=$root/tools/dlc_weapons_attributes.csv\""
         line="$line addrows \"mp/weaponOptions.csv=$root/tools/dlc_weapons_options.csv\""
@@ -171,6 +225,6 @@ if grep -a -q "^Error: writezone:" "$log" || ! grep -a -q "^writezone: wrote '$z
     echo "writing the zone failed; see $log" >&2
     exit 1
 fi
-grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset\|takes the damage\|rows from\|multiplayer has the sound alias" "$log" || true
+grep -a "^writezone: wrote\|stub .* is in no source zone\|has no default asset\|takes the damage\|rows from\|multiplayer has the sound alias\|gets .* surfaces\|is .* as .* is to\|plays .* for .* sounds" "$log" || true
 cp "$zones/kb_dlc_weapons.ff" "$out"
 echo "wrote $out"

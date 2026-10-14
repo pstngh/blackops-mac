@@ -6,7 +6,7 @@
 # primary weapons only there). Sort keys after multiplayer's guns of the group; unlock level the
 # level of the multiplayer gun whose damage the weapon takes (the FG42's, the Stoner63's, is
 # classified: the M60's 20); bots skip a row without an unlock level (they take it for a dual wield).
-25,,weapon_smg,WAW_WEAPON_THOMPSON,thompson,,hud_icon_thompson,KB_DLC_THOMPSON_DESC,,14,3,,2000,primary,,
+25,,weapon_smg,WAW_WEAPON_THOMPSON,thompson,,hud_icon_thompson,KB_DLC_THOMPSON_DESC,silencer,14,3,,2000,primary,,
 58,,weapon_smg,WAW_WEAPON_TYPE100_SMG,type100,,hud_icon_type_100_smg,KB_DLC_TYPE100_DESC,,15,16,,2000,primary,,
 59,,weapon_smg,WEAPON_MP40,mp40,,hud_mp40,KB_DLC_MP40_DESC,,16,3,,2000,primary,,
 36,,weapon_assault,WAW_WEAPON_STG-44,stg44,,hud_icon_stg44,KB_DLC_STG44_DESC,,11,37,,2000,primary,,

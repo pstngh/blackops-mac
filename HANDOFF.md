@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-13, session 37)
+## Status (2026-10-14, session 38)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -511,6 +511,20 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   after seeing the list (build_macos/strip_dupes/removal_list.txt, git-ignored); the 14 originals went to the iCloud
   Drive Trash and the user emptied it the same evening. A server start and a short game from the folder are clean.
   A physics crash seen once in the tests (not from the archives) is session 38's item 5 (Next steps).
+- **A suppressor for the Thompson** (session 38, the user: "please add a suppresor option to the thompsons"; their answers
+  from session 31: only attachments that come with the game, and the Black Ops sound): Create a Class lists Attachments ->
+  Suppressor for the WWII Thompson (its picture, "Invisible from radar when firing, reduced muzzle flash, but less range",
+  the Range bar dropping as on multiplayer's suppressors); a class with it spawns with `thompson_silencer_mp`, "Thompson
+  Suppressor": the MP40's own World at War silencer (the only WWII suppressor part the game has: in the MP40's first-person
+  model) on the Thompson's muzzle, in the player's view and in soldiers' hands (third person), the Black Ops-era
+  suppressed Thompson shots (`wpn_thompson_silencer_fire_plr/_npc`, the AUG's recordings, the user's pick; the loud shot
+  doesn't play), the suppressed muzzle flash (as on multiplayer's suppressed guns, hardly visible), no minimap ping, and
+  multiplayer's suppressor range (no effect with kb_mohaaDamage). The user's other gun changes apply to it as to the
+  Thompson (kb_gunPlacement, kb_wwiiGunMovement, kb_mohaaDamage, kb_damagePercent). Bots can roll it (_bot.gsc adds a
+  random attachment of the row, more often at higher rank). Built into kb_dlc_weapons.ff by tools/make_dlc_weapons.sh
+  (the zone writer's part/variant/hide/sound options); make_portable.sh now writes the zone with the zombie maps of the
+  backup folder next to the game folder (codbo_wwii_guns_backup), as the game folder has none. Checked in play (Decisions
+  session 38). Not in the game folder yet (it has session 37's zone, f1b5ef98...).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -699,8 +713,10 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next session (38): the user's requests (2026-10-13, during session 37: "for the next session, please ...")**:
-1. **A suppressor for the Thompson** ("please add a suppresor option to the thompsons"): most likely a Create a Class
+**The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
+items 2-5 next (session 39 onwards, one piece of work each, with a hand-off)**:
+1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Not installed: the user decides.
+   What the plan was ("please add a suppresor option to the thompsons"): most likely a Create a Class
    attachment for the WWII Thompson (thompson_mp) that fires the suppressed shots kb_dlc_weapons.ff keeps since session
    36 (`weap_thompson_fire_plr_sil`, World at War's own recording; `wpn_thompson_silencer_fire_plr/_npc`, the AUG's
    suppressed recordings). Needs a suppressed variant (the weapon asset with its sound, flash and the range other
@@ -733,7 +749,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
    (main/screenshots/shot0000.jpg was Targa data).
 5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
    while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
-   runs. The session 38 task card lists all five in this order (the user's requests first).
+   runs. The session 38 task card lists all five in this order (the user's requests first); session 38 did item 1 and
+   its task card lists 2-5.
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1155,6 +1172,13 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 38: the WWII Thompson's first-person model has its tag_flash 3.8 units behind its muzzle (x 14.38, the
+barrel ends at 18.17; session 31's note), so its muzzle flash starts inside the barrel, as in the zombie game; with the
+suppressor the suppressed flash is inside the can, but multiplayer's suppressed guns (MP5K) show no flash in first person
+either (screenshots at 60 fps, Decisions session 38). Only the MP40 of the WWII guns has more parts (aperture sight, drum;
+first-person model only): an MP40 suppressor (its own part, the Black Ops-era MP40 silencer sounds kept in the zone) is the
+same work as the Thompson's, if the user wants it.
+
 Seen in session 37: an .iwd in main/ that can't be opened (a dangling link) crashes the game at startup in
 FS_LoadFakeIwdFile (ftello on NULL; Decisions session 37) instead of being skipped. The physics crash (the job queue's
 wait) is session 38's item 5. `Black Ops Launcher 2.app` is no longer in the game folder.
@@ -1384,6 +1408,74 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 38)
+
+**A suppressor for the Thompson** (Status; the user's request for session 38, item 1 of Next steps).
+- **The design**: from session 31's conversation (its transcript; HANDOFF only summed it up): a first try there put
+  multiplayer's modern MP5K suppressor on the Thompson with the MP5K's suppressed sound; the user had it all undone and
+  deleted, then said "i would like to ONLY add the attachments that come with the game" and, offered the World at War
+  Thompson's own suppressed recording or the Black Ops-era one (the AUG's), "i woudl choose the bo sound for the
+  thompson"; offered "the MP40's suppressor part" for the Thompson (no Thompson model has one), they answered "leave as is
+  for now". So now: the MP40's World at War silencer, the Black Ops-era sound, nothing else (no other gun, no other
+  attachment). "thompsons": there is one Thompson (thompson_mp); its suppressed variant is the second.
+- **The tools came back from git** (session 31's commit 8462c7de, dropped by `git reset` then, still in the reflog):
+  `git cherry-pick --no-commit`, the conflicts merged by hand (the writer's usage text, listzone's comment and its `-`
+  branch, the script's summary grep). Its `part`, `hide` and `variant` options and listzone's model listing are as
+  session 31 wrote them (its notes: every attachment combination is a weapon of its own with its WeaponDef; a variant's
+  hideTags hide the model's other parts; model vertices are in model space and a rigid list names its bone by
+  `boneOffset >> 6`; the zone holds 4 floats a bone of localTrans, the code reads 3), with three changes:
+  `part` takes its donor from the source zones first (the MP40's view model, viewmodel_mp_mp40, is in the merged WWII
+  zones), then multiplayer; the variants are made before `hide` (a variant copies its base's hidden parts as they were,
+  so the base hides the new part and the variant shows it without a list of its own: the MP40's bone is tag_silencer,
+  multiplayer's tag_suppressor, so the variant rule "show what the multiplayer variant shows" didn't apply); new `sound
+  <weapon>=<alias>:<new alias>` swaps every sound field of the weapon naming the alias (and fails when none does). A
+  variant's log line now lists the sounds it took from multiplayer's (here only the two fire sounds).
+- **The part** (temporary vertex slices in listzone's model listing, removed): the MP40's tag_silencer is a child of
+  j_gun at 19.986 0.482 0.912, one rigid surface (mc/mtl_weapon_mp_silencer, 136 vertices) from x 15.262 to 24.038: a
+  collar (0.80 wide) to 16.0, then the can (1.36), its axis y 0.490 z 0.950; the MP40's barrel ends at 15.451, so the
+  collar sits 0.19 over it. The Thompson's view model ends at x 18.174 (the Cutts compensator, 0.73-0.94 wide), bore
+  y 0.139 z 1.805; its world model at 11.542 (0.89-1.09 wide), y 0.003 z 1.145. Offsets: the collar 0.05 over the muzzle
+  (the compensator is wider than the MP40's muzzle), the can's axis on the bore: view 2.862 -0.351 0.855, world -3.770
+  -0.487 0.195. The world model takes the view model's part too (the MP40's world model has none; 136 vertices in each
+  of its 3 LODs); its muzzle is wider than the collar, a small step only seen up close in third person.
+- **The variant**: thompson_silencer_mp is thompson_mp as mp5k_silencer_mp is to mp5k_mp: bSilenced, the suppressed
+  flash effects (fx_silencer_flash_base, _world: multiplayer's, stubs), the fire sounds (then swapped to
+  wpn_thompson_silencer_fire_plr/_npc), damage and range of mp5k_silencer_mp (40-20, 350-700). The tables and name are
+  session 31's: the statsTable row's attachments `silencer`, the attributes row `weapon_attachment,silencer,0,0,-10,0,0,0,
+  ,thompson`, KB_DLC_THOMPSON_SILENCER "Thompson Suppressor". The zone: 4,317,269 bytes (was 4,310,731), 468 roots,
+  SHA-256 25db4b27...; two runs the same bytes; written again from itself (`all` plus the 7 aliases) the same bytes; the
+  writer with the new options empty and the old tables writes the installed zone byte for byte (f1b5ef98...).
+- **Installing it**: the game folder has had no zombie maps since session 36, so make_portable.sh kept the installed zone
+  and could never bring the suppressor in. make_dlc_weapons.sh's new `--extra-sources <dir>` takes the zones a folder of
+  the game folder's layout has where the game folder lacks them (its work folder now links files, not directories), and
+  make_portable.sh's new `--dlc-sources <dir>` (default: `codbo_wwii_guns_backup` next to the game folder, when it has
+  zone/Common) passes it. Checked on a scratch copy of the game folder's layout (links, a copy of the installed zone):
+  without the backup next to it "kept the installed ...", with it (and with `--dlc-sources`) the new zone written in,
+  25db4b27...; `make_dlc_weapons.sh --extra-sources <backup> <real game folder>` writes the same bytes. The shell's empty
+  array expansion under `set -u` (macOS bash 3.2) is guarded in the new loops.
+- **Checked in play** (release client, a scratch game folder with links to the game folder and the new zone, scratch
+  profiles, the user's config windowed; screenshots as TGA crops, sounds with OpenAL Soft's wave writer and
+  `snd_solo_alias_substring`):
+  - First person (mp_nuked, a fixed view): the can on the muzzle, in line with the barrel, next to the plain Thompson;
+    held where kb_gunPlacement puts the Thompson. Firing at 60 fps (30 frames each): the plain Thompson shows its flash and
+    smoke, the suppressed one only tracers, as multiplayer's MP5K Suppressor at the same view (no visible flash either).
+  - Third person (`cg_thirdPerson`, both sides, mp_nuked's street): the can on the soldier's Thompson, in line.
+  - Sound: soloing `silencer`, the plain Thompson's burst is silent and the suppressed bursts play (-2.3 to -4.5 dBFS
+    peak, first and third person); soloing `weap_thompson`, the plain burst plays (-1.3) and the suppressed ones are silent.
+  - Create a Class (KB_MENU_CMDS, session 27's sequences, a mouse click): Thompson -> Attachments lists Suppressor (its
+    picture, description, the Range bar red); clicked, ticked, Clear Attachments appears; Esc twice saves: Custom 1 shows
+    the Thompson with the suppressor icon, `statReadDDL` primary 25, primaryattachmentmuzzle 1; then `map mp_nuked`:
+    Custom 1 spawns with the suppressed Thompson.
+  - Bots (the launcher's 7 managed fu bots, 2-minute TDM; a temporary change, removed, gave every bot's bullet gun as
+    thompson_silencer_mp: `scr_botsHasPlayerWeapon 1` gave them nothing usable): their suppressed shots heard (`_npc`
+    solo'd, up to -3.5 dBFS), the match ended and rotated to mp_array, no new error lines against a run without it.
+  - A dedicated server and a client as two processes (both with the new zone): the client holds and fires the suppressed
+    Thompson (heard, -1.5 dBFS), no "Weapon index mismatch". KB_CMDS_GAMETIME on a client of a remote server starts at
+    the server's clock (every entry fires at once): leave it off there.
+  - The ASan client (detect_stack_use_after_return; 7 managed bots, the suppressed Thompson in first and third person
+    firing, the plain one, 113 s): no report.
+  - check_file.py natively and `--i386` (db_save_tool.cpp), audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 37)
 

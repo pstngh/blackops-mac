@@ -205,23 +205,31 @@ renames (the statsTable reference, parentWeaponName, defaults to `<new>` without
 leaves none); `damage <weapon>=<mp weapon>` copies a multiplayer gun's damage, `rows`/`addrows
 <table>=<file>` put rows into a copy of a string table (into its empty rows by index / at the end),
 `strings <file>` adds localized strings (`NAME text` lines), `alias <name>` keeps a sound alias no asset names (with its
-secondaries; a merge's bank is cut again from what the zone names, so each merge passes it on). Source zones load by name from `zone/`
+secondaries; a merge's bank is cut again from what the zone names, so each merge passes it on); attachments (HANDOFF,
+Decisions session 38): `part <model>=<donor model>:<bone>:<x>,<y>,<z>` copies a model's attachment part (its bone and
+surfaces; the donor from the source zones or multiplayer) into a model, moved by the offset, `variant
+<new>=<base>:<mp variant>:<display name>` makes an attachment variant of a gun as the multiplayer variant differs from
+its base (flags, sounds, flash), `hide <weapon>=<tag>[,<tag>]` sets the parts a weapon hides (after the variants), `sound
+<weapon>=<alias>:<new alias>` swaps a weapon's sound. Source zones load by name from `zone/`
 of the install path, so a written zone is a source only from a scratch game folder; tool runs pass
 `+set kb_dlcWeapons 0` (else the DLC zone loads with the common zones and counts as multiplayer's).
 `listzone <zone>[,<zone>] [<type> [<name>]]` lists a zone's assets (weapons with the names they hold,
 their damage, hip spread and view kick, localized strings with their text, `menu <name>` a menu's items with their rect,
 visibility and text expressions and the scripts with their conditions, in postfix order), `sound` every alias with
 its group, category (sfx/music/voice/ui) and file (loaded in the zone or streamed from main/*.iwd; `- sound` multiplayer's),
-`listzone - weapon` multiplayer's weapons, `listzone - localize [prefix]` its strings, `listzone -
+`xmodel <name>` a model's bones and surfaces (vertex boxes), `listzone - weapon [prefix]` multiplayer's weapons (their
+hidden parts, flags, flash and models), `- xmodel <name>` its models, `listzone - localize [prefix]` its strings, `listzone -
 rawfile <script>` a loaded script, `listzone - stringtable mp/statsTable.csv` a table. Commands too long
 for the command line (1 KB) go in a cfg under `<fs_h>/main` (`+exec`).
 `tools/make_dlc_weapons.sh <game dir> <out.ff>` writes the DLC weapons' zone, kb_dlc_weapons.ff (16
 WWII guns with multiplayer damage and their rows of mp/statsTable.csv, mp/attributesTable.csv and
-mp/weaponOptions.csv from tools/dlc_weapons_*, and 7 suppressed shot sounds no gun uses yet; ~10 s, in
+mp/weaponOptions.csv from tools/dlc_weapons_*, the Thompson's suppressor (`thompson_silencer_mp`: the MP40's World at War
+silencer on both Thompson models, the Black Ops-era suppressed Thompson shots), and 7 suppressed shot sounds; ~10 s, in
 build_macos/dlc_weapons) from the World at War zombie maps; `--sources <game dir>` checks a folder has them. The user's
-game folder has no zombie zones since session 36 (HANDOFF, Decisions session 36): make_portable.sh keeps its installed
-zone, and a new one is written from a scratch game folder with the zombie zones of the backup folder
-/Users/pstn/Documents/Games/codbo_wwii_guns_backup (README.txt there; read only). The game loads it at startup after common_mp; to try a
+game folder has no zombie zones since session 36 (HANDOFF, Decisions session 36): they come from the backup folder
+/Users/pstn/Documents/Games/codbo_wwii_guns_backup (README.txt there; read only) with `--extra-sources <dir>`, which
+make_portable.sh passes (`--dlc-sources <dir>`, by default the `codbo_wwii_guns_backup` next to the game folder;
+without one it keeps the installed zone; HANDOFF, Decisions session 38). The game loads it at startup after common_mp; to try a
 new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (links to `main`,
 `zone/English` and every `zone/Common` file). Create a Class from KB_MENU_CMDS: HANDOFF, Decisions
 session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then
