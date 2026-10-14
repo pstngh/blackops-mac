@@ -551,7 +551,11 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the steps; the eye's small up-down bob stays, as in both games). The same in both games, unchanged: the bolt after a
   shot keeps the scope, a reload or a weapon switch ends it, the shot's kick (Black Ops ~3.5 degrees back in 0.75 s,
   MoHAA 5 back in ~0.3 s), the zoom and scope picture. Bots and the other guns are unchanged. Checked (Decisions session
-  40). Not installed in the game folder (the installed `blackops` is session 38's); not pushed.
+  40). Installed in the game folder at the user's "yes" (make_portable.sh at 9526c55c, log build_macos/make_portable_s40.log:
+  `blackops` and the libraries, the launcher (signature verifies), the guns file written again from the backup folder,
+  25db4b27..., the same bytes; the shader library step still stops at the missing Metal Toolchain); the installed
+  `blackops` holds the new dvar text and loads no Homebrew library. The previous one (session 38's, 898ee134...) is in
+  build_macos/scope_s40/revert/blackops: copying it back undoes the install. Pushed at the user's request.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -762,7 +766,8 @@ hand-off**:
    was shown the two Kar98ks in Create a Class (same picture, no scope drawn) and asked what they saw. If they answer: a
    rename or hiding of the iron-sighted Kar98k/Arisaka in the sniper list is theirs to choose; a case that still fails
    needs their steps (the temporary aim-state log: build_macos/scope_s39/kb_adslog.patch, `KB_ADSLOG=1`).
-2b. **Sniper scopes like Medal of Honor's: done (session 40)** (Status, Decisions session 40; not installed, not pushed).
+2b. **Sniper scopes like Medal of Honor's: done (session 40)** (Status, Decisions session 40; installed and pushed at the
+   user's request).
    The plan was (the user, 2026-10-14, end of session 39: "the sniper scoping should work
    exactly the same way in black ops as it does in openmohaa (near instant scope in, and unscopes when i re-right-click)
    does that make sense?"; told yes): with kb_sniperScope, the scoped rifles (L96A1, Scoped Kar98k; WA2000, Dragunov, PSG1
