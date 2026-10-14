@@ -723,7 +723,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
 items 2-5 next (session 39 onwards, one piece of work each, with a hand-off)**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
-   user's "yes"); how to undo it is in Status. Pushing: asked again (the user's "yes" answered two questions at once).
+   user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
+   37's d2c71308).
    What the plan was ("please add a suppresor option to the thompsons"): most likely a Create a Class
    attachment for the WWII Thompson (thompson_mp) that fires the suppressed shots kb_dlc_weapons.ff keeps since session
    36 (`weap_thompson_fire_plr_sil`, World at War's own recording; `wpn_thompson_silencer_fire_plr/_npc`, the AUG's
