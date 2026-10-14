@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-13, session 36)
+## Status (2026-10-13, session 37)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -498,6 +498,19 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   seeing the list (build_macos/strip_zombies/removal_list.txt, git-ignored): the folder 5.6 -> 3.8 GB; the 84 originals
   (4.0 GB) are in the iCloud Drive Trash (Put Back works; the user empties it); a server start and a short game from
   the folder are clean.
+- **No duplicate copies** (session 37, job C, the user's decision at the end of session 36: only copies byte-identical to
+  one that stays): tools/strip_dupes.py removed 802 second copies of 669 files stored in more than one archive (616
+  pictures, 53 sounds; 111.8 MB, mostly textures each map pack shipped again), keeping for each name the copy the
+  game opens (the highest-numbered iw_ archive holding it; Decisions session 37); the 19 files whose copies differ keep
+  them all. 13 archives rebuilt, localized_English_iw12 gone (its 3 files are in iw_ archives too); main/ 2,367 ->
+  2,255 MB of archives, 42 archives. Checked on scratch copies, all passing (Decisions session 37): every file every
+  run opened came from the same archive with and without the change, no removed copy asked for, every map in two
+  settings, the dedicated server, the menus and Create a Class, the launcher's 16-bot FFA, every WWII gun, screenshots
+  within run-to-run noise, the WWII guns file rebuilt from the backup byte-identical, missingasset.csv identical to a
+  run with the retail archives (the user's USB backup). Applied with the user's "yes"
+  after seeing the list (build_macos/strip_dupes/removal_list.txt, git-ignored); the 14 originals went to the iCloud
+  Drive Trash and the user emptied it the same evening. A server start and a short game from the folder are clean.
+  A physics crash seen once in the tests (not from the archives) is session 38's item 5 (Next steps).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -686,8 +699,45 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 ## Next steps (in order)
 
-**Next (the user's decision, 2026-10-13, end of session 36): the duplicate copies in the archives, in a fresh session
-(session 37).** The user asked "theres a bunch of small iwd after the cleanup, shouldnt we merge a bunch of them ?".
+**Next session (38): the user's requests (2026-10-13, during session 37: "for the next session, please ...")**:
+1. **A suppressor for the Thompson** ("please add a suppresor option to the thompsons"): most likely a Create a Class
+   attachment for the WWII Thompson (thompson_mp) that fires the suppressed shots kb_dlc_weapons.ff keeps since session
+   36 (`weap_thompson_fire_plr_sil`, World at War's own recording; `wpn_thompson_silencer_fire_plr/_npc`, the AUG's
+   suppressed recordings). Needs a suppressed variant (the weapon asset with its sound, flash and the range other
+   suppressors get), a model part (the World at War Thompson's view model may have none; the MP40's has one: the
+   Rezurrection facts below) or a borrowed one, and the attachment's rows so Create a Class offers it (writezone,
+   make_dlc_weapons.sh). Check whether "thompsons" means more than the one WWII Thompson.
+2. **Sniper rifles without a scope** ("snipers dont seem to ahve a scope ? (i only tested the kar98 sniper)"): with
+   kb_noAds on, kb_sniperScope (session 32) should let the L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k
+   (scopedkar98k_mp) scope in; the plain WWII Kar98k (kar98k_mp) has iron sights only. Find which one the user picked
+   (asked: "scoped", the Scoped Kar98k, so it is that one that doesn't scope in) and check each scoped rifle with
+   the user's settings.
+3. **Weapons held wrong** ("some weapons seem to have messed up views", the user's screenshots
+   main/screenshots/shot0001.tga and shot0004.tga, 13 Oct 19:57, Havana, arms hidden: the launcher's "show arms" is
+   off, cg_drawArms 0; the user then trashed that folder: PNG copies in build_macos/user_screens_s37, git-ignored):
+   shot0001 a Black Ops bullpup rifle with a sight, held to the right; shot0004 the WWII FG42, centred and low, its
+   sights near the crosshair. Find which guns look wrong and why (no arms; an ADS pose partly
+   applied with kb_noAds; the WWII view models' offsets: kb_gunPlacement moves only the Thompson).
+4. **The log** ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
+   on by default in the first place"): the launcher sends the game's console output to `<game>/blackops.log`
+   (Launcher.swift, made anew at each Play): 305 MB after one session, 1,915,571 of its 2,085,632 lines `ASSERT
+   (ignored) ... cscr_variable.cpp / scr_variable.h ... gScrVarDebugPub[inst]->leakCount[...]` (the script variables'
+   debug bookkeeping, 16 bots), most of the rest setStat lines. To do: stop those asserts (why the debug counts
+   disagree; a debug-only check), and a launcher switch for the log, off by default; tell the user that a crash then
+   leaves no report. No other log file is written there (main/ and players/ hold none). The user then asked "should we
+   look for fix all errors ?"; told: yes to the flood (find why the debug counts disagree, it may be a real bookkeeping
+   slip of the port), then one pass through the other kinds (about 180 in their log, most a few times each: materials
+   without a depth technique, weapon parts a model lacks, weapons or effects the data names but doesn't have, devgui
+   files, the cinematic sound, video memory size), sorting the port's own bugs (fix) from messages the original game
+   prints too (leave); not literally all of them. Also seen: `screenshotJpeg` writes a TGA under a .jpg name
+   (main/screenshots/shot0000.jpg was Targa data).
+5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
+   while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
+   runs. The session 38 task card lists all five in this order (the user's requests first).
+
+**Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
+111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
+user asked "theres a bunch of small iwd after the cleanup, shouldnt we merge a bunch of them ?".
 Told (measured on the game folder): merging saves nothing (an archive is its files; the 43 archives are 2.37 GB either
 way, 16 of them under 20 MB; their central directories, 1.85 MB together, stay one record per file), startup gains
 milliseconds, and merging would have to keep the copy the game uses of every file stored twice. Offered instead: the
@@ -721,9 +771,9 @@ files stored in more than one archive. The user: "yeah sure, in a fresh session"
   from the backup byte-identical. Only then the list and results to the user, their OK, and the swap as in session 36
   (`.new` copies checked by SHA-256, originals to the Trash through Finder one at a time).
 - ON HOLD (the user: "hold on all this for now"; don't start): two attachments per gun without Warlord, every perk at
-  once (session 34's item below). The game folder's unexplained `Black Ops Launcher 2.app` stays as it is (Open items).
-  Ideas, not asked for: the ~190 short voices inside multiplayer's own zones (session 33, a mute setting was offered,
-  no answer); players/metal_pipelines (464 MB) is rebuilt as maps are played, so not a saving.
+  once (session 34's item below). The game folder's unexplained `Black Ops Launcher 2.app` is gone (seen in session 37;
+  the user's doing). Ideas, not asked for: the ~190 short voices inside multiplayer's own zones (session 33, a mute
+  setting was offered, no answer); players/metal_pipelines (464 MB) is rebuilt as maps are played, so not a saving.
 
 **Session 36: all of zombies stripped from the game folder (job B): done** (Status, Decisions session 36). The user's
 decision in session 34 ("what is the biggest next thing we can strip from the game to save space"; shown the
@@ -748,6 +798,9 @@ goes: zombies entirely (unplayable here anyway), Rezurrection's 5 maps, rebuildi
   user's yes) added new_guns_file_2026-10-13/ (zone/Common/kb_dlc_weapons.ff with the suppressed sounds, now the
   installed one, README.txt, SHA256SUMS.txt); the older files are untouched. Since session 36 the game folder has no
   zombie zones: the backup is the only source for rebuilding the guns file.
+- **An older full backup** (the user's, mentioned in session 37): /Volumes/SamsungUSB/Games/codbo on an external
+  drive, 11 Oct 2026, before session 33's strips: all 57 retail archives (6.7 GB), the 86 zones of zone/Common, an
+  older build and launcher. Read only; only there when the drive is plugged in.
 
 **Session 34: more guns blocked (`kb_blockGuns`), no melee (`kb_noMelee`), no death skull (with `kb_cleanHud`): done**
 (Status, Decisions session 34; installed in the game folder and pushed at the user's request). Then never reload
@@ -1102,6 +1155,10 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 37: an .iwd in main/ that can't be opened (a dangling link) crashes the game at startup in
+FS_LoadFakeIwdFile (ftello on NULL; Decisions session 37) instead of being skipped. The physics crash (the job queue's
+wait) is session 38's item 5. `Black Ops Launcher 2.app` is no longer in the game folder.
+
 Seen in session 36 (job B's tests, scratch folders): `Could not load xanim ""` twice in one 26-map rotation with every
 kb_ change off (mid-match, before a bot reconnects; an animation looked up by an empty name; zone assets only, the same
 zones loaded with and without the removal, so not from it); not looked at. The scripted player's `take all` / `give`
@@ -1327,6 +1384,114 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 37)
+
+**The second copies of files stored in more than one archive (job C)** (Status; the user's decision in Next steps,
+end of session 36: only copies byte-identical to one that stays). Read-only work and two scratch game folders first.
+- **Which copy the engine opens** (com_files.cpp): FS_AddIwdFilesForGameDirectory lists main/*.iwd, renames
+  `localized_` names to ten spaces and sorts with iwdsort (two localized names: English first, then FS_PathCmp; else
+  FS_PathCmp, which upper-cases and treats \ and : as /), so all localized archives come first, then the iw_ ones in
+  ascending order; in the base path's main/ a name that is neither is skipped ("Invalid IWD"). Each is added with
+  FS_AddSearchPath, which puts a plain path at the head of fs_searchpaths and a localized one at the head of the
+  localized part, which always follows every plain path. FS_FOpenFileReadForThread walks the list and opens the first
+  archive holding the name (FS_FilenameCompare: no case, \ and : as /; FS_UseSearchPath skips localized archives of
+  other languages; an impure archive breaks out of that archive only, then the walk goes on). So for each name: the
+  highest-numbered iw_ archive holding it, else the highest-numbered localized_English one. Within one archive the
+  hash chain is built head-first, so a name stored twice in one archive opens its last entry: no archive has one.
+  Confirmed on the running game (below): every one of the ~14,000 files each run opened came from the archive this
+  order predicts. Nothing names an archive file (the sources, the executable, the zones), so an emptied archive can go.
+- **tools/strip_dupes.py** (new; imports strip_unused.py's rebuild and checks): the search order as above; for each
+  name in more than one searched archive the first copy stays; another copy goes only if it is an image or sound and
+  every copy of the name has the same uncompressed size, CRC and SHA-256 of the unpacked bytes (a name with any
+  differing copy keeps all); archives the engine doesn't load are left alone. Writes the rebuilt archives as
+  strip_unused.py does (kept entries byte for byte; its verify) and strip_dupes.txt (every copy of each such name: keep
+  or remove, size, CRC, SHA-256, the archive the game opens).
+- **The plan** (the real folder, 43 archives, 2,366.7 MB): 688 names in more than one archive, 19 with differing copies
+  (all kept: the 14 pc_flag_* images and the lobby scrollbars of iw_05/iw_25, two map textures and their merged
+  versions in the map packs), 669 with identical copies (616 images, 53 sounds): 802 copies removed (547 names have 2
+  copies, 111 have 3, 11 have 4), 111.8 MB stored (images 102.6, sounds 9.2). 13 archives rebuilt (iw_05, 25-35,
+  localized_English_iw00), localized_English_iw12 emptied (its 3 files are also in iw_ archives), main/ 2,366.7 ->
+  2,254.8 MB. The copies that stay are in iw_01 (12 names), 03 (20), 04, 05, 08, 09, 25, 29 (67), 30 (79), 32, 33
+  (205), 34 (111), 35 (50), 36 (102), 37, 38 (12): the newest map pack holding each. The list for the user:
+  build_macos/strip_dupes/removal_list.txt (every_copy.txt: the tool's table), git-ignored.
+- **Independent check** (Python's zipfile, runs/verify_dupes.py in the scratchpad): each rebuilt archive is its original
+  minus exactly the plan's copies, in order, every kept entry's unpacked bytes the same, CRC test passing; each removed
+  copy's bytes equal the copy the game opens; the engine's lookup simulated for all 20,393 names over the originals (A)
+  and the rebuilt set (B): the same names, each found first in the same archive with the same CRC and size.
+- **Checks** (scratch game folders: A = links to every file of the game folder, B = the same with the 13 rebuilt
+  archives and without localized_English_iw12; a windowed copy of the user's config; build_macos/blackops with the
+  temporary KB_FSLOG logging of every file request, never committed; scratch profiles; OpenAL Soft's wave writer,
+  silent; runs/analyze_dupes.py: every archive file opened in A or B came from the archive the search order predicts,
+  no removed copy opened from its archive, B found each name in the archive A did, the same misses):
+  - **tools/bench_views.py --map all --shots** (33 views), A, B, A again: 13,805 / 13,808 files read, PASS. B against
+    the closer A run 0.02-0.75% of pixels; the views where B differed more than A from A looked at as difference
+    images: Radiation (the rotating crane boom), Hotel (searchlights, lanterns), Firing Range (dust), Nuketown b (the
+    FPS counter), Duga (fog over the whole view: rerun twice per folder, B 0.07-0.15% from A, A 0.15% from A; B's first
+    run caught another moment). Drive-In: A's first run differed 16% from both others (its camera sat elsewhere).
+  - **A match per map, all 26** (TDM, Dom, HQ, CTF, Sab, Dem, S&D in turn, 1-minute limits, the launcher's 7 managed
+    bots, the scripted player cycling the 16 WWII guns), A and B side by side: with the user's settings (13,995 /
+    14,010 files, PASS) and with every kb_ change off (also the newer ones on the command line; developer 1; 14,204 /
+    14,232 files, PASS); the error and warning lines differ only where the play did (the bots' guns, the scripted
+    player's ammo lines, physics warnings, which materials were drawn); no image or sound message in any log.
+    B's first kb_-off run crashed on its 7th map (mp_crisis) in a physics worker: below; its rerun played all 26.
+  - **Dedicated server rotation** (8 test clients, 30-second limits, 60 minutes, 88 map loads each): the same 5,218
+    error and warning lines (the folder name aside), the same misses; a dedicated server reads no images or sounds.
+  - **Menus** (KB_MENU_CMDS in three runs a folder: the main menu, Create a Class, Custom 1, the gun screen, the group
+    list, the five weapon lists, each WWII gun's screen, the secondary's Pistols): the same 3,073 files read (PASS),
+    the 31 screenshot pairs 0.01-0.12% of pixels apart (the cursor spot); B shows the WWII guns' pictures and names.
+  - **The WWII guns in a match** (run_guns.sh: mp_nuked, each gun given, a screenshot with the view reset, 1 s of fire,
+    a reload, kb_infiniteClip 0, only `_plr` sounds, then the 7 kept suppressed sounds), A and B side by side: 3,890 /
+    3,889 files (PASS); the recordings' 27 bursts at the same times (B a second earlier throughout), the guns' peaks
+    within 0.8 dB (-0.4 to -4.9 dBFS), the suppressed sounds within 0.3 dB; the 23 screenshots 0.03-0.34% apart.
+  - **The launcher** (re-identified copies local.kisakblack.launcher.s37testA/B in scratch game folders,
+    KB_LAUNCHER_TEST; the user's settings written first: FFA, 16 bots, fu, damage 20, no arms, but mp_nuked and 1
+    minute): Play, the 16-bot free-for-all, two match ends and map changes (mp_nuked, mp_array, mp_cracked) in both,
+    54 / 53 joins, ~200 kills each, no crash; 6,135 / 6,151 files (PASS). The domains and plists deleted afterwards
+    (the user's own settings untouched).
+  - **The WWII guns file from the backup**: tools/make_dlc_weapons.sh on a scratch game folder with B's archives and
+    zones plus the backup's zombie zones (all 22 backup files and the newer guns file verify against their
+    SHA256SUMS.txt) wrote kb_dlc_weapons.ff byte-identical to the installed one (f1b5ef98...).
+- **A physics crash found on the way** (not from the archives: physics reads no files, and the run's file log passed):
+  SIGSEGV in bp_env_jq_batch_function1 (phys_broad_phase.cpp:897, `minOut = Input[0]`), a worker thread, fault address
+  0x3bc49ba6 (a float's bits). The broad phase's input is on the main thread's stack and phys_task_manager_flush waits
+  for the jobs (IW_task_manager_flush -> jqSafeFlush -> jqFlush); a job run after that wait returned reads the reused
+  stack. jqFlush (tl/jobqueue/jobqueue_all.cpp) ends its wait on `QueuedBatchCount + ExecutingBatchCount == 0`, two
+  plain loads (`ldr w8,[x20]; ldr w9,[x20,#4]`, no barrier) that arm64 may reorder; a worker taking the last batch
+  raises Executing and then lowers Queued (full barriers), so the wait can read Executing's old 0 and Queued's new 0 and
+  return while that batch starts. x86 keeps loads in order (and the compiler emitted Queued first), so the 32-bit
+  builds only work by that luck. The fix (Queued, an acquire fence, then Executing) is session 38's item 5 (the user's
+  requests first); not reproduced on purpose yet. The crash's report: build_macos/strip_dupes/physics_crash_s37.txt.
+- **missingasset.csv** (a check of the plan): first not compared between A and B: the scratch profiles holding them were
+  deleted before the comparison (a slip, told to the user). After the swap the originals were already gone (the user
+  emptied the Trash at 23:02), so it couldn't be redone against them. What stands in for it: the file logs (every
+  archive request, misses included, the same in A and B in every run) and the file's content, which is zone assets
+  looked up by name (a one-map developer run of the cleaned folder: fx 25, material 29, rawfile 10 (the developer
+  .cfg files that never exist), weapon 5, image 4 (`$g16r16`, `$r5g6b5`, `$blacktransparent`, `gold`: code-made or
+  zone names, none of them a duplicated file), menufile 3, xmodel 2): nothing in it comes from an archive's contents.
+  Then the user offered an old backup of the game folder (/Volumes/SamsungUSB/Games/codbo, 11 Oct, before session 33:
+  all 57 original archives, 6.7 GB; read only, linked): a scratch folder with those archives and the game folder's
+  zones against the cleaned game folder, one developer-mode map each (mp_nuked, 7 managed bots, the kb_ changes off,
+  side by side): missingasset.csv byte-identical (78 lines), no crash, 9 joins each. That compares the cleaned folder
+  with the retail archives, so it covers jobs A, B and C together.
+- **Applied to the game folder** (the user's "yes" after the list and the results): nothing running (pgrep); the plan
+  made again from the real folder right before was the tested one row for row and its 13 archives byte-identical to
+  the tested ones; verify_dupes.py against the real folder passed; the 13 copied in as `.new` and checked by SHA-256;
+  then one at a time the original to the Trash through Finder and the `.new` renamed right after; then
+  localized_English_iw12 to the Trash. After: 42 archives, the 13 equal to the rebuilt ones, no `.new` left;
+  `strip_unused.py <game> - --check` all 20,415 files ok (21,217 - 802); verify_dupes.py with the 14 originals from the
+  Trash: every installed archive is its original minus exactly the list, every name found in the same archive with the
+  same bytes. From the folder (build_macos/blackops with the logging, scratch fs_h, windowed): a dedicated server on
+  mp_nuked with 4 test clients and a 2-minute client match with 7 managed bots and the scripted player cycling the WWII
+  guns: no crash, every file from the predicted archive, no removed copy asked for, only the developer files that never
+  exist missed. Then the logging removed (git checkout of com_files.cpp; never committed), rebuilt, and the server
+  again: the same 156 lines, the bots join. The game folder: 4.2 -> 4.1 GB (du). The user emptied the Trash at 23:02.
+  The installed `blackops` is still session 34's (28f22cab); this session changed only a tool and the notes.
+- **Seen on the way**: a link to an archive that no longer exists (a scratch folder made after the Trash was emptied)
+  crashes the game at startup: FS_LoadZipFile fails, FS_LoadFakeIwdFile opens the same path (NULL) and
+  FS_FileGetFileSize calls ftello on it (com_files.cpp); an unreadable .iwd in main/ should be skipped instead (not
+  fixed; Open items). `WARNING: Could not load weapon variant file 'python_...'` (the Python's attachment variants)
+  prints in every developer run, with or without the change. One crash in about 4.5 hours of client play this session (none in session 36's similar runs).
 
 ## Decisions (session 36)
 

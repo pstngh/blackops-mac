@@ -232,7 +232,10 @@ same-format placeholders for the ones multiplayer names; the user's game folder 
 Decisions session 33). `tools/strip_unused.py <game dir> <out dir> [--dry-run]` rebuilds main/*.iwd without the
 images and sounds no zone, executable or archive text names (the list with every file's reason in
 `<out dir>/strip_unused.txt`; `<game dir> - --check` unpacks every archive file as the engine reads it; HANDOFF,
-Decisions session 35). Moving the game folder's files to the Trash: `/usr/bin/trash` refuses most of them (the folder is
+Decisions session 35). `tools/strip_dupes.py <game dir> <out dir> [--dry-run]` rebuilds them without the second copies
+of images and sounds stored in more than one archive (only copies byte-identical to the one the game opens, which
+stays: every `iw_` archive is searched before any `localized_` one, the highest-numbered first; the list in
+`<out dir>/strip_dupes.txt`; HANDOFF, Decisions session 37). Moving the game folder's files to the Trash: `/usr/bin/trash` refuses most of them (the folder is
 in iCloud Drive); Finder works: `osascript -e 'tell application "Finder" to delete (POSIX file "<path>" as alias)'`. `tools/iwi_to_png.py <game dir> <out dir> <image>...` converts the game's images
 (`images/<name>.iwi` in main/*.iwd: menu art, emblems, rank and prestige icons) to PNGs.
 
