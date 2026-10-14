@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 40)
+## Status (2026-10-14, session 41)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -556,6 +556,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   25db4b27..., the same bytes; the shader library step still stops at the missing Metal Toolchain); the installed
   `blackops` holds the new dvar text and loads no Homebrew library. The previous one (session 38's, 898ee134...) is in
   build_macos/scope_s40/revert/blackops: copying it back undoes the install. Pushed at the user's request.
+- **Black Ops' own guns checked** (session 41, the user: "the stock BO guns should be have their default view (stock view,
+  unchanged)"): they already are; nothing changed in the code. With the user's settings and with every kb_ change off,
+  the FAMAS (ACOG and plain), AK-47 and AK74u (with and without suppressor), M1911 and M16 are drawn in the same place
+  (pictures under 1% apart, the idle sway; only the WWII Thompson moves, kb_gunPlacement), arms shown or hidden, at field
+  of view 80 and 65. And the pose is the original game's: the Call of Duty wiki's pictures of the original FAMAS and AK-47
+  line up with the port's at the same view within a few pixels (Decisions session 41). The original's options menu sets
+  the same dvar as the port (cg_fov_default), so the user's FOV 80 places the gun as the original at 80 would. What makes
+  the user's screenshot (the FAMAS with an ACOG) look odd is the hidden arms (the launcher's "Show arms" off): the back of
+  the gun and the grip that the hands normally cover show. Pictures sent to the user, asked what still looks wrong.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -746,7 +755,7 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
 item 2 checked in session 39 (no fault found; the user's answer is pending), the user's new scope request (2b) done in
-session 40, items 3-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
+session 40, item 3 checked in session 41 (no fault found; the user's answer is pending), items 4-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
 hand-off**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
@@ -791,6 +800,11 @@ hand-off**:
    shot0001 a Black Ops bullpup rifle with a sight, held to the right; shot0004 the WWII FG42, centred and low, its
    sights near the crosshair. Find which guns look wrong and why (no arms; an ADS pose partly
    applied with kb_noAds; the WWII view models' offsets: kb_gunPlacement moves only the Thompson).
+   **Checked in session 41: Black Ops' guns are already the original's** (Status, Decisions session 41); the user was sent
+   build_macos/guns_s41/famas_original_vs_port.png, ak47_original_vs_port.png and your_guns_arms_hidden_and_shown.png and
+   asked what still looks wrong. If they name a gun and what looks wrong, look at that (their settings, that gun, a
+   picture); turning the arms on is their launcher's "Show arms"; moving a Black Ops gun as the Thompson was moved
+   (kb_gunPlacement's table) would no longer be the stock view, so only on their word.
 4. **The log** ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
    on by default in the first place"): the launcher sends the game's console output to `<game>/blackops.log`
    (Launcher.swift, made anew at each Play): 305 MB after one session, 1,915,571 of its 2,085,632 lines `ASSERT
@@ -807,7 +821,7 @@ hand-off**:
 5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
    while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
    runs. The session 38 task card lists all five in this order (the user's requests first); session 38 did item 1 and
-   its task card lists 2-5; session 40 did 2b and its task card lists 3-5.
+   its task card lists 2-5; session 40 did 2b and its task card lists 3-5; session 41 did 3 and its task card lists 4-5.
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1469,6 +1483,48 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 41)
+
+**Black Ops' own guns held as in the original** (item 3 of Next steps; Status). Read-only work and test runs; no code changed.
+- **What the port changes about the first-person gun**, read in the code: kb_gunPlacement (CG_KbGunPlacement) and
+  kb_wwiiGunMovement (BG_KbWwiiGun) match the WWII names only (the Thompson's offset; the 15 WWII guns' walking motion);
+  kb_aaLean rolls and drops the gun only while leaning; kb_sprintFire keeps the weapon out of the sprint states 27-29, so
+  BG_CalculateWeaponMovement_Base_Internal_WeaponState never adds vSprintOfs/vSprintRot (the gun stays in its hip pose with
+  the sprint bob); kb_noAds keeps the hip pose; cg_drawArms (the port's, session 9) hides model 0's bones only. Nothing
+  else touches the view model's placement; the renderer draws it with the world's projection (only the near plane differs,
+  r_znear_depthhack).
+- **Field of view**: session 39's note was half right. The decompiled registration's cg_fov_default default is 65 (range
+  65-80); the port made it and cg_fov 80 in session 9 (81a2144d). The gun's FOV shift (CG_CalculateWeaponMovement_Debug:
+  cg_gun_fovcomp_x -2 times (cg_fov - cg_fov_default) / (cg_fovCompMax 85 - cg_fov_default), clamped 0-1) is 0 whenever
+  cg_fov equals cg_fov_default, which the original keeps by copying cg_fov_default into cg_fov at each spawn
+  (CG_SetThirdPerson) and the port at each change; the original's options slider writes cg_fov_default (`listzone ui_mp
+  menu options_graphics`: item 132, type 8, dvar cg_fov_default, "@PLATFORM_FOV_CAPS"). So at the user's 80 both games
+  place the gun the same (printed in a run: cg_fov 80, cg_fov_default 80, cg_fovCompMax 85, cg_gun_x 0).
+- **Pictures** (release client; a scratch game folder with links and the user's config made windowed at 1280x720, their
+  16:9; scratch profiles with a copy of their mpstats.dat, class Custom 2; mp_cairo dm, no bots; `setviewpos -1515 870 116
+  334`, each gun given alone with `take all;give <gun>` and pictured 4 s later; the harness: build_macos/guns_s41/harness,
+  run_view.sh, tga_cmp.py, compose.py):
+  - The user's settings against every kb_ change that could touch a gun off (noAds, sprintFire, aaLean, gunPlacement,
+    wwiiGunMovement, sniperScope, staticCrosshair and the class, block and ammo ones): famas_acog_mp, ak47_silencer_mp,
+    ak74u_silencer_mp, m1911_mp, famas_mp, m16_mp 0.16-0.66% of the gun area's pixels differ (the idle sway), the Thompson
+    12% (kb_gunPlacement). Arms shown: 6-17% differ, all of it the sleeves (autoassign put the two runs on different
+    teams, so different hands); the guns sit in the same place.
+  - FOV 80 against 65: the gun scales with the view as one object (scope 1.3x larger at 65, tan 40 / tan 32.5 = 1.32).
+    An earlier pair seemed to show the gun farther at 65; a rerun of both with the dvars printed showed the plain scaling
+    (that frame was a different moment of the sway).
+  - **Against the original game**: the Call of Duty wiki's first-person pictures (callofduty.fandom.com, "Famas BO.png"
+    668x350 and "AK-47 BO.png" 756x368, the hip pose with arms, black background; read through the built-in browser at
+    native size, kept in build_macos/guns_s41, game art, not in git). The port at FOV 65 with arms: the FAMAS crop of a
+    1280x720 frame at (570, 370) matches the wiki picture within a few pixels (front and rear sights, selector dial,
+    cocking handle, the left hand); the AK-47 matches a 1600x900 frame's crop at (582, 470) (the wiki picture was taken
+    at a larger size; at 1280x720 it is 1.25x the port's): sights, dust cover ridges, rear end, hand. Only the sleeves
+    differ (factions). build_macos/guns_s41/famas_original_vs_port.png, ak47_original_vs_port.png.
+- **The user's screenshot**: shot0001 is the FAMAS with ACOG at the hip in its own pose (a probe run gave the same
+  picture); with the arms hidden the stock's top, the pistol grip and trigger area show, which the right hand and arm
+  cover in the original. Sent build_macos/guns_s41/your_guns_arms_hidden_and_shown.png (their FAMAS ACOG, AK-47 and AK74u
+  with suppressors, M1911; their settings, arms hidden above and shown below) with the two comparisons and asked what
+  still looks wrong; no change made.
 
 ## Decisions (session 40)
 
