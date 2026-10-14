@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 38)
+## Status (2026-10-14, session 39)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -532,6 +532,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   session 34's only in the zone-writing tool (the old one saved there too, 601d9cc5...). A class saved with the
   suppressor then gives the plain Thompson (BG_UnlockablesGetItemAttachment: an attachment number past the row's list
   is "none", with a warning line).
+- **Sniper scopes checked** (session 39, the user: "snipers dont seem to ahve a scope ? (i only tested the kar98 sniper)",
+  then "scoped"): no fault found. With the user's own config (their MOUSE2 `+toggleads_throw`, every kb_ setting), their
+  own custom classes (a copy of their stats, Custom 1 set to the gun) and the launcher's 16-bot free-for-all on Havana, the
+  Scoped Kar98k scopes in at every press, stays scoped through the bolt after a shot, while leaning and walking, and after
+  cycling through all the class guns; so do the L96A1 and (with kb_blockGuns 0) the WA2000, Dragunov and PSG1. The plain
+  Kar98k (iron sights) never aims with kb_noAds, as chosen in session 32. What the user most likely met: Create a Class
+  lists "Kar98k" right above "Scoped Kar98k" with the same picture, a rifle without a scope (the World at War data has no
+  picture of the scoped one). Asked the user at the hand-off (Decisions session 39); nothing changed in the code.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -721,7 +729,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 ## Next steps (in order)
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
-items 2-5 next (session 39 onwards, one piece of work each, with a hand-off)**:
+item 2 checked in session 39 (no fault found; the user's answer is pending), items 3-5 next (one piece of work each, with
+a hand-off)**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
    37's d2c71308).
@@ -736,7 +745,10 @@ items 2-5 next (session 39 onwards, one piece of work each, with a hand-off)**:
    kb_noAds on, kb_sniperScope (session 32) should let the L96A1, WA2000, Dragunov, PSG1 and Scoped Kar98k
    (scopedkar98k_mp) scope in; the plain WWII Kar98k (kar98k_mp) has iron sights only. Find which one the user picked
    (asked: "scoped", the Scoped Kar98k, so it is that one that doesn't scope in) and check each scoped rifle with
-   the user's settings.
+   the user's settings. **Checked in session 39: every scoped rifle scopes in** (Status, Decisions session 39); the user
+   was shown the two Kar98ks in Create a Class (same picture, no scope drawn) and asked what they saw. If they answer: a
+   rename or hiding of the iron-sighted Kar98k/Arisaka in the sniper list is theirs to choose; a case that still fails
+   needs their steps (the temporary aim-state log: build_macos/scope_s39/kb_adslog.patch, `KB_ADSLOG=1`).
 3. **Weapons held wrong** ("some weapons seem to have messed up views", the user's screenshots
    main/screenshots/shot0001.tga and shot0004.tga, 13 Oct 19:57, Havana, arms hidden: the launcher's "show arms" is
    off, cg_drawArms 0; the user then trashed that folder: PNG copies in build_macos/user_screens_s37, git-ignored):
@@ -1181,6 +1193,10 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 39: Create a Class's class list (cac_main, the summary on the right of Custom 1-10) still shows FRAG,
+WILLY PETE and SELECT EQUIPMENT icons with kb_noGrenades (session 34 hid them in the class's own screen, not there); the
+two Kar98ks share one picture (no picture of the scoped one exists). Not asked for.
+
 Seen in session 38: the WWII Thompson's first-person model has its tag_flash 3.8 units behind its muzzle (x 14.38, the
 barrel ends at 18.17; session 31's note), so its muzzle flash starts inside the barrel, as in the zombie game; with the
 suppressor the suppressed flash is inside the can, but multiplayer's suppressed guns (MP5K) show no flash in first person
@@ -1417,6 +1433,44 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 39)
+
+**Sniper rifles' scopes** (item 2 of the user's requests; Status). Read-only work and test runs; no code changed.
+- **How the aim button works** (cl_input_mp.cpp): `+toggleads_throw` (the user's MOUSE2) presses the throw button
+  (playersKb 29) and runs IN_ToggleADS, which flips `usingAds` on the press (a latch waits for the release); CL_KeyMove
+  sets the command's ADS bit (11) from `usingAds` (or `+speed` held). `usingAds` goes back to 0 on a weapon switch through
+  the client's selection (CG_SelectWeapon's path, not an alt switch), at a respawn, a map's start, and on EV_RESET_ADS
+  (PM_ExitAimDownSight: sprinting, an offhand, swimming, prone moves). With kb_noAds a press on another gun flips
+  `usingAds` silently (nothing visible); the next switch resets it. pmove (PM_UpdateAimDownSightFlag) lets the ADS flag
+  through only for the scoped snipers (BG_KbNoAds -> BG_KbSniperScope, the name's first token).
+- **Tests** (scratch game folder: links to the game folder's main, zone, lib and the user's config_mp.cfg made windowed;
+  scratch fs_h holding a copy of the user's mpstats.dat, Custom 1's primary set with equipClassItem; build_macos/blackops;
+  presses through the bind with `kb_key MOUSE2`; a temporary aim-state log, `KB_ADSLOG=1`, printing usingAds, the
+  throw button, the latch, fWeaponPosFrac, the weapon and state and the ADS flag on each change, saved as
+  build_macos/scope_s39/kb_adslog.patch and removed):
+  - The user's classes (statReadDDL): Custom 1 Thompson (25) with its suppressor slot 0, 2 item 26 (muzzle 9), 3 item 12
+    (muzzle 7), 4 MP40 (59), 5 STG-44 (36); none holds the Scoped Kar98k (82), so they had it in a class at the time or
+    picked another. Classes 6-10 aren't readable as customclass6-10 (session 32's note).
+  - mp_cairo (Havana) dm, no bots: the Scoped Kar98k at the hip (its scope on the model), MOUSE2: the scope overlay; again:
+    the hip; then weapnext through the other five guns with a press on each (no aim, as kb_noAds wants) and back to the
+    Kar98k: the scope again.
+  - The launcher's command line (16 managed fu bots, FFA, cg_drawArms 0, kb_damagePercent 20, kb_infiniteClip 1),
+    110 s: fWeaponPosFrac 0 -> 1 in ~0.3 s at each of 8 presses, a shot while scoped (state 6, the bolt 7) stays at 1 and
+    shows the scope again after the bolt, a press during a hip shot's bolt scopes in when the bolt ends, scoped while
+    leaning and while walking forward.
+  - Each scoped rifle (hip, press, a shot, the bolt, press): L96A1 (43) with the user's settings, the Scoped Kar98k (82),
+    the Dragunov (42), PSG1 (44) and WA2000 (45) with kb_blockGuns 0: all reach 1.0 and draw their scope overlay after
+    the shot too; the plain Kar98k (46) stays at 0 (iron sights, kb_noAds).
+  - Create a Class by mouse (main menu -> CREATE A CLASS -> Custom 1 -> Primary -> Sniper Rifles at 172 332 in a
+    1024x768 window): L96A1, Kar98k, Scoped Kar98k, Arisaka; the two Kar98ks show the same picture (hud_icon_kar98k: a
+    rifle without a scope; the source zones' scoped Kar98k names the same icon and the backup's zones hold no other Kar98k
+    picture), the names differ. A click on Scoped Kar98k (160 278) saves 82.
+- **Not changed**: the scope works; the likely confusion is the list (the plain Kar98k first, the same picture). The
+  user was sent build_macos/scope_s39/create_a_class_two_kar98k.png and in_game_scoped_vs_plain.png and asked what they
+  saw (the hand-off). Session 32's toggle out of step right after a `take all`/`give` swap in a test was not seen in
+  these runs and not looked into further (the scripts' switchToWeapon reaches the client's selection through a server
+  command, cg_servercmds_mp.cpp, so it resets `usingAds` too).
 
 ## Decisions (session 38)
 
