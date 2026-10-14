@@ -8,7 +8,9 @@
 // them on only in developer blocks), so the launcher sets them. Friendly bots are
 // on allies and the player joins allies through KB_CMDS (linux_main.cpp).
 // Gun damage is kb_damagePercent (every gun but the sniper rifles, everyone's), Never reload
-// kb_infiniteClip (the player's magazines never empty).
+// kb_infiniteClip (the player's magazines never empty). Save logs (off by default): the game's
+// output into blackops.log next to the app, and the game's own main/console_mp.log and
+// main/games_mp.log (kb_logFiles); off, the game writes no log file.
 //
 // Build: tools/launcher/build.sh <game dir>
 import AppKit
@@ -109,6 +111,7 @@ struct LauncherView: View {
     @AppStorage("showArms") private var showArms = true     // cg_drawArms
     @AppStorage("damagePercent") private var damagePercent = 100    // kb_damagePercent
     @AppStorage("neverReload") private var neverReload = true      // kb_infiniteClip
+    @AppStorage("saveLogs") private var saveLogs = false           // blackops.log, kb_logFiles
     @State private var error: String?
 
     private let installedMapPackMaps: [GameMap] = {
@@ -175,6 +178,12 @@ struct LauncherView: View {
                 Section("View") {
                     Toggle("Show arms", isOn: $showArms)
                 }
+                Section {
+                    Toggle("Save logs", isOn: $saveLogs)
+                } footer: {
+                    Text("The game's messages, in blackops.log in the game folder. Off: no log files, and a crash leaves no report.")
+                        .foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .scrollDisabled(true)
@@ -189,7 +198,7 @@ struct LauncherView: View {
             .padding([.horizontal, .bottom], 20)
             .padding(.top, 4)
         }
-        .frame(width: 440, height: 760)
+        .frame(width: 440, height: 840)
         .alert("Can't start the game", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: {
@@ -261,7 +270,7 @@ struct LauncherView: View {
         var environment = ProcessInfo.processInfo.environment
         // First-person arms (cg_drawArms 0: the weapon alone), gun damage and never reloading; the game saves them.
         process.arguments = ["+set", "cg_drawArms", showArms ? "1" : "0", "+set", "kb_damagePercent", String(min(max(damagePercent, 5), 100)),
-                             "+set", "kb_infiniteClip", neverReload ? "1" : "0"]
+                             "+set", "kb_infiniteClip", neverReload ? "1" : "0", "+set", "kb_logFiles", saveLogs ? "1" : "0"]
         if match {
             process.arguments! += matchArguments()
             // Join the team the friendly bots are on (allies); free-for-all has one.
@@ -269,12 +278,17 @@ struct LauncherView: View {
             environment["KB_CMDS"] = "3:openscriptmenu team_marinesopfor \(team)"
         }
         process.environment = environment
-        // The game's console output, for a crash report.
-        let logURL = folder.appendingPathComponent("blackops.log")
-        FileManager.default.createFile(atPath: logURL.path, contents: nil)
-        if let log = try? FileHandle(forWritingTo: logURL) {
-            process.standardOutput = log
-            process.standardError = log
+        // The game's console output, for a crash report; without Save logs, nowhere.
+        if saveLogs {
+            let logURL = folder.appendingPathComponent("blackops.log")
+            FileManager.default.createFile(atPath: logURL.path, contents: nil)
+            if let log = try? FileHandle(forWritingTo: logURL) {
+                process.standardOutput = log
+                process.standardError = log
+            }
+        } else {
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
         }
         do {
             try process.run()

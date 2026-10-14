@@ -165,6 +165,7 @@ const dvar_t *com_developer;
 const dvar_t *com_developer_script;
 const dvar_t *com_script_debugger_smoke_test;
 const dvar_t *com_logfile;
+const dvar_t *kb_logFiles;
 //const dvar_t *com_statmon;
 const dvar_t *com_timescale;
 const dvar_t *dev_timescale;
@@ -415,7 +416,7 @@ void __cdecl Com_PrintMessage(int channel, char *msg, int error)
                 Monkey_ComPrintHook(msg);
                 Sys_LeaveCriticalSection(CRITSECT_CONSOLE);
             }
-            if ( channel != 7 && com_logfile && com_logfile->current.integer )
+            if ( channel != 7 && com_logfile && com_logfile->current.integer && (!kb_logFiles || kb_logFiles->current.enabled) )
                 Com_LogPrintMessage(channel, msg);
         }
     }
@@ -2128,6 +2129,10 @@ void Com_InitDvars()
                                     "Write to log file - 0 = disabled, 1 = async file write, 2 = Sync every write");
     if ( com_logfile && !com_logfile->current.integer )
         Dvar_SetInt((dvar_s *)com_logfile, 1);
+    // The port's: no main/console_mp.log or main/games_mp.log (the launcher passes 0 when its log setting is off;
+    // HANDOFF, Decisions session 42). logfile itself stays on: it also puts the scripts in developer mode
+    // (Com_SetScriptSettings), as in the original.
+    kb_logFiles = _Dvar_RegisterBool("kb_logFiles", 1, 0, "Write the log files main/console_mp.log and main/games_mp.log");
     com_statmon = _Dvar_RegisterBool("com_statmon", 0, 0, "Draw stats monitor");
     com_timescale = _Dvar_RegisterFloat("com_timescale", 1.0, 0.001, 10.0, 0x11C0u, "Scale time of each frame");
     dev_timescale = _Dvar_RegisterFloat("timescale", 1.0, 0.001, 10.0, 0x180u, "Scale time of each frame");

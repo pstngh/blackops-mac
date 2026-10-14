@@ -407,8 +407,48 @@ LABEL_12:
     }
 }
 
+#ifndef _WIN32
+// The port's D3D9 layers write only TGA (F12's screenshotJpeg wrote TGA data under a .jpg name): the window's
+// pixels through the engine's own JPEG writer instead, as the save-game shots, written where R_TakeScreenshot writes
+// (this runs on the render thread, where FS_WriteFile may not; HANDOFF, Decisions session 42).
+static void R_TakeScreenshotJpg(char *filename)
+{
+    char ospath[260];
+    const int width = vidConfig.displayWidth;
+    const int height = vidConfig.displayHeight;
+    unsigned __int8 *pixels = (unsigned __int8 *)Z_Malloc(3 * width * height, "R_ScreenShot", 23);
+    unsigned __int8 *out = (unsigned __int8 *)Z_Malloc(3 * width * height, "R_ScreenShot", 23);
+    if ( R_GetFrontBufferData(0, 0, width, height, 3, pixels) )
+    {
+        for ( int i = 0; i < 3 * width * height; i += 3 )
+        {
+            const unsigned __int8 blue = pixels[i];    // the surface's B, G, R
+            pixels[i] = pixels[i + 2];
+            pixels[i + 2] = blue;
+        }
+        R_SaveJpg(0, 90, width, height, pixels, out);
+        FS_BuildOSPath((char *)fs_homepath->current.string, fs_gamedir, filename, ospath);
+        if ( !FS_CreatePath(ospath) )
+        {
+            FILE *f = fopen(ospath, "wb");
+            if ( f )
+            {
+                fwrite(out, 1, hackSize, f);
+                fclose(f);
+            }
+        }
+    }
+    Z_Free((char *)out, 23);
+    Z_Free((char *)pixels, 23);
+}
+#endif
+
 void __cdecl R_TakeScreenshotJpgCallback(char *param)
 {
+#ifndef _WIN32
+    R_TakeScreenshotJpg(param);
+    return;
+#endif
     R_TakeScreenshot(param, D3DXIFF_JPG);
 }
 

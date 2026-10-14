@@ -33,7 +33,7 @@ void __cdecl R_SaveJpg(
 
     cinfo.err = jpeg_std_error(&jerr, Jpeg_Error, Jpeg_Print);
     jpeg_set_jpeg_alloc(Z_MallocJpeg, Z_FreeJpeg);
-    jpeg_CreateCompress(&cinfo, 62, 0x170u);
+    jpeg_CreateCompress(&cinfo, 62, sizeof(jpeg_compress_struct));    // 0x170 on i386
     if ( output_buffer )
     {
         out = output_buffer;
@@ -57,7 +57,10 @@ void __cdecl R_SaveJpg(
         jpeg_write_scanlines(&cinfo, row_pointer, 1u);
     }
     jpeg_finish_compress(&cinfo);
-    FS_WriteFile(filename, (char *)out, hackSize);
+    // No filename: the port's screenshotJpeg (r_screenshot.cpp), on the render thread, where FS_WriteFile may not run,
+    // writes the hackSize bytes of output_buffer itself.
+    if ( filename )
+        FS_WriteFile(filename, (char *)out, hackSize);
     if ( !output_buffer )
         Hunk_FreeTempMemory((char *)out);
     //jpeg_destroy_decompress(&cinfo); // bug?
@@ -69,9 +72,11 @@ void __cdecl jpegDest(jpeg_common_struct *cinfo, unsigned __int8 *outfile, int s
 {
     my_destination_mgr *dest; // [esp+0h] [ebp-4h]
 
-    if ( !cinfo[1].err )
-        cinfo[1].err = (jpeg_error_mgr *)cinfo->mem->alloc_small(cinfo, 0, 28);
-    dest = (my_destination_mgr *)cinfo[1].err;
+    // cinfo is a jpeg_compress_struct: its dest (cinfo[1].err in the decompile), the manager's own size (28 bytes on
+    // i386; 64-bit wrote past a 28-byte block; HANDOFF, Decisions session 42).
+    if ( !((jpeg_compress_struct *)cinfo)->dest )
+        ((jpeg_compress_struct *)cinfo)->dest = (jpeg_destination_mgr *)cinfo->mem->alloc_small(cinfo, 0, sizeof(my_destination_mgr));
+    dest = (my_destination_mgr *)((jpeg_compress_struct *)cinfo)->dest;
     dest->pub.init_destination = init_destination;
     dest->pub.empty_output_buffer = (jpeg_boolean (__cdecl *)(jpeg_compress_struct *))Flame_GetLocalClientSourceRange;
     dest->pub.term_destination = term_destination;
@@ -90,7 +95,7 @@ void __cdecl init_destination(jpeg_compress_struct *cinfo)
 
 void __cdecl term_destination(jpeg_compress_struct *cinfo)
 {
-    hackSize = cinfo->dest[1].free_in_buffer - cinfo->dest->free_in_buffer;
+    hackSize = ((my_destination_mgr *)cinfo->dest)->size - cinfo->dest->free_in_buffer;    // cinfo->dest[1].free_in_buffer on i386
 }
 
 void __cdecl Jpeg_Print(char *message)
@@ -110,7 +115,7 @@ jpeg_decompress_struct *__cdecl R_ReadJpgSetup(
     s_read_cinfo.err = jpeg_std_error(&s_read_jerr, Jpeg_Error, Jpeg_Print);
     jpeg_set_jpeg_alloc(Jpeg_HunkAlloc, BLOPS_NULLSUB);
     s_hunk_mark = Hunk_SetMark();
-    jpeg_CreateDecompress(&s_read_cinfo, 62, 0x1B8u);
+    jpeg_CreateDecompress(&s_read_cinfo, 62, sizeof(jpeg_decompress_struct));    // 0x1B8 on i386
     jpeg_memory_src(&s_read_cinfo, data, dataLen);
     jpeg_read_header(&s_read_cinfo, 1u);
     jpeg_start_decompress(&s_read_cinfo);

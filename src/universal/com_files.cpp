@@ -2222,6 +2222,10 @@ iwd_t *__cdecl FS_LoadFakeIwdFile(char *fakeiwdfile, const char *basename)
     buf = 0;
     f = FS_FileOpenReadBinary(fakeiwdfile);
     iwd = 0;
+    // An archive that can't be opened (a dangling link) is skipped; ftell on NULL crashed here (HANDOFF, Decisions
+    // session 42).
+    if ( !f )
+        return 0;
     len = FS_FileGetFileSize(f);
     if ( len >= 8 )
     {

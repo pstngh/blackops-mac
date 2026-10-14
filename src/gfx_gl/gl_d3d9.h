@@ -66,7 +66,9 @@ public:
 
     // --- Frame / target (gl_d3d9.cpp) ---
     HRESULT WINAPI TestCooperativeLevel() override { KB_SPEC("TestCooperativeLevel %s", KB_SpecThread()); return D3D_OK; }
-    UINT    WINAPI GetAvailableTextureMem() override { KB_SPEC("GetAvailableTextureMem %s", KB_SpecThread()); return 256u * 1024 * 1024; }
+    // No portable query; any GPU this layer runs on has more than 1 GB. Automatic texture detail (R_SetPicmip) follows
+    // it: the old 256 MB gave half-resolution bump and specular maps.
+    UINT    WINAPI GetAvailableTextureMem() override { KB_SPEC("GetAvailableTextureMem %s", KB_SpecThread()); return 1024u * 1024 * 1024; }
     HRESULT WINAPI GetDeviceCaps(D3DCAPS9 *pCaps) override;
     HRESULT WINAPI Reset(D3DPRESENT_PARAMETERS *pp) override;
     HRESULT WINAPI Present(const RECT *, const RECT *, HWND, const RGNDATA *) override;

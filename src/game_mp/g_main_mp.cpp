@@ -753,7 +753,7 @@ void __cdecl    G_InitGame(int levelTime, int randomSeed, int restart, int regis
 
     G_srand(randomSeed);
 
-    if (*(_BYTE *)g_log->current.string)
+    if (*(_BYTE *)g_log->current.string && kb_logFiles->current.enabled)
     {
         if (g_logSync->current.enabled)
             FS_FOpenFileByMode((char *)g_log->current.string, &level.logFile, FS_APPEND_SYNC);

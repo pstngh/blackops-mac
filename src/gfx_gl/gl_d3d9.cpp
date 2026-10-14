@@ -46,6 +46,24 @@ static void FillDefaultCaps(D3DCAPS9 *c) {
     // grazing-angle walls/fences are under-biased and render THROUGH the geometry. Advertising
     // it restores the engine's intended slope+constant bias for both decals and shadowmaps.
     c->RasterCaps |= 0x02000000;  // D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS
+    // What R_CheckDxCaps looks for (r_caps.cpp) and the layer draws; without these each start printed some 30 "Video card
+    // or driver doesn't support ..." lines. None of them is read anywhere else. Not the fullscreen gamma ramp, stencil or
+    // separate alpha blending, which this layer doesn't do (their messages stay).
+    c->Caps2 |= 0x20000000;                 // D3DCAPS2_DYNAMICTEXTURES
+    c->Caps3 |= 0x00000120;                 // D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD | COPY_TO_VIDMEM
+    c->PresentationIntervals |= 0x80000001; // D3DPRESENT_INTERVAL_IMMEDIATE | ONE
+    c->DevCaps |= 0x00098400;               // DRAWPRIMITIVES2EX | HWTRANSFORMANDLIGHT | DRAWPRIMTLVERTEX | HWRASTERIZATION
+    c->PrimitiveMiscCaps |= 0x000008F2;     // MASKZ | CULLNONE/CW/CCW | COLORWRITEENABLE | BLENDOP
+    c->ZCmpCaps = c->AlphaCmpCaps = 0xFF;   // every D3DCMP function
+    c->SrcBlendCaps = c->DestBlendCaps = 0x3FF;
+    c->TextureCaps |= 0x00004805;           // PERSPECTIVE | ALPHA | CUBEMAP | MIPMAP
+    c->TextureFilterCaps |= 0x03030300;     // MIN/MAG/MIP point and linear
+    c->CubeTextureFilterCaps |= 0x03000300; // MIN/MAG point and linear
+    c->TextureAddressCaps |= 0x5;           // WRAP | CLAMP
+    c->DevCaps2 |= 0x1;                     // D3DDEVCAPS2_STREAMOFFSET
+    c->DeclTypes |= 0x1;                    // D3DDTCAPS_UBYTE4N
+    c->StretchRectFilterCaps |= 0x200;      // D3DPTFILTERCAPS_MINFLINEAR
+    c->MaxVolumeExtent = 256;               // GL 3's guaranteed 3D texture size
 }
 
 // The most samples a multisampled renderbuffer may have (GL_MAX_SAMPLES; Apple

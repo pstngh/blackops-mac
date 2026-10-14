@@ -63,10 +63,13 @@ the picture in Contents/Resources and a rebuild without one reuses it: HANDOFF, 
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
-normal` (easy/normal/hard/fu; the bots arrive ~10 s in), `+set kb_damagePercent <n>` ("Gun damage") and `+set
-kb_infiniteClip 0/1` ("Never reload"), both at every start. `KB_LAUNCHER_TEST=<dir>`
+normal` (easy/normal/hard/fu; the bots arrive ~10 s in), `+set kb_damagePercent <n>` ("Gun damage"), `+set
+kb_infiniteClip 0/1` ("Never reload") and `+set kb_logFiles 0/1` ("Save logs", off by default: off, the game's output
+goes nowhere and it writes no main/console_mp.log or main/games_mp.log; on, the output goes to `blackops.log` next to the
+app; kb_logFiles is 1 in a game started by hand), all at every start. `KB_LAUNCHER_TEST=<dir>`
 makes the app save its window as `<dir>/launcher.png` and press Play itself; run it
-in a scratch copy of the game folder (links to `main`, `zone`, `lib` and a copy of
+in a scratch copy of the game folder (`main/` a real folder of links to the archives, as the game writes logs and
+screenshots into `<folder>/main`; links to `zone`, `lib` and a copy of
 `blackops`), as the app starts the `blackops` next to it with that folder's profile.
 
 A client and a dedicated server as separate processes (UDP over loopback): start

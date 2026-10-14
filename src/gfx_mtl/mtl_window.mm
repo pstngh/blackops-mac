@@ -169,7 +169,7 @@ void MetalWindow::setVSync(bool on) {
 extern "C" IDirect3D9 *WINAPI GL_Direct3DCreate9(UINT sdk);
 extern "C" HRESULT WINAPI GL_D3DXSaveSurfaceToFileA(const char *file, D3DXIMAGE_FILEFORMAT fmt,
                                                      IDirect3DSurface9 *surface, const void *palette, const RECT *rect);
-HRESULT MTL_SaveSurfaceToFile(const char *file, IDirect3DSurface9 *surface);
+HRESULT MTL_SaveSurfaceToFile(const char *file, IDirect3DSurface9 *surface, const RECT *rect);
 
 static bool KB_UseMetal() {
     static int use = -1;
@@ -192,6 +192,6 @@ extern "C" IDirect3D9 *WINAPI Direct3DCreate9(UINT sdk) {
 
 extern "C" HRESULT WINAPI D3DXSaveSurfaceToFileA(const char *file, D3DXIMAGE_FILEFORMAT fmt, IDirect3DSurface9 *surface,
                                                   const void *palette, const RECT *rect) {
-    if (KB_UseMetal()) return MTL_SaveSurfaceToFile(file, surface);
+    if (KB_UseMetal()) return MTL_SaveSurfaceToFile(file, surface, rect);
     return GL_D3DXSaveSurfaceToFileA(file, fmt, surface, palette, rect);
 }

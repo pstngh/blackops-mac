@@ -159,6 +159,11 @@ unsigned int __cdecl R_VideoMemoryForDevice(_GUID *lpGUID)
     DWORD total; // [esp+20h] [ebp-8h] BYREF
     DWORD free; // [esp+24h] [ebp-4h] BYREF
 
+#ifndef _WIN32
+    // No DirectDraw on macOS and Linux: the D3D9 layer's figure, for the primary device (else "Failed to get video
+    // memory size." at each start; HANDOFF, Decisions session 42).
+    return !lpGUID && dx.device ? dx.device->GetAvailableTextureMem() : 0;
+#endif
     v3 = DDraw::Instance();
     if ( v3->pDirectDrawCreateEx )
         v2 = v3->pDirectDrawCreateEx(lpGUID, (void **)&dd, &IID_IDirectDraw7, 0);

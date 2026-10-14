@@ -13,6 +13,7 @@
 #include "gl_spec.h"
 
 #include <GL/glew.h>
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -72,13 +73,22 @@ HRESULT WINAPI GL_D3DXSaveSurfaceToFileA(const char *pDestFile, D3DXIMAGE_FILEFO
 HRESULT WINAPI D3DXSaveSurfaceToFileA(const char *pDestFile, D3DXIMAGE_FILEFORMAT /*fmt*/,
 #endif
                                       IDirect3DSurface9 *pSrcSurface, const void * /*palette*/,
-                                      const RECT * /*srcRect*/) {
+                                      const RECT *srcRect) {
     GLSurface *s = static_cast<GLSurface *>(pSrcSurface);
     KB_SPEC("D3DXSaveSurfaceToFileA %s", KB_SpecThread());
     if (!s || !pDestFile) return E_INVALIDARG;
-    int w = (int)s->width(), h = (int)s->height();
+    int sw = (int)s->width(), sh = (int)s->height();
     std::vector<unsigned char> bgra;
-    if (!ReadSurfaceBGRA(s, w, h, bgra)) return E_FAIL;
+    if (!ReadSurfaceBGRA(s, sw, sh, bgra)) return E_FAIL;
+    // The rect's part (the screenshot's: the window's, the surface being the monitor's size with
+    // the back buffer in its corner), opaque.
+    int x0 = 0, y0 = 0, x1 = sw, y1 = sh;
+    if (srcRect) {
+        x0 = std::max(0, (int)srcRect->left); y0 = std::max(0, (int)srcRect->top);
+        x1 = std::min(sw, (int)srcRect->right); y1 = std::min(sh, (int)srcRect->bottom);
+        if (x1 <= x0 || y1 <= y0) return E_INVALIDARG;
+    }
+    const int w = x1 - x0, h = y1 - y0;
 
     FILE *f = fopen(pDestFile, "wb");
     if (!f) return E_FAIL;
@@ -89,7 +99,11 @@ HRESULT WINAPI D3DXSaveSurfaceToFileA(const char *pDestFile, D3DXIMAGE_FILEFORMA
     hdr[14] = (unsigned char)(h & 0xFF); hdr[15] = (unsigned char)((h >> 8) & 0xFF);
     hdr[16] = 32; hdr[17] = 8 | 0x20;   // 8 alpha bits, top-left origin
     fwrite(hdr, 1, 18, f);
-    fwrite(bgra.data(), 1, bgra.size(), f);
+    for (int y = y0; y < y1; ++y) {
+        unsigned char *row = bgra.data() + ((size_t)y * sw + x0) * 4;
+        for (int i = 3; i < w * 4; i += 4) row[i] = 0xFF;
+        fwrite(row, 1, (size_t)w * 4, f);
+    }
     fclose(f);
     return D3D_OK;
 }

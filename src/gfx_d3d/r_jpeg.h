@@ -29,6 +29,7 @@ void __cdecl R_SaveJpg(
                 unsigned __int8 *image_buffer,
                 unsigned __int8 *output_buffer);
 void __cdecl jpegDest(jpeg_common_struct *cinfo, unsigned __int8 *outfile, int size);
+extern int hackSize;
 void __cdecl init_destination(jpeg_compress_struct *cinfo);
 void __cdecl term_destination(jpeg_compress_struct *cinfo);
 void __cdecl Jpeg_Print(char *message);

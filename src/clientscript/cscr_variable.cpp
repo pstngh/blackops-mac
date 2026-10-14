@@ -194,12 +194,13 @@ int __cdecl ThreadInfoCompare(unsigned int *info1, unsigned int *info2)
     int i; // [esp+4h] [ebp-8h]
     const char *pos2; // [esp+8h] [ebp-4h]
 
+    // ThreadDebugInfo's fields by name: pos[] holds native pointers (posSize is word 32 only on i386).
     for ( i = 0; ; ++i )
     {
-        if ( i >= info1[32] || i >= info2[32] )
-            return info1[32] - info2[32];
-        pos1 = (const char *)Ptr32_Decode(info1[i]);
-        pos2 = (const char *)Ptr32_Decode(info2[i]);
+        if ( i >= ((ThreadDebugInfo *)info1)->posSize || i >= ((ThreadDebugInfo *)info2)->posSize )
+            return ((ThreadDebugInfo *)info1)->posSize - ((ThreadDebugInfo *)info2)->posSize;
+        pos1 = ((ThreadDebugInfo *)info1)->pos[i];
+        pos2 = ((ThreadDebugInfo *)info2)->pos[i];
         if ( pos1 != pos2 )
             break;
     }
@@ -244,7 +245,7 @@ void __cdecl Scr_DumpScriptVariables(
                 pos = (char *)gScrVarDebugPub[inst]->varUsage[index];
                 if (pos)
                 {
-                    pInfo = (VariableDebugInfo *)&infoArray[16 * num];
+                    pInfo = (VariableDebugInfo *)&infoArray[sizeof(VariableDebugInfo) * num];
                     if (!fileName || Scr_PrevCodePosFileNameMatches(inst, pos, fileName))
                     {
                         if (functionName || functionSummary)
@@ -286,12 +287,12 @@ void __cdecl Scr_DumpScriptVariables(
                 i = 0;
                 while (i < num)
                 {
-                    pInfoa = (VariableDebugInfo *)&infoArray[16 * i];
+                    pInfoa = (VariableDebugInfo *)&infoArray[sizeof(VariableDebugInfo) * i];
                     do
                     {
                         ++pInfoa->varUsage;
-                        --*(_DWORD *)&infoArray[16 * i++ + 12];
-                    } while (i < num && !VariableInfoCompareCallBack(pInfoa, &infoArray[16 * i]));
+                        --((VariableDebugInfo *)infoArray)[i++].varUsage;
+                    } while (i < num && !VariableInfoCompareCallBack(pInfoa, &infoArray[sizeof(VariableDebugInfo) * i]));
                 }
                 if (lineSort)
                     qsort(infoArray, num, sizeof(VariableDebugInfo), (int(__cdecl *)(const void *, const void *))VariableInfoFileLineCompare);
@@ -317,7 +318,7 @@ void __cdecl Scr_DumpScriptVariables(
                 filteredCount = 0;
                 for (ia = 0; ia < num; ++ia)
                 {
-                    pInfob = (VariableDebugInfo *)&infoArray[16 * ia];
+                    pInfob = (VariableDebugInfo *)&infoArray[sizeof(VariableDebugInfo) * ia];
                     if (pInfob->varUsage)
                     {
                         count += pInfob->varUsage;
@@ -377,8 +378,9 @@ int __cdecl VariableInfoFileNameCompare(unsigned int *info1, unsigned int *info2
     const char *fileName1; // [esp+0h] [ebp-8h]
     const char *fileName2; // [esp+4h] [ebp-4h]
 
-    fileName1 = (const char *)Ptr32_Decode(info1[1]);
-    fileName2 = (const char *)Ptr32_Decode(info2[1]);
+    // VariableDebugInfo's fields by name (native pointers; the words 1-3 only on i386).
+    fileName1 = ((VariableDebugInfo *)info1)->fileName;
+    fileName2 = ((VariableDebugInfo *)info2)->fileName;
     if ( !fileName1 )
         return 1;
     if ( fileName2 )
@@ -395,8 +397,8 @@ int __cdecl VariableInfoFunctionCompare(unsigned int *info1, unsigned int *info2
     fileNameCompare = VariableInfoFileNameCompare(info1, info2);
     if ( fileNameCompare )
         return fileNameCompare;
-    functionName1 = (const char *)Ptr32_Decode(info1[2]);
-    functionName2 = (const char *)Ptr32_Decode(info2[2]);
+    functionName1 = ((VariableDebugInfo *)info1)->functionName;
+    functionName2 = ((VariableDebugInfo *)info2)->functionName;
     if ( !functionName1 )
         return 1;
     if ( functionName2 )
@@ -406,7 +408,7 @@ int __cdecl VariableInfoFunctionCompare(unsigned int *info1, unsigned int *info2
 
 int __cdecl VariableInfoCountCompare(unsigned int *info1, unsigned int *info2)
 {
-    return info2[3] - info1[3];
+    return ((VariableDebugInfo *)info2)->varUsage - ((VariableDebugInfo *)info1)->varUsage;
 }
 
 int __cdecl VariableInfoFileLineCompare(unsigned int *info1, unsigned int *info2)
@@ -468,14 +470,16 @@ void __cdecl Scr_InitVariables(scriptInstance_t inst)
     gScrVarPub[inst].numScriptObjects = 0;
     if (gScrVarDebugPub[inst])
     {
+        // 0x47FFE pointers (0x11FFF8 bytes on i386); with 8-byte pointers the upper half overran into extRefCount and
+        // leakCount, allocated just above it, and their checks then failed by the million (HANDOFF, Decisions session 42).
         gScrVarDebugPub[inst]->varUsage = (const char **)_PMem_AllocNamed(
-            0x11FFF8u,
-            4u,
+            0x47FFE * sizeof(const char *),
+            sizeof(const char *),
             4,
             1u,
             gScriptVarsAlloc,
             TRACK_SCRIPT);
-        memset(gScrVarDebugPub[inst]->varUsage, 0, 0x11FFF8u);
+        memset(gScrVarDebugPub[inst]->varUsage, 0, 0x47FFE * sizeof(const char *));
     }
     Scr_InitVariableRange(inst, 1u, 0x7FFFu);
     Scr_InitVariableRange(inst, 0x8000u, 0x47FFEu);

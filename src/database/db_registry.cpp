@@ -3224,6 +3224,13 @@ void __cdecl DB_LoadXAssets(XZoneInfo *zoneInfo, unsigned int zoneCount, int syn
                     case 1:
                         locZoneInfo[count].allocFlags = 2;
 LABEL_85:
+                        // The port's WWII guns zone has its strings inside: no localized companion to ask for
+                        // ("Could not find zone '...en_kb_dlc_weapons.ff'" at each start; HANDOFF, Decisions session 42).
+                        if ( !I_stricmp(zoneInfo[k].name, "kb_dlc_weapons") )
+                        {
+                            locZoneInfo[count++] = zoneInfo[k];
+                            continue;
+                        }
                         v7 = Win_GetLanguage();
                         SEH_GetLanguageIndexForName(v7, &language);
                         name = zoneInfo[k].name;

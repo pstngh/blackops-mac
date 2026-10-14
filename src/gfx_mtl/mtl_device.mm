@@ -437,6 +437,34 @@ static void FillCaps(D3DCAPS9 *c) {
     // the anisotropic filtering materials specify (R_SetTexFilter).
     c->TextureCaps |= 0x00010000;           // D3DPTEXTURECAPS_MIPCUBEMAP
     c->TextureFilterCaps |= 0x04000400;     // D3DPTFILTERCAPS_MINFANISOTROPIC | MAGFANISOTROPIC
+    // What R_CheckDxCaps looks for (r_caps.cpp) and the layer draws; without these each start printed some 30 "Video card
+    // or driver doesn't support ..." lines. None of them is read anywhere else (R_StoreDirect3DCaps reads the fields set
+    // above). Not D3DCAPS2_FULLSCREENGAMMA: SetGammaRamp does nothing, so r_gamma stays unused, and its warning stays.
+    c->Caps2 |= 0x20000000;                 // D3DCAPS2_DYNAMICTEXTURES
+    c->Caps3 |= 0x00000120;                 // D3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD | COPY_TO_VIDMEM
+    c->PresentationIntervals |= 0x80000001; // D3DPRESENT_INTERVAL_IMMEDIATE | ONE
+    c->DevCaps |= 0x00098400;               // DRAWPRIMITIVES2EX | HWTRANSFORMANDLIGHT | DRAWPRIMTLVERTEX | HWRASTERIZATION
+    c->PrimitiveMiscCaps |= 0x000208F2;     // MASKZ | CULLNONE/CW/CCW | COLORWRITEENABLE | BLENDOP | SEPARATEALPHABLEND
+    c->ZCmpCaps = c->AlphaCmpCaps = 0xFF;   // every D3DCMP function
+    c->SrcBlendCaps = c->DestBlendCaps = 0x3FF;
+    c->TextureCaps |= 0x00004805;           // PERSPECTIVE | ALPHA | CUBEMAP | MIPMAP
+    c->TextureFilterCaps |= 0x03030300;     // MIN/MAG/MIP point and linear
+    c->CubeTextureFilterCaps |= 0x03000300; // MIN/MAG point and linear
+    c->TextureAddressCaps |= 0x5;           // WRAP | CLAMP
+    c->StencilCaps |= 0x1FF;                // every D3DSTENCILOP
+    c->DevCaps2 |= 0x1;                     // D3DDEVCAPS2_STREAMOFFSET
+    c->DeclTypes |= 0x1;                    // D3DDTCAPS_UBYTE4N
+    c->StretchRectFilterCaps |= 0x200;      // D3DPTFILTERCAPS_MINFLINEAR
+    c->MaxVolumeExtent = 2048;
+}
+
+// D3D9 on Windows reported the card's memory plus some shared memory, in a UINT. Apple's GPUs share the system's memory:
+// Metal's working set, held under 4 GB. Automatic texture detail (R_SetPicmip) follows it; the old fixed 256 MB gave
+// half-resolution bump and specular maps.
+UINT WINAPI MetalDevice::GetAvailableTextureMem() {
+    const unsigned long long ws = mtl ? mtl.recommendedMaxWorkingSetSize : 0;
+    if (!ws) return 256u * 1024 * 1024;
+    return ws > 0xFFF00000ull ? 0xFFF00000u : (UINT)ws;
 }
 
 HRESULT WINAPI MetalDevice::GetDeviceCaps(D3DCAPS9 *c) {
@@ -1347,23 +1375,36 @@ HRESULT WINAPI MetalDevice::GetSwapChain(UINT, IDirect3DSwapChain9 **pp) {
 }
 
 // A TGA of a surface (D3DXSaveSurfaceToFileA: the screenshot command saves the system
-// memory surface GetFrontBufferData filled).
-HRESULT MTL_SaveSurfaceToFile(const char *file, IDirect3DSurface9 *surface) {
+// memory surface GetFrontBufferData filled), the rect's part of it (the window's: the surface
+// is the monitor's size, the back buffer in its corner), opaque. KB_SCREENSHOT passes no rect.
+HRESULT MTL_SaveSurfaceToFile(const char *file, IDirect3DSurface9 *surface, const RECT *rect) {
     MetalSurface *s = static_cast<MetalSurface *>(surface);
     if (!s || s->kind() != MetalSurface::S_SYSMEM || MTL_Format(s->format(), false).bytes != 4) {
         MTL_Bug("D3DXSaveSurfaceToFileA of this surface");
         return D3DERR_INVALIDCALL;
     }
+    const int sw = (int)s->width(), sh = (int)s->height();
+    int x0 = 0, y0 = 0, x1 = sw, y1 = sh;
+    if (rect) {
+        x0 = std::max(0, (int)rect->left); y0 = std::max(0, (int)rect->top);
+        x1 = std::min(sw, (int)rect->right); y1 = std::min(sh, (int)rect->bottom);
+        if (x1 <= x0 || y1 <= y0) return D3DERR_INVALIDCALL;
+    }
     FILE *f = fopen(file, "wb");
     if (!f) return E_FAIL;
-    const int w = (int)s->width(), h = (int)s->height();
+    const int w = x1 - x0, h = y1 - y0;
     unsigned char hdr[18] = {};
     hdr[2] = 2;
     hdr[12] = w & 0xFF; hdr[13] = (w >> 8) & 0xFF;
     hdr[14] = h & 0xFF; hdr[15] = (h >> 8) & 0xFF;
     hdr[16] = 32; hdr[17] = 8 | 0x20;   // top-down
     fwrite(hdr, 1, 18, f);
-    fwrite(s->sysmem().data(), 1, (size_t)w * h * 4, f);
+    std::vector<unsigned char> row((size_t)w * 4);
+    for (int y = y0; y < y1; ++y) {
+        memcpy(row.data(), s->sysmem().data() + ((size_t)y * sw + x0) * 4, row.size());
+        for (size_t i = 3; i < row.size(); i += 4) row[i] = 0xFF;
+        fwrite(row.data(), 1, row.size(), f);
+    }
     fclose(f);
     return D3D_OK;
 }
@@ -1380,7 +1421,7 @@ static void MaybeScreenshot(MetalDevice *dev, MetalSurface *bb) {
     for (size_t i = 3; i < tmp.sysmem().size(); i += 4) tmp.sysmem()[i] = 0xFF;
     char path[1024];
     snprintf(path, sizeof(path), "%s/present_%06lu.tga", dir, presents);
-    MTL_SaveSurfaceToFile(path, &tmp);
+    MTL_SaveSurfaceToFile(path, &tmp, nullptr);
     fprintf(stderr, "[mtl] wrote %s\n", path);
 }
 

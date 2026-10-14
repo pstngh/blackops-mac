@@ -311,6 +311,7 @@ extern const dvar_t *com_developer;
 extern const dvar_t *com_developer_script;
 extern const dvar_t *com_script_debugger_smoke_test;
 extern const dvar_t *com_logfile;
+extern const dvar_t *kb_logFiles;
 extern const dvar_t *com_statmon;
 extern const dvar_t *com_timescale;
 extern const dvar_t *dev_timescale;

@@ -41,7 +41,7 @@ public:
 
     // Frame / target
     HRESULT WINAPI TestCooperativeLevel() override { return D3D_OK; }
-    UINT    WINAPI GetAvailableTextureMem() override { return 256u * 1024 * 1024; }
+    UINT    WINAPI GetAvailableTextureMem() override;
     HRESULT WINAPI GetDeviceCaps(D3DCAPS9 *caps) override;
     HRESULT WINAPI Reset(D3DPRESENT_PARAMETERS *pp) override;
     HRESULT WINAPI Present(const RECT *, const RECT *, HWND, const RGNDATA *) override;

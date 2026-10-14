@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 41)
+## Status (2026-10-14, session 42)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -566,6 +566,33 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the user's screenshot (the FAMAS with an ACOG) look odd is the hidden arms (the launcher's "Show arms" off): the back of
   the gun and the grip that the hands normally cover show. Pictures sent to the user, asked what still looks wrong; the
   user: "yes to all" (they look right; the notes pushed, b243a6e9). Closed.
+- **The log** (session 42, the user: "why do the logs get so big, can we have a setting to turn them all off in the
+  launcher. they shouldnt be on by default in the first place", "should we look for fix all errors ?"):
+  - **The flood was a port bug, fixed**: 92% of the user's 305 MB blackops.log were the script engine's debug checks
+    (`ASSERT (ignored) ... leakCount` / `varUsage`). Its per-variable table of pointers (varUsage) was sized for 4-byte
+    pointers; with 8-byte ones the upper half wrote over the debug counters stored right above it, once a match has had
+    enough script variables (the user's 16-bot match after ~4 minutes; by 8 minutes 25,000 lines a second until the end).
+    Only the debug counters were damaged, not game data, but printing them slowed the game. Reproduced on purpose
+    (a test build holding extra script variables): 2.2 million lines in 150 s before, none after (Decisions session 42).
+  - **Logs off by default**: the launcher's new "Save logs" switch (off by default; under "Show arms"; its note says a crash
+    then leaves no report). Off, the game's output goes nowhere and the new `kb_logFiles 0` stops the game's own
+    main/console_mp.log (a second copy of everything, written anew each start) and main/games_mp.log (the matches' kill
+    log, which grew across starts); on, all three as before. kb_logFiles defaults to 1 (a game started by hand still logs);
+    not archived. The launcher window is 80 points taller for it.
+  - **The other messages sorted** (~200 kinds in the user's log; the list: build_macos/log_s42/user_log_message_kinds.txt):
+    fixed, the port's own: some 30 "Video card or driver doesn't support ..." lines at each start (the port's graphics
+    layers left most capability bits empty; now only what a layer lacks prints: fullscreen gamma on both, on the GL layer also
+    separate alpha blending and stencil); "Failed to get video memory size" and the fixed 256 MB the layers reported, which
+    made "automatic" texture detail (a fresh profile's) load bump and specular maps at half resolution (the user's config
+    sets it by hand); "Could not find zone ...en_kb_dlc_weapons.ff"; F12's `screenshotJpeg` wrote a TGA under a .jpg name
+    (now a real JPEG, through the game's own JPEG writer, whose 64-bit slips were fixed too) and both screenshot kinds were
+    monitor-sized with the picture in a corner in a window (now the window's size, opaque); an unreadable .iwd in main/ (a
+    dangling link) crashed at startup (now skipped); the script engine's two debug dumps (`scriptUsage`, and the dumps
+    before "exceeded maximum number of script variables") read their 64-bit entries as 32-bit ones. Left, the original
+    game's own: the setStat / Cloning Player / Freeing Corpse / SetClientViewAngle lines (debugStats is on in the
+    original), materials without a depth pass, weapon parts a model lacks, assets the data names but doesn't have, the
+    devgui files, the physics TL warnings and the rest (Decisions session 42).
+  Checked: release and ASan clients, dedicated server, the launcher from a scratch folder (Decisions session 42).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -756,8 +783,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
 item 2 checked in session 39 (no fault found; the user's answer is pending), the user's new scope request (2b) done in
-session 40, item 3 checked in session 41 (no fault found; the user's answer is pending), items 4-5 next, each in a fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a
-hand-off**:
+session 40, item 3 checked in session 41 (the user: the guns look right), item 4 done in session 42, item 5 next, each in a
+fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a hand-off**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
    37's d2c71308).
@@ -807,7 +834,9 @@ hand-off**:
    picture); turning the arms on is their launcher's "Show arms"; moving a Black Ops gun as the Thompson was moved
    (kb_gunPlacement's table) would no longer be the stock view, so only on their word. **The user's answer: "yes to
    all" (the guns look right; push the notes): closed.**
-4. **The log** ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
+4. **The log: done (session 42)** (Status, Decisions session 42): the flood fixed (a port bug), the launcher's "Save logs"
+   switch, off by default, the other messages sorted and the port's own fixed. Not installed or pushed yet (asked at the
+   hand-off). What the request was ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
    on by default in the first place"): the launcher sends the game's console output to `<game>/blackops.log`
    (Launcher.swift, made anew at each Play): 305 MB after one session, 1,915,571 of its 2,085,632 lines `ASSERT
    (ignored) ... cscr_variable.cpp / scr_variable.h ... gScrVarDebugPub[inst]->leakCount[...]` (the script variables'
@@ -819,11 +848,18 @@ hand-off**:
    without a depth technique, weapon parts a model lacks, weapons or effects the data names but doesn't have, devgui
    files, the cinematic sound, video memory size), sorting the port's own bugs (fix) from messages the original game
    prints too (leave); not literally all of them. Also seen: `screenshotJpeg` writes a TGA under a .jpg name
-   (main/screenshots/shot0000.jpg was Targa data).
+   (main/screenshots/shot0000.jpg was Targa data). (The game folder's main/ held no log then; the game writes
+   main/console_mp.log and main/games_mp.log there at each start: the user must have removed them.)
 5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
    while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
    runs. The session 38 task card lists all five in this order (the user's requests first); session 38 did item 1 and
-   its task card lists 2-5; session 40 did 2b and its task card lists 3-5; session 41 did 3 and its task card lists 4-5.
+   its task card lists 2-5; session 40 did 2b and its task card lists 3-5; session 41 did 3 and its task card lists 4-5;
+   session 42 did 4 and its task card lists 5. The details are item 5 of session 42's brief: read QueuedBatchCount, then
+   std::atomic_thread_fence(std::memory_order_acquire), then ExecutingBatchCount in jqFlush (tl/jobqueue/jobqueue_all.cpp;
+   no code on x86), check objdump shows a dmb between the two loads; a test-only patch reading Executing first with a short
+   spin should reproduce the crash under KB_PHYS_STRESS=2500, the fix not; then regression runs (dedicated server with
+   bots, client matches with managed bots and the scripted player, KB_PHYS_STRESS 5 x 4 minutes, bench_views fps on
+   mp_nuked).
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1245,6 +1281,13 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 42: "Item WEAPON_ASP does not have attachment number 4 it only has 2 attachments" 7 times at the first spawn
+with the user's stats (the class menu reads a class whose secondary is the ASP with an attachment number from another gun;
+harmless, not looked into). The server's live script values grow over a 16-bot match (43,693 25 s in, 54,671 at ~8 minutes in
+one run; not measured as a trend): if they kept growing, a match without a time limit (the user's) would one day stop with
+"exceeded maximum number of script variables" (259K values); worth a long soak with the probe (build_macos/log_s42/
+kb_varmax.patch). The brightness slider still does nothing (no fullscreen gamma ramp; Next steps 8).
+
 Seen in session 39: Create a Class's class list (cac_main, the summary on the right of Custom 1-10) still shows FRAG,
 WILLY PETE and SELECT EQUIPMENT icons with kb_noGrenades (session 34 hid them in the class's own screen, not there); the
 two Kar98ks share one picture (no picture of the scoped one exists). Not asked for.
@@ -1257,8 +1300,8 @@ first-person model only): an MP40 suppressor (its own part, the Black Ops-era MP
 same work as the Thompson's, if the user wants it.
 
 Seen in session 37: an .iwd in main/ that can't be opened (a dangling link) crashes the game at startup in
-FS_LoadFakeIwdFile (ftello on NULL; Decisions session 37) instead of being skipped. The physics crash (the job queue's
-wait) is session 38's item 5. `Black Ops Launcher 2.app` is no longer in the game folder.
+FS_LoadFakeIwdFile (ftello on NULL; Decisions session 37) instead of being skipped (fixed in session 42). The physics crash
+(the job queue's wait) is session 38's item 5. `Black Ops Launcher 2.app` is no longer in the game folder.
 
 Seen in session 36 (job B's tests, scratch folders): `Could not load xanim ""` twice in one 26-map rotation with every
 kb_ change off (mid-match, before a bot reconnects; an animation looked up by an empty name; zone assets only, the same
@@ -1311,7 +1354,7 @@ player (`getdstat` reads zeroes: weapon 0 is weapon_null); a listen server's own
 looked into; the launcher's matches are listen servers.
 
 Seen in session 25: the `screenshot` command writes the 1024x768 back buffer into the top-left corner of
-a 1920x1080 TGA (the rest black), at the scratch profile's default settings; not looked at.
+a 1920x1080 TGA (the rest black), at the scratch profile's default settings (fixed in session 42).
 
 Seen in session 22 (the worker audit, Decisions session 22; races on x86 too, so not ordering bugs):
 - Model lighting: `R_AllocModelLighting` runs from fx_draw (glass, `ShardGroup::GenerateVerts`,
@@ -1415,7 +1458,8 @@ Seen in session 9:
   transparency AA barely ever ran on Windows either.
 - The `screenshot` command in a window smaller than the monitor writes a
   monitor-sized TGA with the picture in a corner (R_GetFrontBufferData sizes its
-  surface by the monitor in windowed mode; seen at 1280x720 on a 1920x1080 display).
+  surface by the monitor in windowed mode; seen at 1280x720 on a 1920x1080 display). Fixed in session 42 (the
+  layers crop to the window's rect).
 - Apple's GL has no fractional sample shading: "dither (fast)" and "supersample
   (nice)" look and cost the same (every sample shaded).
 
@@ -1485,6 +1529,101 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 42)
+
+**The log** (item 4 of Next steps; Status).
+- **The flood** (the user's blackops.log of 13 Oct, read only: 2,085,632 lines; the first assert at server time ~250 s,
+  25,000 a second from ~494 s to the end at ~572 s; the shutdown leak dump listed 8,749 counters below zero). The script
+  engine's debug bookkeeping (gScrVarDebugPub, always on: Scr_InitVariables enables it) keeps per variable a reference count
+  (leakCount, int) and the code position that made it (varUsage, `const char *`), both over 0x47FFE entries, allocated from
+  the physical memory pool's high end, which grows down: leakCount, then extRefCount (0xFFFC bytes), then varUsage right below.
+  varUsage was allocated 0x11FFF8 bytes, 0x47FFE 4-byte pointers; with 8-byte pointers entries from 0x23FFF on (child ids from
+  114,687) wrote into extRefCount, and from child id 122,879 into leakCount: a variable's alloc/free stored a code position or
+  0 into some other variable's count, and every later reference check of that one failed and printed. Only the debug arrays
+  were overwritten (the overrun ends inside leakCount; saveIdMapRev above it is untouched), so no game data. Fixed: 0x47FFE *
+  sizeof(const char *), pointer-aligned (cscr_variable.cpp; the same on i386).
+  - Why after minutes: child ids are handed out roughly in order of the live count, with hashed placement; a temporary
+    probe (build_macos/log_s42/kb_varmax.patch, never committed: the highest child id per instance, `KB_VARFILL=<n>` holds n
+    extra server values) showed the server at 110,604 25 s into the 16-bot FFA (43,693 values) and crossing 114,687 at
+    ~8 minutes (54,671 values) in a 10-minute run of the scripted player, which printed no assert in 10 minutes (the
+    user's play reached it sooner). The live count grows over a match (not looked into: if it kept growing, a very long
+    match would end at the 259K limit, "exceeded maximum number of script variables"; Open items).
+  - Reproduced on purpose: KB_VARFILL=120000 (ids to 176K), the launcher's 16-bot FFA, 150 s: the old code printed
+    2,211,504 asserts of the user's seven kinds (1864, 1897, 1188, 348, 1895, 2188, 2243, in similar proportions); the fixed
+    code none (ids to 172K, 196 respawns). KB_VARFILL=214000 reaches the limit: Sys_Error "exceeded maximum number of script
+    variables" (the dumps run only with showError, which a test didn't reach).
+  - Found on the way, the same file: Scr_DumpScriptVariables indexed its entries at i386's 16-byte stride (`&infoArray[16 *
+    num]`, `+ 12` for varUsage) and its sort callbacks, and Scr_DumpScriptThreads' ThreadInfoCompare, read the entries as
+    4-byte words (posSize as word 32, positions through Ptr32_Decode): fields by name now. `scriptUsage` (a dedicated server,
+    4 bots): before, all 579 threads in one group; after, 220 groups with call chains.
+- **Logs off** (the user: "they shouldnt be on by default"): besides the launcher's blackops.log (stdout and stderr), the game
+  writes `<fs_h>/main/console_mp.log` (Com_LogPrintMessage, the whole console, truncated each start) and
+  `<fs_h>/main/games_mp.log` (G_InitGame's g_log, appended across starts). `logfile 0` can't be the switch: Com_InitDvars
+  forces it back to 1 and Com_SetScriptSettings puts the scripts in developer mode while it is on (compiler debug info, error
+  handling), so the original always ran its scripts that way. New `kb_logFiles` (common.cpp, default 1, not archived): 0 skips
+  both files (Com_PrintMessage's log call, G_InitGame's open). The launcher: `saveLogs` (AppStorage, default off), "Save logs"
+  in a section of its own with the note "The game's messages, in blackops.log in the game folder. Off: no log files, and a
+  crash leaves no report."; off it passes `+set kb_logFiles 0` and sends the output to /dev/null, on `kb_logFiles 1` and
+  blackops.log as before. The window is 840 points high (was 760; the new row didn't fit).
+- **The sorting pass** (the ~200 kinds of the user's log, build_macos/log_s42/user_log_message_kinds.txt). Fixed:
+  - **Caps**: the Metal and GL layers reported D3DCAPS9 with almost nothing but shader versions and sizes, so R_CheckDxCaps
+    printed ~30 lines (its "quit" responses are the port's "ignored on GL backend" warnings). Only r_init.cpp's
+    R_StoreDirect3DCaps reads caps (gamma, anisotropy, slope bias, mip cube maps, clip planes, texture size); the bits
+    added are only ones R_CheckDxCaps checks and none of those six (so nothing draws differently): dynamic textures, the
+    Caps3 and presentation bits, the DevCaps, PrimitiveMiscCaps (Z mask, culls, colour write, blend op; separate alpha on
+    Metal only), every compare and blend factor, texture/cube filter, address, stencil (Metal), stream offsets, UBYTE4N,
+    StretchRect linear, MaxVolumeExtent (2048 Metal, 256 GL). Left out, honestly: D3DCAPS2_FULLSCREENGAMMA (SetGammaRamp does
+    nothing: r_gamma stays unused, Next steps 8), and on GL separate alpha and stencil, which that layer doesn't do. Metal now
+    prints only "doesn't support fullscreen gamma"; GL that, separate alpha (with "ignored on GL backend") and stencil (info).
+  - **Video memory**: the layers' GetAvailableTextureMem returned 256 MB; R_SetPicmip's automatic texture detail
+    (r_picmip_manual 0, a fresh profile's default) then gave picmip 0/1/1 (half-resolution normal and specular maps). Metal
+    now reports `recommendedMaxWorkingSetSize` held under 4 GB (4095 MB here), GL 1 GB (no portable query); R_VideoMemoryForDevice
+    (DirectDraw, Windows only) asks the layer on other platforms, so "Failed to get video memory size" is gone. Checked:
+    automatic detail 0/1/1 before, 0/0/0 now. The user's config sets 0/0/0 by hand, so their game doesn't change.
+  - **en_kb_dlc_weapons**: DB_LoadXAssets adds a localized companion zone for each zone of certain alloc flags, and the DLC
+    zone's 1024 is one; the zone holds its own strings, so none is asked for now (the warning gone; the zone loads as before).
+  - **Screenshots**: both layers' D3DXSaveSurfaceToFileA ignored the format and the rect: `screenshotJpeg` (the user's F12)
+    wrote Targa data under .jpg, and in a window both kinds were monitor-sized (GetFrontBufferData fills a monitor-sized
+    surface with the back buffer in its corner; R_TakeScreenshot's rect is the window's, at 0,0 as ClientToScreen is a stub).
+    Now the rect is cropped and alpha set opaque (Metal and GL); `screenshotJpeg` on macOS and Linux reads the window's pixels
+    (R_GetFrontBufferData, B/G/R swapped to RGB) and compresses with the game's own R_SaveJpg (quality 90), written with
+    fopen where R_TakeScreenshot writes (the render thread runs it; FS_WriteFile asserts Sys_IsMainThread there; R_SaveJpg
+    with no filename now only compresses, hackSize holds the size). R_SaveJpg had never run in multiplayer: jpeg_CreateCompress
+    got i386's struct size 0x170 (now sizeof; the same for the unused decompress 0x1B8), and jpegDest allocated i386's 28-byte
+    destination manager (56 on 64-bit: SIGBUS in write_file_header) through `cinfo[1].err` (now `cinfo->dest` by name, and
+    term_destination reads the manager's `size` by name). Checked: Metal and GL, a 1024x768 window: a real JPEG and a TGA of
+    1024x768 each, the same picture and colours (they were 1920x1080 TGAs).
+  - **Unreadable .iwd** (session 37's Open item): FS_LoadFakeIwdFile returns 0 when the file can't be opened (ftello on NULL
+    before). A dangling iw_99.iwd link: the old build SIGSEGV at startup, the new one loads mp_nuked.
+  Left (the original's, or the data's): `setStat` (debugStats defaults to 1 in the original), Cloning Player / Freeing Corpse /
+  SetClientViewAngle prints; "missing TECHNIQUE_BUILD_FLOAT_Z" (R_TrySetMaterialWithFunc's once-per-interval warning: the
+  float-Z depth pass is the original's path for cards without NVIDIA's INTZ, which the port takes; glass, decals and blends
+  have no such technique and are skipped as in the original); "CG_SetWeaponHidePartBits: No such bone tag" (the data:
+  t5_weapon_famas_viewmodel has the flamethrower's other tags but no tag_flamer_heat_guard, which famas_reflex_mp hides);
+  missing fx/materials/xanims/xmodels/weapons the data names; "weapon X not found in weapon table"; the Python's attachment
+  combinations (and the zone loader's wait for them, which overlaps the map's loading); devgui and autoexec_dev cfgs (exec'd
+  by the original code, not shipped); exposure files; vision files' unknown dvars; bg_shock's '0' values; path node user
+  counts; redundant assets; physics TL warnings; unknown online commands (userPublishNews, updatevehiclebindings,
+  resetCustomGametype); CodeCallback_DestructibleEvent; ui_animate's CycleNext; weaponOptions.csv's 'none'; R_Cinematic_Init's
+  sound (Bink is stubbed); macOS's IMKCFRunLoopWakeUpReliable line. "Item WEAPON_ASP does not have attachment number 4"
+  (7 lines at the first spawn, from the class menu): Open items.
+- **Checked** (build_macos/log_s42/harness: run_flood.sh the launcher's 16-bot FFA, run_checks.sh screenshots, run_series.sh
+  1-minute TDM with 7 managed bots and the WWII guns, run_asan.py; scratch game folders: T with links, T2/T3 with main/ a real
+  folder of links (the game writes logs and screenshots into `<base>/main` when fs_h isn't set: never a linked main/)):
+  - Release client, the launcher's 16-bot FFA with `kb_logFiles 0`: no file in the profile's main/ but the screenshots; 0
+    asserts. TDM series (4 maps, 4 minutes, Thompson suppressed and MP40 fired, a JPEG every 12 s): no assert, crash or
+    "Weapon index mismatch". Dedicated server (8 test clients, 1-minute TDM, 4 minutes, developer 1): 3 maps, no assert, the
+    two logs written (kb_logFiles 1).
+  - ASan client (detect_stack_use_after_return; the 16-bot FFA, fighting, a JPEG and a TGA screenshot every 15 s,
+    `scriptUsage`; 180 s): no report, 0 asserts, 221 respawns. (The jpeg library's own pool hid the destination overrun from
+    ASan: only the release run's SIGBUS showed it.)
+  - The launcher (a scratch game folder with main/ a real folder, a copy re-identified local.kisakblack.launcher.s42test,
+    KB_LAUNCHER_TEST): default: `+set kb_logFiles 0`, no blackops.log, no main/*.log; `saveLogs` true: `kb_logFiles 1`,
+    blackops.log and main/console_mp.log and games_mp.log. The window picture with the new row fits at 840. Domain and plist
+    deleted; the user's local.kisakblack.launcher has no saveLogs key (off after an install).
+  - check_file.py natively and `--i386` (cscr_variable, db_registry, g_main_mp, r_jpeg, r_screenshot, r_texturemem, common,
+    com_files; gl_d3d9 and gl_d3dx only the known GLEW header artefact), audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 41)
 
