@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 42)
+## Status (2026-10-14, session 43)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -510,7 +510,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   run with the retail archives (the user's USB backup). Applied with the user's "yes"
   after seeing the list (build_macos/strip_dupes/removal_list.txt, git-ignored); the 14 originals went to the iCloud
   Drive Trash and the user emptied it the same evening. A server start and a short game from the folder are clean.
-  A physics crash seen once in the tests (not from the archives) is session 38's item 5 (Next steps).
+  A physics crash seen once in the tests (not from the archives) was session 38's item 5 (fixed in session 43).
 - **A suppressor for the Thompson** (session 38, the user: "please add a suppresor option to the thompsons"; their answers
   from session 31: only attachments that come with the game, and the Black Ops sound): Create a Class lists Attachments ->
   Suppressor for the WWII Thompson (its picture, "Invisible from radar when firing, reduced muzzle flash, but less range",
@@ -600,6 +600,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   from the folder (build_macos/blackops, scratch fs_h) loads the guns and plays. The previous `blackops`, launcher and guns
   file are in build_macos/log_s42/revert: copying them back undoes the install. The user's old 305 MB blackops.log went to
   the Trash through Finder (their yes).
+- **The physics crash** (session 43, item 5 of the user's requests): the crash seen once in session 37's tests (a physics
+  worker thread, about once in 4.5 hours of play) is fixed. The game waits for its physics jobs before it reuses their
+  input; on Apple Silicon that wait could end while the last job was only starting, because it read the job queue's two
+  counters (waiting, running) with two loads that the processor may take out of order. It now reads both in one 8-byte
+  load, as the queue's other check (jqPoll) already did (tl/jobqueue/jobqueue_all.cpp; the 32-bit Windows and Linux
+  builds keep their code). A test build that made the old wait slow crashed 3 times of 3 within 9 seconds; the fixed wait
+  with the same delay ran 3 x 4 minutes clean. The fixed build passed the physics stress (5 x 4 minutes), a dedicated
+  server, client matches with map rotation, the 16-bot free-for-all and the ASan client, at the same fps (Decisions
+  session 43). Not installed or pushed yet.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -790,7 +799,8 @@ millisecond), so CPU and GPU are close to balanced at A and the engine caps the 
 
 **The user's requests (2026-10-13, during session 37: "for the next session, please ..."); item 1 done in session 38,
 item 2 checked in session 39 (no fault found; the user's answer is pending), the user's new scope request (2b) done in
-session 40, item 3 checked in session 41 (the user: the guns look right), item 4 done in session 42, item 5 next, each in a
+session 40, item 3 checked in session 41 (the user: the guns look right), item 4 done in session 42, item 5 done in session
+43 (all of them done), each in a
 fresh session (the user: "well we should work in a fresh session"), one piece of work each, with a hand-off**:
 1. **A suppressor for the Thompson: done (session 38)** (Status, Decisions session 38). Installed in the game folder (the
    user's "yes"); how to undo it is in Status. Pushed at the user's request (GitHub mac-port at f5936b01, with session
@@ -857,7 +867,9 @@ fresh session (the user: "well we should work in a fresh session"), one piece of
    prints too (leave); not literally all of them. Also seen: `screenshotJpeg` writes a TGA under a .jpg name
    (main/screenshots/shot0000.jpg was Targa data). (The game folder's main/ held no log then; the game writes
    main/console_mp.log and main/games_mp.log there at each start: the user must have removed them.)
-5. **The physics crash found in session 37's tests** (Decisions session 37): the job queue's wait (jqFlush) can return
+5. **The physics crash found in session 37's tests: done (session 43)** (Status, Decisions session 43: one 8-byte load of
+   both counts instead of the planned fence, which would have covered only one of the two ways the wait could miss a
+   batch). What the plan was (Decisions session 37): the job queue's wait (jqFlush) can return
    while the last physics job starts (two counter reads arm64 may reorder); a one-fence fix, then stress and regression
    runs. The session 38 task card lists all five in this order (the user's requests first); session 38 did item 1 and
    its task card lists 2-5; session 40 did 2b and its task card lists 3-5; session 41 did 3 and its task card lists 4-5;
@@ -1288,6 +1300,16 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 43: `KB_PHYS_STRESS=2500` on the launcher's 16-bot free-for-all (mp_cairo) crashes within ~30 s, with or
+without session 43's fix: the physics' transient allocator fails a request ("transient allocation too large, increase
+block_size"; its 16 KB blocks come from the physics buffer, 3,670,016 bytes, phys_main.cpp, the i386 size: either that ran
+out or one request outgrew a block, not looked into), create_contact_point_info returns null and
+phys_contact_manifold_process::process writes through the null `m_cpi` (phys_collision.cpp:1016; the decompiled code
+asserts and goes on, as the original would). Only the artificial stress reaches it: the user's 305 MB log of real play
+(session 42) has none of these messages. Structs with pointers are larger on 64-bit, so the port may fill that buffer
+sooner than the original at the same load; how close real play comes (the allocator tracks its largest size,
+transient_allocator_update_largest_size) is not measured.
+
 Seen in session 42: "Item WEAPON_ASP does not have attachment number 4 it only has 2 attachments" 7 times at the first spawn
 with the user's stats (the class menu reads a class whose secondary is the ASP with an attachment number from another gun;
 harmless, not looked into). The server's live script values grow over a 16-bot match (43,693 25 s in, 54,671 at ~8 minutes in
@@ -1308,7 +1330,7 @@ same work as the Thompson's, if the user wants it.
 
 Seen in session 37: an .iwd in main/ that can't be opened (a dangling link) crashes the game at startup in
 FS_LoadFakeIwdFile (ftello on NULL; Decisions session 37) instead of being skipped (fixed in session 42). The physics crash
-(the job queue's wait) is session 38's item 5. `Black Ops Launcher 2.app` is no longer in the game folder.
+(the job queue's wait) was session 38's item 5 (fixed in session 43). `Black Ops Launcher 2.app` is no longer in the game folder.
 
 Seen in session 36 (job B's tests, scratch folders): `Could not load xanim ""` twice in one 26-map rotation with every
 kb_ change off (mid-match, before a bot reconnects; an animation looked up by an empty name; zone assets only, the same
@@ -1536,6 +1558,72 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 43)
+
+**The physics crash: the job queue's wait returned while the last batch started** (item 5 of Next steps; Status).
+- **The wait**: jqFlush (tl/jobqueue/jobqueue_all.cpp) runs the group's batches itself until the group's `QueuedBatchCount
+  + ExecutingBatchCount` is 0; physics waits through it (phys_task_manager_flush -> IW_task_manager_flush ->
+  Sys_WaitWorkerCmdInternal -> jqSafeFlush), as do the other worker commands' waits and R_WaitWorkerCmds. The counts were
+  two plain 4-byte loads (`ldr w8,[x20]; ldr w9,[x20,#4]`). A worker taking a batch (jqPopNextBatchFromQueue) raises the
+  group's Executing, then lowers its Queued (`ldaddal` each, full barriers); arm64 may satisfy the second load first,
+  so the wait could see Executing's 0 from before and Queued's 0 from after and return while that batch starts. The
+  physics jobs read their input from the caller's stack (phys_task_manager_process's `input`) and the main thread's lists
+  (g_bpb_list_cur), which the main thread reuses at once: session 37's crash (bp_env_jq_batch_function1 reading `Input[0]`).
+  A worker putting a batch back (a callback returning nonzero: r_stream's update, combine and sort callbacks while
+  another of theirs runs) raises Queued, then lowers Executing; two loads in Queued-then-Executing order can miss that
+  even when they stay in order (on x86 too: the original's; physics never puts one back).
+- **The fix**: jqBatchGroup is a union of the two counts with an 8-byte `BatchCount` (8-aligned: alignas and
+  static_asserts, and both jqPoll and jqFlush assert "read won't be atomic"), and jqPoll already tests `BatchCount` in one
+  load (`ldr x8`). jqFlush now does the same on 64-bit builds (`#if UINTPTR_MAX > 0xFFFFFFFFu`, as ptr32.h): an aligned
+  8-byte load is single-copy atomic on arm64, so it sees both counts at one moment, and since a worker raises one count
+  before it lowers the other, their sum is 0 only when nothing of the group is queued or running. The acquire fence at the
+  end (session 5's) is unchanged. 32-bit builds keep the two loads (the same code as before). objdump: `ldr x8, [x20]` at
+  both tests, `dmb ishld` at the exit. Not the planned "Queued, an acquire fence, Executing" (session 42's brief): that
+  covers only the first case.
+- **Other two-count reads**: none. jqPoll (also the callback of Sys_AssistAndWaitWorkerCmdInternal's
+  jqAssistWithBatches, R_FinishedFrontendWorkerCmds and r_stream's callbacks) reads `BatchCount` in one load already;
+  jqWorkerSleep, jqAreJobsQueued, jqStop's assert, r_pretess's assert and r_stream's `ExecutingBatchCount > 1` read one
+  count each. jqAddBatch/jqAddBatchToQueue raise Queued before the push, so no count goes below 0.
+- **Reproduced on purpose** (build_macos/jq_s43/kb_jqtest.patch, test only, never committed; `git apply` on session 43's commit:
+  `KB_JQ_MODE` 0 = the fix, 1 = the old two loads, 2 = Executing, a spin of `KB_JQ_SPIN` iterations, then Queued (the old
+  race widened); KB_JQ_SPIN also spins before the one load in mode 0; after each physics wait it counts the returns with
+  the group's BatchCount not 0, "[jqtest] early return"). `KB_PHYS_STRESS=2500`, mp_nuked TDM, the launcher's 7 managed
+  bots (normal), the scripted player (CLAUDE.md's KB_CMDS), com_maxfps 250 (the user's config); excerpts in
+  build_macos/jq_s43/crashes_mode2.txt and runs_mode0_mode1.txt:
+  - mode 2, spin 2000: crashed 3 runs of 3, ~9 s after the start, each after 10 early returns (queued 0, executing 1;
+    about one wait in 300): SIGSEGV in bp_env_jq_batch_function2 (phys_broad_phase.cpp:2496, the inlined
+    process_cluster_environment_collision on a cluster taken from g_bpb_list_cur after the main thread had moved on; fault
+    address 0xffffffff00000030) twice, SIGBUS in phys_jq_constraint_solver_batch_function once; the
+    physics jobs, on worker threads.
+  - mode 0, spin 2000 (the fix, the same delay): 3 x 240 s, over 200,000 physics waits each, 0 early returns, no crash.
+  - mode 1 (the old code as it was): 240 s, over 200,000 waits, 0 early returns, no crash. The natural window is a few
+    instructions (both counts in one cache line); session 37 met it once in about 4.5 hours of client play.
+- **Checks** (the fixed build; scripts in build_macos/jq_s43: run_stress.sh, run_ded.sh, batch_a.sh, batch_b.sh, with
+  session 42's harness; scratch game folder with links, windowed config, scratch profiles, sound to /dev/null):
+  - **KB_PHYS_STRESS=2500** (run_stress.sh: mp_nuked TDM, the launcher's 7 managed bots, the scripted player, the
+    user's com_maxfps 250): 5 x 240 s, no crash, assert or `[mtl] BUG` (182,000-191,000 "leafList overflow" lines a run:
+    the map-wide queries ran throughout).
+  - **Dedicated server** (run_ded.sh: 8 test clients, 1-minute TDM, developer 1, 240 s): 4 maps (mp_nuked, mp_array,
+    mp_cracked, mp_crisis), no crash or assert; only the data's messages (the Python's attachment variants,
+    hind_rockets, t5_veh_civ_tiara, path nodes' mantle_window_36).
+  - **Client TDM series** (run_series.sh: 1-minute TDM, 7 managed bots, the Thompson suppressed and the MP40, a JPEG
+    every 12 s; 240 s): 4 maps, 3 rotations, no crash, assert or "Weapon index mismatch"; the pictures normal.
+  - **The launcher's 16-bot FFA** (run_flood.sh: mp_cairo, fu bots, a copy of the user's stats; 300 s): 433 spawns, no
+    crash or assert.
+  - **ASan client** (build_asan with the fix, detect_stack_use_after_return): the stress setup above
+    (build_macos/jq_s43/run_asan_stress.py) 180 s, and run_asan.py's 16-bot FFA 180 s (214 spawns, 19 screenshots): no
+    report, crash or assert.
+  - **fps** (bench_views.py --bots, mp_nuked's 8 views, a 1280x720 window, HEAD and the fix alternating; geometric means;
+    the tables in build_macos/jq_s43/bench_*.txt): HEAD 588.8 and 590.9, the fix 576.5 and 590.8: the same within
+    run-to-run noise.
+  - **Found on the way, not from the fix**: KB_PHYS_STRESS=2500 on the launcher's 16-bot FFA (mp_cairo) crashes HEAD
+    and the fix alike, 4 runs of 4 at 25-32 s (batch_c.sh; stress_cairo_head_vs_fixed.txt), and the ASan client once
+    (asan_stress_crash.txt): the physics' transient allocator fails a request ("transient allocation too large, increase
+    block_size"), create_contact_point_info returns null ("contact_point_info buffer overflow", no_error), and
+    phys_contact_manifold_process::process asserts `m_cpi` and writes through it (phys_collision.cpp:1016; the original's
+    code), on two threads at once. Open items. Stress tests use mp_nuked with 7 bots (CLAUDE.md).
+- check_file.py natively and `--i386` (jobqueue_all.cpp), audit_splitlocals.py 0, gen_db_save.py `--check`.
 
 ## Decisions (session 42)
 
@@ -3236,7 +3324,7 @@ the unlocked read that found it (no code on x86), commented once per file.
   hand-rolled lock is not (`DObjUnlock` was `str wzr`).
 - **Clean**: the job queue (queue nodes under tlAtomicMutex, interlocked counts, session 5's fences
   in `jqPoll`/`jqFlush`, which also end `jqAssistWithBatches`' waits; conditional batches are never
-  used). Physics: the phases are separated by `IW_task_manager_flush` (= `jqFlush`), and inside a
+  used; but jqFlush's two-count read wasn't: session 43). Physics: the phases are separated by `IW_task_manager_flush` (= `jqFlush`), and inside a
   phase the env-query prolog merges under a mutex, the cluster list, pair lists, contact lists and
   wheel list are CAS pops/pushes, the transient and slot-pool allocators CAS (tagged stack), the
   GJK cache, bpei database and auto rigid bodies take read/write locks, auto-activation is

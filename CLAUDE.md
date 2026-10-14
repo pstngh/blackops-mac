@@ -54,7 +54,8 @@ assert fires (`iassert` compiles to nothing in RelWithDebInfo; only the decompil
 `Assert_MyHandler`/`_tlAssert` checks run). `KB_PHYS_STRESS=2500` grows every ragdoll's and
 vehicle's physics query to cover the map and wakes every dynent it reaches, so all the physics
 threads build the same environment objects at once (HANDOFF, Decisions session 21): a race there
-crashed the old code within a minute on mp_nuked with bots.
+crashed the old code within a minute on mp_nuked with bots. Use it on mp_nuked with 7 bots: on the
+16-bot free-for-all it uses up the physics memory within ~30 s and crashes (HANDOFF, Open items, session 43).
 
 The game folder's `Black Ops Launcher.app` (tools/launcher, built by
 make_portable.sh or `tools/launcher/build.sh <game dir> [icon picture]`; its icon is made by

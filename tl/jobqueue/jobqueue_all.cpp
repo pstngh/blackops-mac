@@ -1918,7 +1918,16 @@ void __cdecl jqFlush(jqBatchGroup *GroupID, unsigned __int64 batchCount)
     while (1)
     {
         // Stop if nothing queued/executing
+#if UINTPTR_MAX > 0xFFFFFFFFu
+        // Both counts in one 8-byte load, as jqPoll reads them. A worker taking a batch raises
+        // Executing before it lowers Queued, one putting a batch back raises Queued before it lowers
+        // Executing; two loads (which arm64 may also reorder) can see neither, and the flush returned
+        // while the last batch started, its input on the caller's reused stack. x86 kept the two
+        // loads in order, which covers only the first case.
+        if (p_group->BatchCount == 0)
+#else
         if ((p_group->QueuedBatchCount + p_group->ExecutingBatchCount) == 0)
+#endif
             break;
 
         // Stop if a max `batchCount` was specified and we've hit that limit
