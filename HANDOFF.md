@@ -593,6 +593,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
     original), materials without a depth pass, weapon parts a model lacks, assets the data names but doesn't have, the
     devgui files, the physics TL warnings and the rest (Decisions session 42).
   Checked: release and ASan clients, dedicated server, the launcher from a scratch folder (Decisions session 42).
+  The user: "yes to all": pushed (GitHub mac-port at 8d7cdb6b) and installed (make_portable.sh at 8d7cdb6b, log
+  build_macos/make_portable_s42.log: `blackops` and the 6 libraries, the launcher (signature verifies, its icon kept, the
+  identifier local.kisakblack.launcher, so the user's settings stay), the guns file written again from the backup folder,
+  25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A dedicated server
+  from the folder (build_macos/blackops, scratch fs_h) loads the guns and plays. The previous `blackops`, launcher and guns
+  file are in build_macos/log_s42/revert: copying them back undoes the install. The user's old 305 MB blackops.log went to
+  the Trash through Finder (their yes).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -835,8 +842,8 @@ fresh session (the user: "well we should work in a fresh session"), one piece of
    (kb_gunPlacement's table) would no longer be the stock view, so only on their word. **The user's answer: "yes to
    all" (the guns look right; push the notes): closed.**
 4. **The log: done (session 42)** (Status, Decisions session 42): the flood fixed (a port bug), the launcher's "Save logs"
-   switch, off by default, the other messages sorted and the port's own fixed. Not installed or pushed yet (asked at the
-   hand-off). What the request was ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
+   switch, off by default, the other messages sorted and the port's own fixed. Installed and pushed at the user's "yes to
+   all" (Status). What the request was ("why do the logs get so big, can we have a setting to turn them all off in the launcher. they shouldnt be
    on by default in the first place"): the launcher sends the game's console output to `<game>/blackops.log`
    (Launcher.swift, made anew at each Play): 305 MB after one session, 1,915,571 of its 2,085,632 lines `ASSERT
    (ignored) ... cscr_variable.cpp / scr_variable.h ... gScrVarDebugPub[inst]->leakCount[...]` (the script variables'
