@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 43)
+## Status (2026-10-14, session 44)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -615,6 +615,17 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A dedicated server
   from the folder (scratch fs_h) loads the guns and the bots join. The previous `blackops`, launcher and guns file are in
   build_macos/jq_s43/revert: copying them back undoes the install.
+- **The physics memory budget** (session 44, a follow-up of session 43's stress crash): measured, nothing changed. The
+  physics keeps all its objects in one fixed buffer of 3,670,016 bytes (the original's size, phys_main.cpp). The launcher's
+  16-bot free-for-all used at most 14.7% of it (537,792 bytes) on mp_cairo, mp_nuked, mp_firingrange and mp_kowloon (10
+  minutes each where the match lasted; the use levels off after 2-6 minutes). The same objects at the original's 32-bit sizes
+  would take roughly 8-20% less, so the port's larger structs leave real play far from the limit. Only the artificial
+  `KB_PHYS_STRESS` fills it: its map-wide queries build the collision geometry of most of the map in one step and the buffer
+  goes from 5% to 98% within a second; the next contact then finds no memory and the original's code writes through the null
+  contact (the crash). Growing the buffer would only delay that; a null check would turn it into a dropped contact (the
+  user's call; Decisions session 44). Found on the way: the 16-bot free-for-all on mp_nuked and mp_firingrange stops after
+  about 5 minutes with "exceeded maximum number of script variables", also with the build the user played before today
+  (Open items).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1306,15 +1317,25 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 44: the launcher's 16-bot free-for-all (session 42's run_flood.sh: fu bots, no time or score limit, the
+user's config and stats, the scripted player) stops with Sys_Error "exceeded maximum number of script variables" on mp_nuked
+about 4.5-5 minutes in (3 runs of 3: the physics probe build, HEAD's build, and session 40's install,
+build_macos/log_s42/revert/blackops, the build the user played with before session 42) and on mp_firingrange about 6
+minutes in (1 run); mp_cairo and mp_kowloon played their 10 minutes without it. So it is older than session 42 and not
+from the probe. Session 42 saw the server's live script values grow over a match on mp_cairo (43,693 at 25 s, 54,671 at ~8
+minutes); on these two maps they reach the 259K limit within minutes. Not looked into (which scripts hold the values, and
+whether the original game does the same or a port bug keeps them alive); session 42's probe
+(build_macos/log_s42/kb_varmax.patch) counts them. A user playing those maps with 16 bots and no time limit would meet it.
+
 Seen in session 43: `KB_PHYS_STRESS=2500` on the launcher's 16-bot free-for-all (mp_cairo) crashes within ~30 s, with or
 without session 43's fix: the physics' transient allocator fails a request ("transient allocation too large, increase
-block_size"; its 16 KB blocks come from the physics buffer, 3,670,016 bytes, phys_main.cpp, the i386 size: either that ran
-out or one request outgrew a block, not looked into), create_contact_point_info returns null and
+block_size"; its 16 KB blocks come from the physics buffer, 3,670,016 bytes, phys_main.cpp, the i386 size: session 44
+measured that the buffer ran out, no request outgrew a block), create_contact_point_info returns null and
 phys_contact_manifold_process::process writes through the null `m_cpi` (phys_collision.cpp:1016; the decompiled code
 asserts and goes on, as the original would). Only the artificial stress reaches it: the user's 305 MB log of real play
-(session 42) has none of these messages. Structs with pointers are larger on 64-bit, so the port may fill that buffer
-sooner than the original at the same load; how close real play comes (the allocator tracks its largest size,
-transient_allocator_update_largest_size) is not measured.
+(session 42) has none of these messages. Measured in session 44 (Decisions session 44): real play peaks at 10-15% of the
+buffer (the port's structs make that roughly 8-20% more than the original's at the same load); the stress takes it from 5%
+to 98% within a second. Left as the original has it unless the user wants the null check.
 
 Seen in session 42: "Item WEAPON_ASP does not have attachment number 4 it only has 2 attachments" 7 times at the first spawn
 with the user's stats (the class menu reads a class whose secondary is the ASP with an attachment number from another gun;
@@ -1564,6 +1585,75 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 44)
+
+**The physics memory budget under real play** (a follow-up of session 43's stress crash; Status, Open items).
+- **How the physics memory works**: Phys_Init allocates one buffer of 3,670,016 bytes once per process (phys_main.cpp, the
+  original's size; 3,668,544 usable after the 64-bit phys_memory_manager, 1,472 bytes, 976 on i386). Everything comes from
+  it by bumping one pointer (phys_memory_manager::allocate) that never goes back: permanent allocations (42,176 bytes at
+  startup) and slot pools, one per slot size and alignment, shared by every type of that size, whose freed slots go on the
+  pool's free list for reuse but never back to the buffer. So the buffer's use (`m_buffer_cur - m_buffer_start`) is a
+  high-water mark: the sum over the pools of the most slots each ever had in use at once (each with its header, extra_info:
+  16 bytes on 64-bit, 8 on i386). The transient allocators (the collision buffer `G_BPM->g_collision_memory_buffer`, the
+  two contact point buffers, the solver's, the gjk query's and the stack ones) take 16 KB blocks (16,384 bytes, a 16-byte
+  header on 64-bit, 12 on i386) from one of those pools and give them back at each reset. `transient_allocator_update_largest_size`
+  is an empty function in the decompile, so the probe measured it itself.
+- **The probe** (build_macos/physmem_s44/kb_physmem.patch, test only, never committed; `git apply` on 5e29865a;
+  phys_mem_new.cpp and phys_transient_allocator.cpp): `KB_PHYSMEM=<seconds>` prints the buffer's use, each pool's slot size,
+  peak and current slots and the call chain that created it, the largest transient request and the largest transient
+  allocator with their callers, the requests over 1 KB and the allocators over 64 KB by caller, and every failed transient
+  allocation (size, caller, whether it fitted a block). In build_macos/physmem_s44 with it: blackops_probe, the harness
+  (run_flood.sh, session 42's with `MAP` and without the com_maxfps override, so the user's 250; batch_real.sh,
+  batch_scrvar.sh), summarize.py (the tables with each pool's i386 equivalent; summary.txt), sizes.py (both ABIs' sizeof of
+  every record clang lays out in the physics files; sizes*.json) and excerpts.txt. Built in a scratch copy of HEAD outside
+  the checkout.
+- **Real play** (the launcher's 16-bot free-for-all: fu bots, no time or score limit, the user's config and stats, the
+  scripted player; 600 s a map, the probe every 10 s):
+
+  | map | played | spawns | peak use (bytes) | share | 16 KB blocks | the same at i386 sizes |
+  |---|---|---|---|---|---|---|
+  | mp_cairo | 600 s | 883 | 527,512 | 14.4% | 12 | 485,552 |
+  | mp_nuked | 278 s (script variables) | 565 | 537,792 | 14.7% | 12 | 494,992 |
+  | mp_firingrange | 354 s (script variables) | 671 | 464,200 | 12.7% | 10 | 423,700 |
+  | mp_kowloon | 600 s | 936 | 381,520 | 10.4% | 9 | 354,684 |
+
+  The use levels off (mp_cairo: 10.1% at 1 minute, 13.4% at 2, 14.4% from 6 on). No failed or oversized request; the largest
+  request 1,152 bytes (pulse_sum_constraint_solver::create_pulse_sum_contact), the largest transient allocator 64 KB (4
+  blocks, the solver's). The biggest pools (mp_cairo): the 16 KB blocks (197 KB), the gjk cache (176-byte slots, 380 at once),
+  rigid bodies (480, 85), physics object records (368, 103), bpei entries (72, 322), cylinders (192, 111), dynent brushes
+  (128, 135), ragdoll constraints (352, 44), ragdoll bodies (2,680, 4). Over a map rotation the pools keep their largest
+  counts (shared by size), so a session's use stays about the per-pool maximum of the maps played.
+- **Against the original**: the slots' structs measured with clang for both ABIs (sizes.py); the same peak counts at the
+  original's slot sizes (its sizeof + 8, rounded to its alignment; a pool shared by two types taken at its creator's type) come
+  to 7.5-9.5% less (the table's last column). That counts the 16 KB blocks as equal, about a third of the use; their contents
+  are larger on 64-bit too (contact points 80 -> 112 bytes, collision pairs 20 -> 40, pointer lists twice), so the original
+  probably filled fewer (not measured): the port uses roughly 8-20% more of the buffer than the original at the same load.
+  Grown most: SAP nodes 128 -> 208 bytes, SAP active pairs 16 -> 32, broad-phase collision pairs 24 -> 48, bpei entries 36 ->
+  56, contact constraints 56 -> 112, rigid bodies 384 -> 464.
+- **Under KB_PHYS_STRESS=2500** (the same free-for-all on mp_cairo, the probe every second; 2 runs, crashed at 31 and 26 s
+  as in session 43, at phys_collision.cpp:1016): the buffer sat at 5-6% (real play's share), then within one second went to
+  97-98%: the map-wide queries built the environment geometry of most of the map in the collision buffer (one transient
+  allocator of 1.5 MB, 93 blocks: standard_query::query, gjk_partition_t::create, gjk_brush_t::create), with 5,645 bpei
+  entries, 1,440 gjk cache entries, 630 rigid bodies, 608 SAP nodes, 646 physics object records, 1,063 cylinders and the
+  2,048 SAP active pairs of the cap ("max num sap active pairs reached"). Then contact_point_info::create_cpi's requests
+  (160-336 bytes) found no block: the buffer ran out (resize() got no slot). No request outgrew a block (the largest 9,728
+  bytes, the sweep and prune's lists). At the original's sizes the same counts come to about 3.23 MB of its 3.67, so the
+  original might have lasted a moment longer, but the stress keeps growing (it wakes every dynent it reaches) and would run
+  it out too.
+- **A 64-bit-only limit seen on the way, not reached**: axis_aligned_sweep_and_prune::process takes its three sorted lists
+  (2 x its nodes, pointers) from one transient block each, so on 64-bit a list holds 1,023 SAP nodes (16,368 / 16), on i386
+  2,046; more would fail as "transient allocation too large" and crash on the null list. Real play peaked at 36 nodes, the
+  stress at 608.
+- **Not changed** (the user's call): growing the buffer on 64-bit builds (`#if UINTPTR_MAX > 0xFFFFFFFFu`, as
+  jobqueue_all.cpp does) isn't needed for real play (about 7x headroom) and would only delay the stress crash; a null check
+  after create_cpi in phys_contact_manifold_process::process (go on without that contact, as its no_error argument intends)
+  would let the stress run on with dropped contacts. Neither matters outside KB_PHYS_STRESS.
+- **Found on the way**: "exceeded maximum number of script variables" on mp_nuked and mp_firingrange (Open items). Control
+  runs on mp_nuked: HEAD's build without the probe (275 s, 581 spawns) and session 40's install (log_s42/revert/blackops,
+  run from build_macos/physmem_s44/pre42 with a `lib` link to the game folder's libraries: about 5 minutes, 610 spawns)
+  stopped the same way.
+- Only HANDOFF.md changed; no code.
 
 ## Decisions (session 43)
 
