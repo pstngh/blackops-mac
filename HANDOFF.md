@@ -608,7 +608,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   builds keep their code). A test build that made the old wait slow crashed 3 times of 3 within 9 seconds; the fixed wait
   with the same delay ran 3 x 4 minutes clean. The fixed build passed the physics stress (5 x 4 minutes), a dedicated
   server, client matches with map rotation, the 16-bot free-for-all and the ASan client, at the same fps (Decisions
-  session 43). Not installed or pushed yet.
+  session 43). The user: "push it and install it": pushed (GitHub mac-port at 61191764) and installed (make_portable.sh
+  from a frozen copy of the tested build, build_macos/jq_s43/install, as the physics-memory session shares the checkout;
+  log build_macos/make_portable_s43.log: `blackops` (its code identical to the tested build's) and the 6 libraries, the
+  launcher (unchanged, signature verifies, local.kisakblack.launcher), the guns file written again from the backup folder,
+  25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A dedicated server
+  from the folder (scratch fs_h) loads the guns and the bots join. The previous `blackops`, launcher and guns file are in
+  build_macos/jq_s43/revert: copying them back undoes the install.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
