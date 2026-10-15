@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-15, session 46)
+## Status (2026-10-15, session 47)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -667,6 +667,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   installed `blackops` and lib/ run from a scratch folder as a dedicated server (scratch fs_h, 4 test clients, mp_nuked)
   loads the guns and plays. The previous `blackops`, launcher and guns file are in build_macos/godmode_s46/revert: copying
   them back undoes the install.
+- **The wristwatch with the clean HUD** (session 47; seen in session 46): since session 29, with `kb_cleanHud` on (the
+  user's setting) the watch on the first-person left arm showed a flat purple glass where the game draws a dial and hands
+  (the real time). The dial is a HUD menu, "wristwatch", that paints into a texture on the arm, not onto the screen; the
+  clean HUD skipped it with the rest. It now paints that one menu: the watch looks as with the HUD on, and nothing else
+  of the HUD comes back (Decisions session 47; build_macos/watch_s47 has the pictures). Committed at the user's yes; not
+  pushed or installed in the game folder.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1363,10 +1369,6 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
-Seen in session 46: with `kb_cleanHud 1` (the user's setting) the first-person wristwatch's face draws flat purple; with
-`kb_cleanHud 0` it draws as the game's (grey glass). The clean HUD skips `Menu_PaintAll`, and the "wristwatch" menu is
-probably what paints the face (not investigated). Since session 29; cosmetic.
-
 Seen in session 44, explained in session 45 (Status, Decisions session 45): the launcher's 16-bot free-for-all (fu bots,
 no time or score limit, gun damage 20%) stops with Sys_Error "exceeded maximum number of script variables" on mp_nuked
 after 4-5 minutes (mp_firingrange ~6; mp_cairo grows the same way, slower, about half an hour at its pace): the original
@@ -1632,6 +1634,31 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 47)
+
+**The wristwatch's face with `kb_cleanHud`** (session 46's Open item; Status).
+- **What draws it**: the HUD menu `wristwatch` (common_mp, from ui_mp/hud.txt; patch_mp has a redundant copy) holds one
+  item, `WristWatchFace`, an ownerdraw (316, `CG_DrawWristWatch`, cg_newDraw_mp.cpp: `cgMedia.watch_face`, then the hour,
+  minute and second hands rotated to `Com_RealTime`), visible unless `hideUi3d`. The menu's `ui3dWindowId` is 0, so
+  `Menu_Paint` sends its draws to UI3D window 0 (`R_UI3D_ScrPlaceFromTextureWindow`), which the backend renders into
+  `R_RENDERTARGET_UI3D` (`RB_UI3D_RenderToTexture`, r_ui3d.cpp, only for windows that got draws this frame), the texture
+  the arm model's watch glass samples. `Menu_PaintAll` paints it among the HUD menus outside the menu stack; session 29's
+  clean HUD skips `Menu_PaintAll`, so the target was never drawn and the glass showed flat purple (the target's untouched
+  contents on Metal).
+- **The only one**: a temporary listing of every menu's `ui3dWindowId` (listzone over common_mp, patch_mp, ui_mp and
+  patch_ui_mp; the print removed) found `wristwatch` the only real menu with a UI3D window (the `,name` entries are the
+  redundant assets' placeholders). So painting it alone puts nothing on the screen.
+- **The change** (cg_draw_mp.cpp): `CG_KbPaintWristWatch` finds the menu by name in `cgDC` and paints it with
+  `Menu_Paint` as `Menu_PaintAll` does for the menus outside the stack (an empty `ScreenPlacementStack`, no UI3D override);
+  `CG_Draw2DInternal` calls it where kb_cleanHud skips `Menu_PaintAll` (both places: the free spectator and play).
+  `kb_cleanHud 0` is unchanged.
+- **Checked** (build_macos/godmode_s46's run.sh: 7-bot TDM on mp_nuked, the user's config, demigod, `kb_shots 16 40`;
+  runs/watch_clean1 and watch_clean0 keep the frames used; build_macos/watch_s47/watch_before_after_reference.png: session
+  46's purple glass, the fixed `kb_cleanHud 1`, `kb_cleanHud 0`; clean1_vs_clean0.png the whole screen): with the dvar on
+  the watch shows its dial and hands as with it off, and the screen shows the crosshair, the FPS counter and the developer
+  console lines only (no minimap, score, ammo or popups); with it off the full HUD. The log's errors are the same set as
+  session 46's runs; no `[mtl] BUG`. check_file.py natively and `--i386`, audit_splitlocals.py 0.
 
 ## Decisions (session 46)
 

@@ -340,6 +340,26 @@ void __cdecl CG_Draw2D(int localClientNum)
     CG_Draw2DInternal(localClientNum);
 }
 
+// kb_cleanHud: the first-person wristwatch's face (the dial and hands, CG_DrawWristWatch) is the HUD
+// menu "wristwatch", which paints into UI3D window 0, the texture the arm's watch glass shows; with
+// Menu_PaintAll skipped nothing is drawn there and the glass shows flat purple. It is the only HUD menu
+// with a UI3D window, so painting it alone puts nothing back on the screen.
+static void CG_KbPaintWristWatch(int localClientNum)
+{
+    UiContext *dc;
+    menuDef_t *menu;
+    ScreenPlacementStack scrPlaceStack;
+
+    dc = &cgDC[localClientNum];
+    menu = Menus_FindByName(dc, "wristwatch");
+    if ( menu )
+    {
+        scrPlaceStack.size = 0;
+        scrPlaceStack.contextIndex = dc->contextIndex;
+        Menu_Paint(localClientNum, dc, &scrPlaceStack, menu, (const ScreenPlacement *)0xFFFFFFFF);
+    }
+}
+
 void __cdecl CG_Draw2DInternal(int localClientNum)
 {
     cg_s *cgameGlob; // [esp+0h] [ebp-14h]
@@ -363,7 +383,8 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
             drawHud = CG_ShouldDrawHud(localClientNum);
             // kb_cleanHud (the user's change, HANDOFF Decisions session 29): only the crosshair (and the
             // debug overlays, cg_drawFPS among them) during play; no HUD menus (minimap, score, ammo,
-            // kill feed, player cards, hints), names, chat, vote or damage and grenade indicators, and
+            // kill feed, player cards, hints) but the wristwatch's face (CG_KbPaintWristWatch), no
+            // names, chat, vote or damage and grenade indicators, and
             // no script hud elements, foreground ones (the spawn's perk list) too, until the round's
             // outcome (CG_KbHideHudElems).
             cleanHud = kb_cleanHud->current.enabled;
@@ -395,6 +416,8 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
                             CG_Draw2dHudElems(localClientNum, 0);
                         if ( !cleanHud )
                             Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
+                        else
+                            CG_KbPaintWristWatch(localClientNum);
                         if ( !hideHudElems )
                             CG_Draw2dHudElems(localClientNum, 1);
                     }
@@ -418,6 +441,8 @@ void __cdecl CG_Draw2DInternal(int localClientNum)
                             CG_Draw2dHudElems(localClientNum, 0);
                         if ( !cleanHud )
                             Menu_PaintAll(localClientNum, &cgDC[localClientNum]);
+                        else
+                            CG_KbPaintWristWatch(localClientNum);
                     }
                     if ( !hideHudElems )
                         CG_Draw2dHudElems(localClientNum, 1);
