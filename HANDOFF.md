@@ -627,8 +627,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   about 5 minutes with "exceeded maximum number of script variables", also with the build the user played before today
   (Open items).
 - **The script variables limit** (session 45, a follow-up of session 44's find): measured, not a port bug; fixed with
-  one script patch at the user's "yes, apply the one-line script fix ... Don't push or install yet" (committed, not
-  pushed or installed). The launcher's 16-bot free-for-all with the user's settings (fu bots, gun damage
+  one script patch at the user's "yes, apply the one-line script fix" (0ca23a24); then the user: "Push it and install it
+  in the game folder": pushed (GitHub mac-port at 0ca23a24) and installed (make_portable.sh, log
+  build_macos/make_portable_s45.log: `blackops`, its code and strings identical to the tested build's, and the 6
+  libraries; the launcher, signature valid, local.kisakblack.launcher; the guns file written again from the backup folder,
+  25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A copy of the
+  installed `blackops` and lib/ run from a scratch folder as a dedicated server (scratch fs_h, 4 test clients, mp_nuked)
+  loads the guns and plays. The previous `blackops`, launcher and guns file are in build_macos/scrvar_s45/revert: copying
+  them back undoes the install. The launcher's 16-bot free-for-all with the user's settings (fu bots, gun damage
   20%, no time or score limit) stops on mp_nuked after 4-5 minutes because the game's scripts build up a queue of waiting
   threads: every hit on a bot starts a challenge thread (`_missions::playerDamaged`), every death up to two more (the kill's
   medals, pro perks and challenges, and a bots-killed counter), and all of them wait their turn in
@@ -919,9 +925,8 @@ fresh session (the user: "well we should work in a fresh session"), one piece of
 
 **Session 45: the script variables stop in the 16-bot free-for-all: fixed (session 45)** (Status, Decisions session 45).
 Not a port bug: the original scripts' one-a-frame challenge queue filled faster than it emptied. The fix (one more entry
-in cscr_parser.cpp's scrKbPatches, no dvar) is committed at the user's "yes"; not pushed or installed ("Don't push or
-install yet"): both wait for the user. Installing is make_portable.sh as usual (the frozen tested build is
-build_macos/scrvar_s45/blackops_fixed, the same code as HEAD's build).
+in cscr_parser.cpp's scrKbPatches, no dvar) is committed at the user's "yes", then pushed and installed at their "Push it
+and install it in the game folder" (Status; undo: build_macos/scrvar_s45/revert).
 
 **Session 37: the duplicate copies in the archives (job C): done** (Status, Decisions session 37): 802 second copies,
 111.8 MB, applied with the user's "yes". What the plan was (the user's decision, 2026-10-13, end of session 36): the
@@ -1348,8 +1353,8 @@ no time or score limit, gun damage 20%) stops with Sys_Error "exceeded maximum n
 after 4-5 minutes (mp_firingrange ~6; mp_cairo grows the same way, slower, about half an hour at its pace): the original
 scripts' challenge queue (`WaitTillSlowProcessAllowed`, one thread a server frame) gets ~31 threads a second, mostly one per
 hit, and keeps 11-14 a second; the game's live objects pass their limit (29,566). Not a port bug. Fixed in session 45 (a
-hit starts no challenge thread when challenges can't run, which in this game is always; 20 minutes, no growth); not
-installed yet (Next steps).
+hit starts no challenge thread when challenges can't run, which in this game is always; 20 minutes, no growth); pushed
+and installed in the game folder (Status).
 
 Seen in session 43: `KB_PHYS_STRESS=2500` on the launcher's 16-bot free-for-all (mp_cairo) crashes within ~30 s, with or
 without session 43's fix: the physics' transient allocator fails a request ("transient allocation too large, increase
