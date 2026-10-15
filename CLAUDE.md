@@ -96,7 +96,7 @@ Lightweight/Pro, 209 Attack Dogs); `statReadDDL cacLoadouts customclass1 primary
 prints a loadout slot.
 
 The user's gameplay changes are archived dvars that default to 1 (HANDOFF, Decisions
-sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32, 34 and 40): `kb_godMode` (human players take no damage), `kb_noGrenades`,
+sessions 16-18, 20, 23, 26, 27, 28, 29, 31, 32, 34, 40 and 46): `kb_godMode` (human players can't die: hits land as in normal play, kick, flinch, sounds, but health stops at 1), `kb_noGrenades`,
 `kb_noLaunchers` (a class's RPG, M72 LAW or Strela-3 comes as an AK-47), `kb_noKillstreaks`, `kb_noLastStand`,
 `kb_noDualWield` (a dual-wield pick comes as the single gun, for bots too; Create a Class offers none),
 `kb_dlcWeapons` (the 16 WWII guns of zone/Common/kb_dlc_weapons.ff in Create a Class and for the bots;

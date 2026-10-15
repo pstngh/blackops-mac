@@ -3943,7 +3943,7 @@ void __cdecl PlayerCmd_finishPlayerDamage(scr_entref_t entref)
                 Vec3NormalizeTo(dir, localdir);
             else
                 memset(localdir, 0, sizeof(localdir));
-            if ( (pSelf->flags & 1) != 0 || G_KbGodMode(pSelf) )
+            if ( (pSelf->flags & 1) != 0 )
             {
                 ApplyKnockBack(pSelf, damage, localdir, dflags, 1);
                 return;
@@ -4072,7 +4072,12 @@ void __cdecl PlayerCmd_finishPlayerDamage(scr_entref_t entref)
             if ( (float)pSelf->client->ps.damageTimer > max_damage_time )
                 pSelf->client->ps.damageTimer = (int)max_damage_time;
             pSelf->client->ps.damageDuration = pSelf->client->ps.damageTimer;
-            pSelf->health -= damage;
+            // kb_godMode (G_KbGodMode): a human player keeps 1 health where the hit would kill; the rest of the hit
+            // (the damage notify, pain, knockback, the view kick above) still uses the full damage, as in normal play.
+            if ( G_KbGodMode(pSelf) && pSelf->health - damage <= 0 )
+                pSelf->health = 1;
+            else
+                pSelf->health -= damage;
 
             {
                 PROF_SCOPED("damage notify");

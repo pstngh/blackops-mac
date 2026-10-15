@@ -2067,7 +2067,7 @@ void G_RegisterDvars()
         "Offset bipod mount position on gun by this distance");
     // The user's gameplay changes (HANDOFF, Decisions session 16); 0 gives the original game.
     // kb_noGrenades and kb_noLaunchers are registered with the items (BG_UnlockableItemsInit).
-    kb_godMode = _Dvar_RegisterBool("kb_godMode", 1, 1u, "Human players take no damage (bots do)");
+    kb_godMode = _Dvar_RegisterBool("kb_godMode", 1, 1u, "Human players can't die: health stops at 1 (bots take normal damage)");
     kb_noLastStand = _Dvar_RegisterBool("kb_noLastStand", 1, 1u, "Nobody goes into last stand (Second Chance)");
     kb_noDeathCam = _Dvar_RegisterBool(
         "kb_noDeathCam",

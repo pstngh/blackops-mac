@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-14, session 45)
+## Status (2026-10-15, session 46)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -183,7 +183,7 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   display, unlocked: 240 frames shown a second with vsync, 330-395 without. A cold
   system shader cache no longer stalls the spawn (Decisions session 15).
 - **The user's gameplay changes, stage A** (session 16; the queue and stages are in Next
-  steps): permanent god mode for the human players, no grenades of any kind (lethal,
+  steps): permanent god mode for the human players (since session 46 a "demigod": hits land, health stops at 1), no grenades of any kind (lethal,
   tactical, equipment, grenade launchers, the explosive crossbow) for anyone, no last stand
   for anyone, no killcam, final killcam or death view (respawn 0.1 s after dying), no music
   (menus and matches), no announcer, and an infinite reserve for the human players (the clip
@@ -652,6 +652,15 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   minute's count); a dedicated server and the TDM series rotated cleanly (Decisions session 45). The queue also held back
   the kills' medals, pro-perk progress, challenges and the "N kill streak" message (it waits for them) while it was long
   (how long each waited was not measured); with the fix they run within a frame or two of the kill.
+- **God mode feels the hits** (session 46, the user: "when using godmode, there is no damage/kickback"): `kb_godMode` is
+  now a "demigod", the user's choice of two: a human player is hit as in normal play (the view kick, the short dark-red
+  flash, the flinch and slow walk, the push, the "you're hit" sound; health drops, with the heartbeat and hurt breathing
+  when low, and regenerates) but keeps 1 health where a hit would kill, so never dies or goes into last stand. Before, a
+  hit did nothing at all for them. The user's clean HUD still hides the hit-direction marks and the red low-health edge,
+  in normal play too (their choice: kept). Tested with the launcher's 16-bot free-for-all and a 7-bot TDM with the user's
+  settings: 313 and 119 hits on the player, no death; health 95, 90, 85 ... stops at 1 and comes back to 100; bots die
+  as before; `kb_godMode 0` unchanged (Decisions session 46). Committed at the user's yes; not pushed or installed (the game
+  folder's copy still has the old god mode).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1348,6 +1357,10 @@ that weren't resolved). Item indices are listed in CLAUDE.md.
 
 ## Open items found but not fixed
 
+Seen in session 46: with `kb_cleanHud 1` (the user's setting) the first-person wristwatch's face draws flat purple; with
+`kb_cleanHud 0` it draws as the game's (grey glass). The clean HUD skips `Menu_PaintAll`, and the "wristwatch" menu is
+probably what paints the face (not investigated). Since session 29; cosmetic.
+
 Seen in session 44, explained in session 45 (Status, Decisions session 45): the launcher's 16-bot free-for-all (fu bots,
 no time or score limit, gun damage 20%) stops with Sys_Error "exceeded maximum number of script variables" on mp_nuked
 after 4-5 minutes (mp_firingrange ~6; mp_cairo grows the same way, slower, about half an hour at its pace): the original
@@ -1614,6 +1627,63 @@ Pre-existing (wrong on every build):
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
 
+## Decisions (session 46)
+
+**kb_godMode with the hits' feedback** (the user, 2026-10-15: "when using godmode, there is no damage/kickback, if u know
+what I mean. this needs to be fixed."; Status).
+- **Why nothing showed**: `G_KbGodMode` (session 16) ended `G_DamageClient` before `Scr_PlayerDamage`, so neither the
+  script's damage callback nor `finishPlayerDamage` ran for a human player, and everything a hit does to its victim is made
+  there: `damage_blood`/`damage_from` -> `P_DamageFeedback` (g_active_mp.cpp) -> `ps.damageEvent`/`damageCount`/
+  `damageYaw`/`damagePitch` -> `CG_DamageFeedback` on the client (the view kick, `v_dmg_pitch`/`v_dmg_roll`; the dark-red
+  full-screen `CG_DrawFlashDamage`; the direction slots `viewDamage[]`); `ps.damageTimer`/`damageDuration` (the flinch, the
+  stumble animations, `PM_DamageScale_Walk`'s slow walk) and `dmgDirection`/`dmgType` (pain animations); the victim-only
+  `EV_BULLET_HIT_CLIENT_SMALL`/`LARGE` (`prj_bullet_impact_small_player`/`large_player`, the "you're hit" sound);
+  `ApplyKnockBack`; the `damage` notify; the health the client shows (`ps.stats[0]`: the low-health overlay) and the
+  scripts' regeneration (_healthoverlay.gsc: `mpl_player_heartbeat` and hurt breathing under 35%, a pain voice when hit
+  below full health, regeneration after the tweakable delay).
+- **The choice** (asked in plain words): (a) "feel the hits, health stays full" (no heartbeat, hurt breathing, pain voice
+  or red edge) or (b) "demigod": health drops and refills, never below 1. The user: "Demigod: health drops and refills,
+  never below 1. Keep the clean HUD as it is (hit arrows and red edge hidden)." The original game has (b) as the `demigod`
+  cheat (`FL_DEMI_GODMODE`, `ent->flags` 2: `finishPlayerDamage` lowers the damage to health - 1). The `god` cheat (flags 1)
+  runs the callback but `finishPlayerDamage` stops after the knockback: no kick, so not that one.
+- **The change**: `G_DamageClient` no longer tests `G_KbGodMode` (the callback runs as for everyone), `finishPlayerDamage`'s
+  god-cheat test is the original's again, and the one difference left is the health: where a hit would take a human
+  player to 0 or below, health becomes 1. The demigod cheat lowers `damage` before the flinch timer, so its hits at 1
+  health don't flinch; kb_godMode keeps the full damage for the flinch timer, the `damage` notify, pain and knockback, as
+  in normal play. A human player's health never reaches 0, so no death from damage and no last stand; `kill` and a team
+  switch still kill as before. Falls and kill triggers leave 1 health (a player who falls into an out-of-map kill trigger
+  stays in it at 1 health, hit every frame; before, untouched: `kill` gets out). The dvar's description says it.
+- **Other ways, weighed with the user**: removing kb_godMode and typing `demigod` (ClientSpawn sets `ent->flags = 4096`, so
+  the cheat is gone at every spawn: each match, round, map and team change), or setting `FL_DEMI_GODMODE` at every spawn
+  (the original damage code untouched, one line at spawn; but at 1 health its hits count 0, so no flinch or knockback, and
+  the trace run below took 184 of its 226 hits at 1 health). The user, after the comparison: keep this one.
+- **Scripts**: Callback_PlayerDamage now runs for the human player. Its attacker lists (`attackers`, `attackerData`,
+  `attackerDamage`) are keyed by client and reset on a hit at full health and on full regeneration (`resetAttackerList`),
+  so they stay bounded however long the player lives; session 45's patch keeps `_missions::playerDamaged` out of the queue.
+  The bots get hit markers and hit stats against the player as against anyone (assists only come with a death).
+- **The clean HUD** (kb_cleanHud, session 29) skips `Menu_PaintAll` (with it the "low health" and "directional hit
+  indicator" menus) and `CG_DrawDamageDirectionIndicators`, in normal play too: with it on (kept, the user's choice) a hit
+  shows as the kick, the flash, the stagger, the push and the sounds; with it off the blood-red edge and the red hit marks
+  show as well (strip_hud.png).
+- **Checked** (scratch game folder build_macos/godmode_s46: links to the game folder's main, zone and lib, the user's
+  config with a 1024x768 window; scratch profiles; `run.sh <name> <s> tdm|dm <godmode> [+set ...]` there runs a listen
+  client on mp_nuked with the launcher's managed fu bots, gun damage 20%, never reload, no limits, `KB_EXTRA` for more
+  KB_CMDS; `frames.py` prints each frame's mean colour, `strip.py` puts frames side by side as a PNG; sound to the wave
+  writer, `snd_solo_alias_substring` to hear one alias):
+  - 7-bot TDM, 155 s: 119 hits on the player, no death. Frames at 30 a second over a burst of hits: at each hit the view
+    is knocked off (the scene shifts against the gun) and tinted (the frame's mean green/red falls from 1.04 to 0.95 for
+    about 5 frames; strip_kick.png, before and at a hit).
+  - The launcher's 16-bot free-for-all, 250 s: 313 hits on the player, no death; the bots died 520 times between them
+    (about 11 hits a death at 20%, as before). With `impact_large_player` soloed the rifle hits on the player are heard
+    (most hits were the StG 44's, which use the small sound); with `heartbeat` soloed the heartbeat plays through most of
+    75 s of fighting.
+  - `developer_script 1` (for the callback's `g_debugDamage` print) and `kb_cleanHud 0`, TDM, 150 s: 226 hits, health 95, 90,
+    85 ... down to 1 and held there (184 hits at 1 health; a bot's sniper rifle does 90), then 11, 21 ... 100 once the hits
+    stop; the low-health edge and the hit marks on screen; no death.
+  - `kb_godMode 0`, TDM, 110 s: the player died to a bot's M16 as before.
+  - No assert, script error, `[mtl] BUG` or signal in any run. check_file.py natively and `--i386` on the three files,
+    audit_splitlocals.py 0, gen_db_save.py `--check`.
+
 ## Decisions (session 45)
 
 **"exceeded maximum number of script variables" in the 16-bot free-for-all** (session 44's find; Status, Open items).
@@ -1659,7 +1729,7 @@ Pre-existing (wrong on every build):
 - **The queue** (_globallogic_utils.gsc, the original's): `WaitTillSlowProcessAllowed() { while ( level.lastSlowProcessFrame
   == gettime() ) wait .05; level.lastSlowProcessFrame = gettime(); }`: each frame every waiting thread wakes and the first
   to run takes the frame. Callers: Callback_PlayerDamage threads `_missions::playerDamaged` after every hit the damage
-  callback runs for (with kb_godMode not the human player's: G_KbGodMode skips the callback); Callback_PlayerKilled threads
+  callback runs for (with kb_godMode not the human player's until session 46: G_KbGodMode skipped the callback); Callback_PlayerKilled threads
   `updateGlobalBotKilledCounter` (level.globalLarrysKilled) on every death and `_missions::playerKilled` on every kill by
   another player, whose waitAndProcessPlayerKilledCallback queues and then threads the medal, pro-perk and challenge
   callbacks and notifies `playerKilledChallengesProcessed` (which _hardpoints' streakNotify waits for before the "N kill
@@ -4147,7 +4217,8 @@ Test runs that need the player to die pass `+set kb_godMode 0`.
   The scripts were read from the zones (decompress the .ff's zlib stream after the 12-byte
   header, find RawFile assets: name pointer -1, length, buffer -1, the name, then for
   .gsc/.csc an 8-byte header and a zlib stream; patch_mp's copies override common_mp's).
-- **kb_godMode** (human players only: not `SV_IsTestClient`): `G_KbGodMode` (g_combat_mp.cpp)
+- **kb_godMode** (human players only: not `SV_IsTestClient`; changed in session 46 to the demigod, Decisions session 46,
+  so this paragraph is history): `G_KbGodMode` (g_combat_mp.cpp)
   ends `G_DamageClient` before the script's damage callback, so no shellshock, flinch, burn
   or hit marker either, and `finishPlayerDamage` treats it like the `god` cheat. Falls and
   kill triggers can't kill you; `kill` (cheats are on in map games) still does, and a team

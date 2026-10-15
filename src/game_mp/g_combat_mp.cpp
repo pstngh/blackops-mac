@@ -435,8 +435,9 @@ double __cdecl G_GetWeaponHitLocationMultiplier(hitLocation_t hitLoc, unsigned i
     }
 }
 
-// kb_godMode: human players take no damage at all: like the god cheat, and the script's
-// damage callback (shellshock, flinch, burning) doesn't run for them either. Bots are test clients.
+// kb_godMode: human players can't die: a hit is a normal hit (the script's damage callback, view kick, flinch,
+// hit sound, knockback, health regeneration), but finishPlayerDamage leaves them 1 health where it would kill,
+// like the demigod cheat (HANDOFF, Decisions session 46). Bots are test clients.
 bool __cdecl G_KbGodMode(const gentity_s *ent)
 {
     return kb_godMode->current.enabled && ent->client && !SV_IsTestClient(ent->s.number);
@@ -545,7 +546,6 @@ void __cdecl G_DamageClient(
     if ( targ->takedamage
         && damage > 0
         && (targ->client->flags & 3) == 0
-        && !G_KbGodMode(targ)
         && targ->client->sess.connected == CON_CONNECTED
         && targ->client->ps.pm_type != 9
         && (targ->client->ps.otherFlags & 1) == 0 )
