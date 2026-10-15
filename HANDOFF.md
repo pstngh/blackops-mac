@@ -671,8 +671,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   user's setting) the watch on the first-person left arm showed a flat purple glass where the game draws a dial and hands
   (the real time). The dial is a HUD menu, "wristwatch", that paints into a texture on the arm, not onto the screen; the
   clean HUD skipped it with the rest. It now paints that one menu: the watch looks as with the HUD on, and nothing else
-  of the HUD comes back (Decisions session 47; build_macos/watch_s47 has the pictures). Committed at the user's yes; not
-  pushed or installed in the game folder.
+  of the HUD comes back (Decisions session 47; build_macos/watch_s47 has the pictures). Committed at the user's yes
+  (57e0f821); then the user: "push/install": pushed (GitHub mac-port, with this note) and installed (make_portable.sh,
+  log build_macos/make_portable_s47.log: `blackops`, its code and strings identical to the tested build's, and the 6
+  libraries; the launcher, signature valid, local.kisakblack.launcher; the guns file written again from the backup
+  folder, 25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A copy
+  of the installed `blackops` and lib/ run from a scratch folder as a dedicated server (scratch fs_h, 4 test clients,
+  mp_nuked) loads the guns and plays. The previous `blackops`, launcher and guns file are in build_macos/watch_s47/revert:
+  copying them back undoes the install.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
