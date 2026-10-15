@@ -659,8 +659,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   hit did nothing at all for them. The user's clean HUD still hides the hit-direction marks and the red low-health edge,
   in normal play too (their choice: kept). Tested with the launcher's 16-bot free-for-all and a 7-bot TDM with the user's
   settings: 313 and 119 hits on the player, no death; health 95, 90, 85 ... stops at 1 and comes back to 100; bots die
-  as before; `kb_godMode 0` unchanged (Decisions session 46). Committed at the user's yes; not pushed or installed (the game
-  folder's copy still has the old god mode).
+  as before; `kb_godMode 0` unchanged (Decisions session 46). Committed at the user's yes (9836d3bf); then the user: "Push it
+  and install it in the game folder": pushed (GitHub mac-port, with this note) and installed (make_portable.sh, log
+  build_macos/make_portable_s46.log: `blackops`, its code and strings identical to the tested build's, and the 6 libraries;
+  the launcher, signature valid, local.kisakblack.launcher; the guns file written again from the backup folder,
+  25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A copy of the
+  installed `blackops` and lib/ run from a scratch folder as a dedicated server (scratch fs_h, 4 test clients, mp_nuked)
+  loads the guns and plays. The previous `blackops`, launcher and guns file are in build_macos/godmode_s46/revert: copying
+  them back undoes the install.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
