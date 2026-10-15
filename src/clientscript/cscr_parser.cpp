@@ -1095,10 +1095,10 @@ SourceBufferInfo *__cdecl Scr_GetNewSourceBuffer(scriptInstance_t inst)
     return &gScrParserPub[inst].sourceBufferLookup[gScrParserPub[inst].sourceBufferLookupLen++];
 }
 
-// The user's gameplay changes that the game's scripts make (HANDOFF, Decisions session 16):
-// each patch replaces one line's text, found exactly once, as the script loads, and the new
-// text checks its dvar when it runs. No patch adds lines, so script errors keep their line
-// numbers. A patch whose text isn't there leaves the script alone and says so.
+// The user's gameplay changes that the game's scripts make (HANDOFF, Decisions session 16), and
+// one fix (the last, no dvar): each patch replaces one line's text, found exactly once, as the
+// script loads, and the new text checks its dvar when it runs. No patch adds lines, so script
+// errors keep their line numbers. A patch whose text isn't there leaves the script alone and says so.
 struct ScrKbPatch
 {
     const char *filename;
@@ -1212,6 +1212,17 @@ static const ScrKbPatch scrKbPatches[] =
         "maps/mp/gametypes/_globallogic.gsc",
         "wait GetDvarFloat( #\"scr_intermission_time\" );",
         "if ( !GetDvarInt( \"kb_noRoundEndWait\" ) ) wait GetDvarFloat( #\"scr_intermission_time\" );"
+    },
+    // Not a gameplay change: a hit starts its challenge thread only when the challenges can run, which in this game's
+    // _missions.gsc is never (mayProcessChallenges returns false), so the thread did nothing but wait its turn in
+    // WaitTillSlowProcessAllowed, one thread a server frame. More than 20 hits a second (16 bots at low gun damage)
+    // queued them faster than they left, until "exceeded maximum number of script variables" (HANDOFF, Decisions
+    // session 45). The kills' threads still queue there, a few a second.
+    {
+        "maps/mp/gametypes/_globallogic_player.gsc",
+        "self thread maps\\mp\\gametypes\\_missions::playerDamaged(eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, sHitLoc );",
+        "if ( maps\\mp\\gametypes\\_missions::mayProcessChallenges() ) "
+        "self thread maps\\mp\\gametypes\\_missions::playerDamaged(eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, sHitLoc );"
     },
 };
 
