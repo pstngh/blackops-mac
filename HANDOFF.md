@@ -1,6 +1,6 @@
 # HANDOFF — native macOS (Apple Silicon) port
 
-Branch `mac-port` of https://github.com/pstngh/kisakblack-mac. Local checkout:
+Branch `mac-port` of https://github.com/pstngh/blackops-mac (named kisakblack-mac until 2026-10-15). Local checkout:
 `/Users/pstn/Documents/kisakblack-mac`. Game data: `/Users/pstn/Documents/Games/codbo`
 (Steam Black Ops: `main/*.iwd`, `zone/Common`, `zone/English`). Build, run and
 debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.md.
