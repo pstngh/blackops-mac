@@ -43,7 +43,82 @@ there are no grenades, launchers, killstreaks or knifing, no aiming down the sig
 fixed Counter-Strike-style crosshair, Medal of Honor-style damage and leaning, a clean HUD, and no death cam.
 
 Each change is a setting whose name starts with `kb_`. Set it to 0 in the game's console to get the original back, for
-example `kb_godMode 0`. They are all listed in [CLAUDE.md](CLAUDE.md).
+example `kb_godMode 0`. The settings are saved in your config, except `kb_logFiles`.
+
+**Dying and damage**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_godMode` | 1 | You can't die: hits land normally, health stops at 1 (bots take normal damage) |
+| `kb_noLastStand` | 1 | Nobody goes into last stand (Second Chance) |
+| `kb_mohaaDamage` | 1 | Guns do Medal of Honor: Allied Assault damage at any distance: headshots 4x, the rest 1x |
+| `kb_damagePercent` | 100 | Lowers every gun's damage except sniper rifles', in percent (1-100); the launcher's "Gun damage" |
+| `kb_noMelee` | 1 | Nobody can knife; bots don't try |
+
+**Weapons and classes**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_noGrenades` | 1 | No grenades, equipment, grenade launchers or explosive crossbow, for anyone |
+| `kb_noLaunchers` | 1 | No rocket launchers: RPG, M72 LAW or Strela-3 become an AK-47 |
+| `kb_noKillstreaks` | 1 | Nobody earns killstreaks |
+| `kb_noDualWield` | 1 | No dual wield: you get the single gun |
+| `kb_blockGuns` | 1 | Blocks the FN FAL, Galil, M14, Olympia, HS-10, the light machine guns, the sniper rifles except the L96A1, and the Ballistic Knife |
+| `kb_allClassGuns` | 1 | You also carry the main guns of custom classes 1-5 |
+| `kb_dlcWeapons` | 1 | The WWII guns from World at War in Create a Class and for bots (takes effect at the next start) |
+| `kb_infiniteReserve` | 1 | Reloading never uses up your spare ammo |
+| `kb_infiniteClip` | 1 | Your magazine never empties, so you never reload; the launcher's "Never reload" |
+
+**Aiming and moving**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_noAds` | 1 | No aiming down the sights; everything fires from the hip |
+| `kb_sniperScope` | 1 | Sniper rifles still scope in, Medal of Honor style (instant, no sway) |
+| `kb_staticCrosshair` | 1 | A small fixed Counter-Strike crosshair; your bullets land inside it |
+| `kb_sprintFire` | 1 | Fire while sprinting without stopping the sprint |
+| `kb_aaLean` | 1 | Medal of Honor lean: 40 degrees, the view tilts, full speed |
+| `kb_noProne` | 1 | Nobody goes prone; the prone key crouches instead |
+| `kb_wwiiGunMovement` | 1 | WWII guns move like Black Ops guns while walking |
+| `kb_gunPlacement` | 1 | The WWII Thompson is held where the MP40 is |
+
+**Crosshair look** (Counter-Strike's own crosshair settings)
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_crosshairSize` | 2.5 | Line length |
+| `kb_crosshairGap` | -1 | Gap in the middle |
+| `kb_crosshairThickness` | 1 | Line thickness |
+| `kb_crosshairColor` | 1 1 1 1 | Colour and transparency (white) |
+| `kb_crosshairUseAlpha` | 0 | Use the colour's transparency |
+| `kb_crosshairDot` | 0 | A dot in the centre |
+| `kb_crosshairOutline` | 0 | A black outline |
+| `kb_crosshairOutlineThickness` | 1 | Outline thickness |
+
+**Screen**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_cleanHud` | 1 | Only the crosshair during play: no minimap, score, ammo, kill feed, names or markers |
+| `kb_noHitMarker` | 1 | No hit marker when you hit someone (the hit sound stays) |
+| `kb_noDeathCam` | 1 | No killcam or death view: you respawn right away |
+| `kb_noVersion` | 1 | No version text at the bottom right |
+
+**Match flow**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_noCountdown` | 1 | No "match begins in" countdown |
+| `kb_noRoundEndWait` | 1 | No waiting or scoreboard between rounds and maps |
+
+**Sound, menus and logs**
+
+| Setting | Default | What it does |
+|---|---|---|
+| `kb_noMusic` | 1 | No music in menus or matches |
+| `kb_noAnnouncer` | 1 | No announcer voice (battle chatter stays) |
+| `kb_cacButton` | 1 | The main menu's THEATER button opens CREATE A CLASS (takes effect at the next start) |
+| `kb_logFiles` | 1 | Write the game's log files; the launcher's "Save logs" (off there unless you tick it) |
 
 ## Other platforms
 
