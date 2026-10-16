@@ -1,82 +1,67 @@
-# KisakBlack
+# Black Ops for Mac
 
-[![Build and deploy](https://github.com/riicchhaarrd/KisakBlack/actions/workflows/build.yml/badge.svg?branch=github-actions)](https://github.com/riicchhaarrd/KisakBlack/actions/workflows/build.yml?query=branch%3Agithub-actions)
+Call of Duty: Black Ops multiplayer, running natively on Apple Silicon Macs: no Rosetta, no Wine.
 
-## About the project
-An open source fully-buildable reimplementation of Call of Duty Black ops's Multi-Player .exe
+This is a port of [KisakBlack](https://github.com/SwagSoftware/KisakBlack), the open-source rebuild of the game's
+multiplayer executable. You need your own copy of the game (the Steam version) for its data.
 
-Aimed towards mod developers and BLOPS enthusiasts.
+## What works
 
-### Development Blog
-Learn about the Development of KisakBlack here: [https://lwss.github.io/Kisak-Black/](https://lwss.github.io/Kisak-Black/)
+- Matches against bots on every multiplayer map, started from a simple launcher app
+- Dedicated servers, and joining a server over the network
+- Graphics through Metal, sound, mouse and keyboard
 
-## Building
+## Build
 
-Both native targets require a Steam copy of [Call of Duty: Black Ops](https://store.steampowered.com/app/42700/Call_of_Duty_Black_Ops/) and its game data.
-
-### Windows x86
-
-Install Visual Studio 2022, CMake 3.16+, and the [DirectX SDK (June 2010)](https://www.microsoft.com/en-us/download/details.aspx?id=6812), then run:
+Install Xcode, then:
 
 ```sh
-cmake -S . -B build -G "Visual Studio 17 2022" -A Win32
-cmake --build build --config Release
-```
-
-Set `DXSDK_DIR` if the SDK is not in its default location. Copy the game data and required runtime DLLs beside the executable before launching it.
-
-### Linux x86 / OpenGL
-
-Install the 32-bit GCC, SDL2, GLEW, OpenAL, Speex, VPX, and JPEG development packages, then run:
-
-```sh
-./build_linux.sh
-```
-
-The executable is written to `build_linux/blackops`.
-
-### macOS (Apple Silicon) / OpenGL
-
-Work in progress: the native arm64 build links and the dedicated server boots;
-loading a map and the client are not tested yet. Install Xcode and the Homebrew
-dependencies, then build:
-
-```sh
-brew install cmake ninja ccache sdl2 glew openal-soft speex libvpx sse2neon
+brew install cmake ninja pkgconf sdl2-compat glew openal-soft speex libvpx sse2neon
 cmake -S . -B build_macos -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build_macos
+ninja -C build_macos
 ```
 
-This is the first 64-bit target; see [docs/64bit.md](docs/64bit.md) for how
-32-bit assets, network fields and pointers stored in ints are handled.
+## Install
 
+Point this at your game folder (the one with `main/` and `zone/` in it):
 
+```sh
+tools/make_portable.sh "/path/to/your/game folder"
 ```
-Keep in Mind: This is a ~20 year old game with some known exploits. We will try to fix these as we become aware of them.
-However, there is a non-zero chance of some type of binary exploitation when playing online. Use a sandbox (Sandboxie?) for peace of mind. 
-```
 
-## Known Issues
-(Use the **[issues](https://github.com/SwagSoftware/KisakBlack/issues)** section)
+It copies the game and the libraries it needs into that folder and adds `Black Ops Launcher.app`. Run it again after
+every build.
 
-## Troubleshooting
-- ***Can't Connect to Dedicated Server*** :
-  -  Check `net_ip` and `net_port`, the server will increment the port if the preferred one isn't available but the client won't sweep upwards.
- - ***DLL Error upon launch*** :
-   - You didn't copy over the necessary runtime DLL's
+## Play
 
-## FAQ
-- Can we use AI in this project?
-  - Yes you can, but you're still responsible for whatever you commit. In general, you should have the AI be assisting you, and not carrying you. We have started using AI to help de-bug, and it's been extremely helpful.
+Open `Black Ops Launcher.app` in the game folder, pick a map, a mode and the bots, and press Play.
 
-## Credits and Special Thanks
-- ***All Original BLOPS Developers (for creating one of the best games of all time)***
-- https://github.com/SwagSoftware/KisakCOD (Some code re-used)
-- https://github.com/PJayB/jk3src (Jedi Academy fork with .sln)
-- https://github.com/voron00/CoD2rev_Server - Useful yacc code for the gsc scripting here
-- https://github.com/shiversoftdev/BO3Enhanced - Viewed as reference code for some of the Steam API Auth
-- [RAD Game Tools](https://www.radgametools.com/) for their Bink library.
+## Gameplay changes
 
+This version is set up for playing alone against bots, and it changes the game by default. For example: you can't die,
+there are no grenades, launchers, killstreaks or knifing, no aiming down the sights (sniper rifles still scope in), a
+fixed Counter-Strike-style crosshair, Medal of Honor-style damage and leaning, a clean HUD, and no death cam.
 
-## Discord
-[Join the KisakCOD Discord](https://discord.gg/9uqntRWMA3)
+Each change is a setting whose name starts with `kb_`. Set it to 0 in the game's console to get the original back, for
+example `kb_godMode 0`. They are all listed in [CLAUDE.md](CLAUDE.md).
+
+## Other platforms
+
+The code still has KisakBlack's Windows and Linux (32-bit) builds; see [KisakBlack](https://github.com/SwagSoftware/KisakBlack)
+for how to build them. They are not tested here.
+
+## More
+
+- [HANDOFF.md](HANDOFF.md): the port's status and how each part was done
+- [docs/64bit.md](docs/64bit.md): how the 32-bit game was made to run as 64-bit
+
+This is a game from 2010 with known exploits. Be careful playing online.
+
+## Credits
+
+- The original Black Ops developers
+- [KisakBlack](https://github.com/SwagSoftware/KisakBlack) and its [development blog](https://lwss.github.io/Kisak-Black/),
+  which this is built on, and the projects it credits: [KisakCOD](https://github.com/SwagSoftware/KisakCOD),
+  [jk3src](https://github.com/PJayB/jk3src), [CoD2rev_Server](https://github.com/voron00/CoD2rev_Server),
+  [BO3Enhanced](https://github.com/shiversoftdev/BO3Enhanced) and [RAD Game Tools](https://www.radgametools.com/) (Bink)
+- [OpenMoHAA](https://github.com/openmoh/openmohaa) for the lean, and FFmpeg for the WMA sound decoder
