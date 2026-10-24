@@ -126,9 +126,11 @@ a human player's scope as MoHAA's: in and out in 0.05 s, no drift or walking swa
 or map at once), `kb_damagePercent` (an int 1-100, default 100: lowers every gun's damage but the sniper rifles', everyone's, in
 percent; 100 or more changes nothing; the launcher's "Gun damage" passes it), `kb_blockGuns` (nobody gets the FN FAL, Galil,
 M14, Olympia, HS-10, HK21, RPK, M60, Stoner63, Dragunov, WA2000, PSG1 or Ballistic Knife, any variant: a class's comes as an
-AK-47, the knife as nothing; bots pick others and, with kb_noLaunchers and kb_noGrenades, always a pistol second; the WWII guns stay; Create a Class lists none of them, nor
+AK-47, a sniper rifle as the L96A1 (the default Sniper class's Dragunov), the knife as nothing; bots pick others and, with kb_noLaunchers and kb_noGrenades, always a pistol second; the WWII guns stay; Create a Class lists none of them, nor
 launchers, the crossbow or the lethal/tactical/equipment rows), `kb_noMelee` (the melee button does nothing, bots don't
-melee). With kb_cleanHud the world markers (the teammates' death skull, objective markers) are hidden too. Tests
+melee), `kb_instantClass` (a class a human player picks while alive comes at once, where they stand, as in the grace
+period: a script patch of menuClass), `kb_consoleCommands` (in a match the console runs a line without the leading / as a
+command, as at the menu; the original says it in chat; quit and kill still need the /). With kb_cleanHud the world markers (the teammates' death skull, objective markers) are hidden too. Tests
 where the player should die pass
 `+set kb_godMode 0`, tests of ADS `+set kb_noAds 0`, of explosives `+set kb_noGrenades 0` (and
 `kb_noLaunchers`, `kb_noKillstreaks`), of prone `+set kb_noProne 0`, tests that read the HUD (popups, kill feed, hints) in screenshots `+set kb_cleanHud 0`, of Black Ops' own

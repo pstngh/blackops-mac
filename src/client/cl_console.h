@@ -471,6 +471,7 @@ extern const dvar_t *con_inputHintBoxColor;
 extern const dvar_t *con_outputBarColor;
 extern const dvar_t *con_outputSliderColor;
 extern const dvar_t *con_outputWindowColor;
+extern const dvar_t *kb_consoleCommands;
 extern const dvar_t *con_gameMsgWindowNMsgTime[3];
 extern const dvar_t *con_gameMsgWindowNLineCount[3];
 extern const dvar_t *con_gameMsgWindowNScrollTime[3];

@@ -63,8 +63,9 @@ example `kb_godMode 0`. The settings are saved in your config, except `kb_logFil
 | `kb_noLaunchers` | 1 | No rocket launchers: RPG, M72 LAW or Strela-3 become an AK-47 |
 | `kb_noKillstreaks` | 1 | Nobody earns killstreaks |
 | `kb_noDualWield` | 1 | No dual wield: you get the single gun |
-| `kb_blockGuns` | 1 | Blocks the FN FAL, Galil, M14, Olympia, HS-10, the light machine guns, the sniper rifles except the L96A1, and the Ballistic Knife |
+| `kb_blockGuns` | 1 | Blocks the FN FAL, Galil, M14, Olympia, HS-10, the light machine guns, the sniper rifles except the L96A1, and the Ballistic Knife; a class's blocked gun comes as an AK-47, a blocked sniper rifle as the L96A1 |
 | `kb_allClassGuns` | 1 | You also carry the main guns of custom classes 1-5 |
+| `kb_instantClass` | 1 | A class you pick while alive comes at once, where you stand, not at the next spawn |
 | `kb_dlcWeapons` | 1 | The WWII guns from World at War in Create a Class and for bots (takes effect at the next start) |
 | `kb_infiniteReserve` | 1 | Reloading never uses up your spare ammo |
 | `kb_infiniteClip` | 1 | Your magazine never empties, so you never reload; the launcher's "Never reload" |
@@ -119,6 +120,7 @@ example `kb_godMode 0`. The settings are saved in your config, except `kb_logFil
 | `kb_noAnnouncer` | 1 | No announcer voice (battle chatter stays) |
 | `kb_cacButton` | 1 | The main menu's THEATER button opens CREATE A CLASS (takes effect at the next start) |
 | `kb_logFiles` | 1 | Write the game's log files; the launcher's "Save logs" (off there unless you tick it) |
+| `kb_consoleCommands` | 1 | In a match, the console runs what you type without the leading `/` (the original says it in chat); `quit` and `kill` still need it |
 
 ## Other platforms
 

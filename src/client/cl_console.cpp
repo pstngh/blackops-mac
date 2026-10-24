@@ -57,6 +57,7 @@ const dvar_t *con_inputHintBoxColor;
 const dvar_t *con_outputBarColor;
 const dvar_t *con_outputSliderColor;
 const dvar_t *con_outputWindowColor;
+const dvar_t *kb_consoleCommands;
 
 const dvar_t *con_gameMsgWindowNMsgTime[3];
 const dvar_t *con_gameMsgWindowNLineCount[3];
@@ -735,6 +736,12 @@ void __cdecl Con_OneTimeInit()
                                                                                 1.0,
                                                                                 1u,
                                                                                 "Color of typewritten objective text.");
+    // The user's change (README, "Gameplay changes"); 0 gives the original console.
+    kb_consoleCommands = _Dvar_RegisterBool(
+        "kb_consoleCommands",
+        1,
+        1u,
+        "In a game, the console runs what is typed as a command without the leading /, instead of saying it in chat");
     Con_InitMessageWindow(
         &con.consoleWindow,
         con.consoleMessages,

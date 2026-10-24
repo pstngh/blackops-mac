@@ -1197,6 +1197,15 @@ static const ScrKbPatch scrKbPatches[] =
         "if ( !isDefined( options ) ) options = 0; self GiveWeapon( weapon, 0, int( options ) ); } }\n"
         "giveLoadout( team, class )"
     },
+    // kb_instantClass: a class a human player picks while alive comes at once, where they stand, as it does in the
+    // grace period at a match's start or at a supply station (menuClass), instead of "at the next spawn": with
+    // kb_godMode there is no next spawn
+    {
+        "maps/mp/gametypes/_globallogic_ui.gsc",
+        "supplyStationClassChange = isDefined( self.usingSupplyStation ) && self.usingSupplyStation;",
+        "supplyStationClassChange = ( isDefined( self.usingSupplyStation ) && self.usingSupplyStation ) "
+        "|| ( GetDvarInt( \"kb_instantClass\" ) && !self is_bot() && !self istestclient() );"
+    },
     // kb_noRoundEndWait: no waiting at a round's or match's end: the outcome screen's delays (roundEndWait:
     // the round end, the side switch, the match end with its match bonus, which is still handed out)...
     {

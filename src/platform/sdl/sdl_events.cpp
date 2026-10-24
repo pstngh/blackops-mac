@@ -59,6 +59,10 @@ void Sys_PumpSDLEvents(unsigned t) {
                 int k = Sys_SDLKeyToKeyNum((int)e.key.keysym.sym);
                 if (k != K_NONE)
                     Sys_QueEvent(t, SE_KEY, k, e.type == SDL_KEYDOWN ? 1 : 0, 0, nullptr);
+                // The text fields (console, chat, menus) erase on the character 8 that Windows' WM_CHAR sends for
+                // Backspace (Field_CharEvent); SDL sends no text for it. Its key repeats repeat it.
+                if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_BACKSPACE)
+                    Sys_QueEvent(t, SE_CHAR, 8, 0, 0, nullptr);
                 break;
             }
             case SDL_TEXTINPUT:

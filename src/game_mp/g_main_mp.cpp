@@ -125,6 +125,7 @@ const dvar_t *kb_noKillstreaks;
 const dvar_t *kb_noHitMarker;
 const dvar_t *kb_noCountdown;
 const dvar_t *kb_allClassGuns;
+const dvar_t *kb_instantClass;
 const dvar_t *kb_mohaaDamage;
 const dvar_t *kb_noRoundEndWait;
 const dvar_t *kb_damagePercent;
@@ -2090,6 +2091,11 @@ void G_RegisterDvars()
         1,
         1u,
         "Human players also carry the primary guns of custom classes 1-5");
+    kb_instantClass = _Dvar_RegisterBool(
+        "kb_instantClass",
+        1,
+        1u,
+        "A class a human player picks while alive comes at once, where they stand, not at the next spawn");
     kb_mohaaDamage = _Dvar_RegisterBool(
         "kb_mohaaDamage",
         1,

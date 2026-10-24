@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-15, session 47)
+## Status (2026-10-24, session 48)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -678,6 +678,19 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   folder, 25db4b27..., the same bytes; the shader library step stops at the missing Metal Toolchain as before). A copy
   of the installed `blackops` and lib/ run from a scratch folder as a dedicated server (scratch fs_h, 4 test clients,
   mp_nuked) loads the guns and plays. The previous `blackops`, launcher and guns file are in build_macos/watch_s47/revert:
+  copying them back undoes the install.
+- **Class change at once, the Sniper class's L96A1, console Backspace and commands without /** (session 48, the user:
+  "choose class should make me respawn with the new class", "snipers dont have zoom when i right click", "i cant
+  backspace in the console, and why do I always need to do tab to add / so the command loads?"): new `kb_instantClass`
+  (a class picked while alive comes at once, where the player stands), a blocked sniper rifle (the default Sniper class's
+  Dragunov) comes as the L96A1, Backspace erases in the console, chat and menu fields, and new `kb_consoleCommands` (a
+  console line without the / runs as a command in a match too). Checked in a scratch game folder (Decisions session 48);
+  on branch fix/class-respawn-scope-console. Installed in the game folder at the user's "yes" (make_portable.sh, log
+  build_macos/make_portable_s48.log: `blackops` and its 6 libraries, byte-identical to the previous ones; the launcher,
+  signature valid, its icon kept; the guns file kept as it was, 25db4b27..., since codbo_wwii_guns_backup is no longer
+  next to the game folder; the shader library step stops at the missing Metal Toolchain as before). A copy of the
+  installed `blackops` run from the scratch game folder spawns the Sniper class with the L96A1, scopes in, and takes
+  Custom 5 at once 28 s in. The previous `blackops`, lib/, launcher and guns file are in build_macos/install_s48/revert:
   copying them back undoes the install.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
@@ -1640,6 +1653,44 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 48)
+
+The local checkout is now /Users/pstn/Documents/blackops-mac (a fresh clone of pstngh/blackops-mac; the old
+~/Documents/kisakblack-mac and its build_macos are gone), work on branch fix/class-respawn-scope-console.
+- **Class change while alive** (`kb_instantClass`, archived, default 1): menuClass (_globallogic_ui.gsc) gives the new class
+  at once only in the grace period at a match's start (`level.inGracePeriod && !self.hasDoneCombat`) or at a supply
+  station, else it says "class will change on next spawn", which with kb_godMode never comes. A script patch adds "the dvar
+  is on and the player is human" to its supply-station flag, so the class comes the way the grace period gives it (setClass,
+  giveLoadout, so kb_allClassGuns' guns too), where the player stands. Not a real respawn: the game's only respawn of a
+  living player is the team switch's suicide, which leaves a body, drops the gun and prints an obituary, and one-life modes
+  (S&D) would eliminate the player.
+- **Sniper zoom**: the scope works (L96A1 with the user's config and MOUSE2 `+toggleads_throw`: in on a press, out on the
+  next). The user's classes (statReadDDL): Custom 1-5 primaries 12, 26, 12, 28, 52 (Trench Gun), no sniper rifle; classes
+  6-10 (`prestigeclass1`-`5` in the DDL) 50, 27, 43 (L96A1, class 8), 15, 12. The default Sniper class (`sniper_mp`)
+  has the Dragunov, which kb_blockGuns gave as an AK-47 (kb_noAds: no aiming, so no zoom). G_KbForBlockedGun now gives a
+  blocked Dragunov, WA2000 or PSG1 as `l96a1_mp`: the Sniper class spawns with the L96A1 and scopes in.
+- **Backspace**: the text fields erase on the character 8 (Field_CharEvent, the menus' Item_TextField_HandleKey), which
+  Windows' WM_CHAR sends for Backspace; SDL sends no text event for it, so sdl_events.cpp queues SE_CHAR 8 with each
+  Backspace key-down (its repeats too). The K_BACKSPACE key event does nothing in either path, so nothing erases twice.
+- **Commands without /** (`kb_consoleCommands`, archived, default 1, registered in Con_OneTimeInit): Console_Key ran a line
+  without a leading / or \ as a command only when disconnected, in a match it sent "cmd say <line>"; Tab's completion
+  adds the /. With the dvar a match does as the menu does (Con_Restricted_AddBuf; quit and kill still need the /).
+- **Checked** (scratch game folder /tmp/claude-501/kbg: links to the game folder's main archives, zone, lib, kb_shaders,
+  localization.txt, a copy of the build and copies of the user's config_mp.cfg (windowed) and mpstats.dat; mp_nuked TDM,
+  KB_CMDS, screenshots): Custom 1 set to the L96A1 (scratch stats) scopes in and out with `kb_key MOUSE2`; 25 s after the
+  spawn, out of the grace period, `kb_instantClass 0` + Custom 2 keeps the L96A1 (the original), `kb_instantClass 1` +
+  Custom 3 and then Custom 5 swap the gun at once; the Sniper class with developer 1: "kb_blockGuns: not giving
+  dragunov_mp", the L96A1 in hand, scoped on the press, out on the next. No "Script patch ... not applied" line.
+  Backspace and kb_consoleCommands, through a temporary `kb_typetest` command (removed) that handed SDL text and Backspace
+  key events to Sys_PumpSDLEvents' handling (SDL_PushEvent crashed in sdl2-compat, so it called the handler directly;
+  the console opens on `kb_key \``, `toggleconsole` isn't a command): in the match, "set kbtestvar 12x", Backspace, "3"
+  showed "set kbtestvar 123" and Enter ran it (`kbtestvar` is "123"); with `kb_consoleCommands 0` "set kbtestvar2 5" went
+  to chat ("Unknown Soldier 1: set kbtestvar2 5") and set nothing.
+  check_file.py natively and `--i386` (sdl_events.cpp: the known SDL header artefacts only).
+- **A scratch game folder needs a short path**: DB_BuildOSPath writes `<base>\zone\<language>\<zone>.ff` into 256 bytes,
+  so a base path near 200 characters (the session's scratchpad) truncates it and the first zone fails with "Read error of
+  file 'en_code_pre_gfx_mp'".
 
 ## Decisions (session 47)
 

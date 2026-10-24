@@ -518,7 +518,9 @@ void __cdecl Console_Key(int localClientNum, int key)
         {
             Con_Restricted_AddBuf(&g_consoleField.buffer[1]);
         }
-        else if ( Console_IsClientDisconnected()
+        // kb_consoleCommands: in a game too, a line without the / runs as a command, as at the menu, where the
+        // original says it in chat; quit and kill still need the /, as at the menu.
+        else if ( (Console_IsClientDisconnected() || kb_consoleCommands->current.enabled)
                      && I_strnicmp(g_consoleField.buffer, "quit", 4)
                      && I_strnicmp(g_consoleField.buffer, "kill", 4) )
         {

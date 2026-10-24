@@ -1805,7 +1805,9 @@ bool __cdecl G_KbBlockedGunWeapon(unsigned int weaponIndex)
 }
 
 // What a class gets in a blocked gun's place: a gun comes as an AK-47 (as a launcher does), the
-// ballistic knife as nothing (the user's answers, HANDOFF Decisions session 34).
+// ballistic knife as nothing (the user's answers, HANDOFF Decisions session 34), and a blocked sniper
+// rifle as the L96A1, the sniper rifle they kept, so a sniper class (the default Sniper class's
+// Dragunov) still scopes in (kb_sniperScope) where an AK-47 can't aim (kb_noAds).
 unsigned int __cdecl G_KbForBlockedGun(unsigned int weaponIndex)
 {
     char reference[64];
@@ -1815,6 +1817,8 @@ unsigned int __cdecl G_KbForBlockedGun(unsigned int weaponIndex)
     G_KbWeaponReference(weaponIndex, reference, sizeof(reference));
     if ( !I_stricmp(reference, "knife_ballistic") )
         return 0;
+    if ( !I_stricmp(reference, "dragunov") || !I_stricmp(reference, "wa2000") || !I_stricmp(reference, "psg1") )
+        return G_GetWeaponIndexForName((char *)"l96a1_mp");
     return G_GetWeaponIndexForName((char *)"ak47_mp");
 }
 
