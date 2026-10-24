@@ -741,7 +741,7 @@ void __cdecl Con_OneTimeInit()
         "kb_consoleCommands",
         1,
         1u,
-        "In a game, the console runs what is typed as a command without the leading /, instead of saying it in chat");
+        "The console runs what is typed as a command without the leading /, instead of saying it in chat");
     Con_InitMessageWindow(
         &con.consoleWindow,
         con.consoleMessages,

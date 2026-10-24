@@ -692,6 +692,13 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   installed `blackops` run from the scratch game folder spawns the Sniper class with the L96A1, scopes in, and takes
   Custom 5 at once 28 s in. The previous `blackops`, lib/, launcher and guns file are in build_macos/install_s48/revert:
   copying them back undoes the install.
+  Then the user tried it: the instant class worked, but "the l96a1 didnt have a scope" and quit needed the /. **The right
+  mouse button reached the game as MOUSE3** (sdl_events.cpp took SDL's button numbers, left 1, middle 2, right 3, in
+  order from K_MOUSE1; the engine's MOUSE2 is the right button): a right click ran MOUSE3's `+frag` (nothing, with
+  kb_noGrenades) and the middle button aimed. Every scope test since session 32 pressed `kb_key MOUSE2`, which skips that
+  code, so session 39's "no fault found" was this. Now mapped by name (right MOUSE2, middle MOUSE3, X1/X2 MOUSE4/5), and
+  kb_consoleCommands runs quit and kill without the / too. Reinstalled (build_macos/make_portable_s48b.log; the revert
+  folder still holds the files from before session 48).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1688,6 +1695,13 @@ The local checkout is now /Users/pstn/Documents/blackops-mac (a fresh clone of p
   showed "set kbtestvar 123" and Enter ran it (`kbtestvar` is "123"); with `kb_consoleCommands 0` "set kbtestvar2 5" went
   to chat ("Unknown Soldier 1: set kbtestvar2 5") and set nothing.
   check_file.py natively and `--i386` (sdl_events.cpp: the known SDL header artefacts only).
+- **Mouse buttons** (after the user's try): SDL_MOUSEBUTTON events went to `K_MOUSE1 + button - 1`, so SDL's middle (2)
+  was MOUSE2 and right (3) MOUSE3; Windows' WM_RBUTTONDOWN is MOUSE2. A switch maps left, right, middle, X1, X2 to
+  MOUSE1-5. Checked through a temporary `kb_buttontest <sdl button>` (removed) feeding SDL button events to the event
+  handler: on the Sniper class's L96A1, button 3 scopes in, 3 again out, 3 in; 2 (now `+frag`) does nothing visible and
+  doesn't stop the next right click. One earlier run of the same sequence showed no scope and didn't repeat (the user was
+  watching that window and may have clicked in it). `kb_key MOUSE2`, which tests used, queues the key itself and never
+  showed the swap. kb_consoleCommands: "quit" typed without the / quit the game (`kb_typetest quit`, Enter).
 - **A scratch game folder needs a short path**: DB_BuildOSPath writes `<base>\zone\<language>\<zone>.ff` into 256 bytes,
   so a base path near 200 characters (the session's scratchpad) truncates it and the first zone fails with "Read error of
   file 'en_code_pre_gfx_mp'".

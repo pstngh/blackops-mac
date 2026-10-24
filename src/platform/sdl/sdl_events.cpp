@@ -71,8 +71,19 @@ void Sys_PumpSDLEvents(unsigned t) {
                 break;
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP: {
-                int btn = e.button.button - SDL_BUTTON_LEFT;  // 0-based -> K_MOUSE1..
-                Sys_QueEvent(t, SE_KEY, K_MOUSE1 + btn, e.type == SDL_MOUSEBUTTONDOWN ? 1 : 0, 0, nullptr);
+                // SDL numbers the middle button before the right one; the engine (Windows' WM_RBUTTONDOWN) has
+                // MOUSE2 the right button, MOUSE3 the middle one.
+                int k;
+                switch (e.button.button) {
+                    case SDL_BUTTON_LEFT:   k = K_MOUSE1; break;
+                    case SDL_BUTTON_RIGHT:  k = K_MOUSE2; break;
+                    case SDL_BUTTON_MIDDLE: k = K_MOUSE3; break;
+                    case SDL_BUTTON_X1:     k = K_MOUSE4; break;
+                    case SDL_BUTTON_X2:     k = K_MOUSE5; break;
+                    default:                k = K_NONE;   break;
+                }
+                if (k != K_NONE)
+                    Sys_QueEvent(t, SE_KEY, k, e.type == SDL_MOUSEBUTTONDOWN ? 1 : 0, 0, nullptr);
                 break;
             }
             case SDL_WINDOWEVENT:

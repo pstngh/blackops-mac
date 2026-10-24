@@ -120,7 +120,7 @@ example `kb_godMode 0`. The settings are saved in your config, except `kb_logFil
 | `kb_noAnnouncer` | 1 | No announcer voice (battle chatter stays) |
 | `kb_cacButton` | 1 | The main menu's THEATER button opens CREATE A CLASS (takes effect at the next start) |
 | `kb_logFiles` | 1 | Write the game's log files; the launcher's "Save logs" (off there unless you tick it) |
-| `kb_consoleCommands` | 1 | In a match, the console runs what you type without the leading `/` (the original says it in chat); `quit` and `kill` still need it |
+| `kb_consoleCommands` | 1 | The console runs what you type without the leading `/` (in a match the original says it in chat) |
 
 ## Other platforms
 
