@@ -700,9 +700,11 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   kb_consoleCommands runs quit and kill without the / too. Reinstalled (build_macos/make_portable_s48b.log; the revert
   folder still holds the files from before session 48).
 - **Launcher map mosaic** (session 49, the user: "i would like the laucher to have a map picker that has the image of
-  the map, so maybe a button i click to see a mosaic of all maps and then i choose by clicking on it"): the Map row shows
-  the chosen map's name and picture; a click opens a sheet with a tile per map (Random, the 14 maps, then the installed
-  map packs' 12 under "Map Packs"), the game's own map-menu pictures, and a click on a tile chooses it. On branch
+  the map, so maybe a button i click to see a mosaic of all maps and then i choose by clicking on it"); then "on the main
+  launcher page, dont show the picture. and on the map picker mosaic, any chance we could have the photos larger? DO NOT
+  split hte DLC maps from the regular ones, u can sort them alphabetically". A click on the Map row (the map's name)
+  opens a window, "Choose a Map", with a tile per map (Random, then the 14 maps and the installed map packs' 12 by name),
+  the game's own map-menu pictures, and a click on a tile chooses it. On branch
   feat/launcher-map-picker (Decisions session 49). Installed in the game folder (tools/launcher/build.sh: icon and
   identifier kept, 27 pictures); the previous launcher is in build_macos/launcher_s49/revert.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
@@ -1681,15 +1683,20 @@ Pre-existing (wrong on every build):
   and `BlackOpsLauncher --map-pictures` prints them; build.sh converts them from the game folder's main/*.iwd with
   tools/iwi_to_png.py (~1 s) into Contents/Resources/maps/<map id>.png (2 MB). A game folder without archives reuses the
   installed app's pictures; with neither, the tiles are gray with a symbol.
-- **Layout**: tiles of 96 points (192 pixels on Retina from the 240 crop), 4 columns, so the sheet is the launcher's
-  width and all 27 fit in its height (819 points) without scrolling; the name sits on a dark gradient at the tile's
-  bottom, the chosen map has an accent border and a check, a hovered one a white border; Cancel or Escape closes it.
-  The whole Map row is the button (the label stays centred; LabeledContent put it at the top of the taller row).
+- **Layout**: first a sheet of 96-point tiles in 4 columns (the launcher's width); the user asked for bigger pictures,
+  no picture on the main page and the map packs' maps not split off. A sheet can't be wider than its window, so the
+  mosaic is a window of its own (MapPickerWindow, AppKit hosting the SwiftUI grid): 150-point tiles (300 pixels on
+  Retina from the 240 crop, a little soft), 7 columns, so 27 tiles take 4 rows, 1150 x 702 points with the title bar;
+  fewer columns on a screen narrower than ~1160 points. Its top is the launcher's top, centred on it, kept on the screen;
+  one at a time; a tile click or Escape (cancelOperation) or the close button closes it. All maps sort by name (Random
+  first). The name sits on a dark gradient at the tile's bottom, the chosen map has an accent border and a check, a
+  hovered one a white border. The whole Map row (name and chevron, no picture) is the button.
 - **Checked** (scratch game folder /tmp/claude-501/kbg, a copy of the app with another CFBundleIdentifier):
-  `KB_LAUNCHER_TEST_MAP=mp_cairo` opened the mosaic (all 27 tiles, Nuketown checked), chose Havana, and Play started
-  `blackops ... +map mp_cairo`; `KB_LAUNCHER_TEST_MAP=random` showed Random in the row and started a random installed map
-  (mp_berlinwall2). build.sh in a folder without main/ kept the installed app's 27 pictures; in an empty folder the app
-  has none and shows the gray tiles (no map packs listed: no zone). Clicking a tile by hand isn't tested here (no input).
+  `KB_LAUNCHER_TEST_PICK=415,443` opened the mosaic (27 tiles by name, Nuketown checked), clicked Kowloon's tile (mouse
+  down and up through the window's sendEvent, so the tile's own button), the row showed Kowloon and Play started
+  `blackops ... +map mp_kowloon`. The first (sheet) version: choosing Random started a random installed map
+  (mp_berlinwall2); build.sh in a folder without main/ kept the installed app's 27 pictures; in an empty folder the app
+  has none and shows the gray tiles (no map packs listed: no zone). Escape closing the window isn't tested.
 
 ## Decisions (session 48)
 

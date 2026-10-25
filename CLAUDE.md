@@ -70,8 +70,8 @@ normal` (easy/normal/hard/fu; the bots arrive ~10 s in), `+set kb_damagePercent 
 kb_infiniteClip 0/1` ("Never reload") and `+set kb_logFiles 0/1` ("Save logs", off by default: off, the game's output
 goes nowhere and it writes no main/console_mp.log or main/games_mp.log; on, the output goes to `blackops.log` next to the
 app; kb_logFiles is 1 in a game started by hand), all at every start. `KB_LAUNCHER_TEST=<dir>`
-makes the app save its window as `<dir>/launcher.png` and press Play itself (with `KB_LAUNCHER_TEST_MAP=<map id>`
-it first opens the map mosaic, saves it as `<dir>/maps.png` and chooses that map); run it
+makes the app save its window as `<dir>/launcher.png` and press Play itself (with `KB_LAUNCHER_TEST_PICK=<x>,<y>`
+it first opens the map mosaic, saves it as `<dir>/maps.png` and clicks it at that pixel of maps.png); run it
 in a scratch copy of the game folder (`main/` a real folder of links to the archives, as the game writes logs and
 screenshots into `<folder>/main`; links to `zone`, `lib` and a copy of
 `blackops`), as the app starts the `blackops` next to it with that folder's profile.

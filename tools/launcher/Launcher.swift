@@ -11,8 +11,8 @@
 // kb_infiniteClip (the player's magazines never empty). Save logs (off by default): the game's
 // output into blackops.log next to the app, and the game's own main/console_mp.log and
 // main/games_mp.log (kb_logFiles); off, the game writes no log file.
-// The map is chosen from a mosaic of the maps' pictures, the ones the game's own map menu
-// shows; build.sh copies them from the game folder into the app (game art, not in git).
+// The map is chosen from a mosaic of the maps' pictures (a window of its own), the ones the game's
+// own map menu shows; build.sh copies them from the game folder into the app (game art, not in git).
 //
 // Build: tools/launcher/build.sh <game dir>
 import AppKit
@@ -138,15 +138,15 @@ struct LauncherView: View {
     @AppStorage("neverReload") private var neverReload = true      // kb_infiniteClip
     @AppStorage("saveLogs") private var saveLogs = false           // blackops.log, kb_logFiles
     @State private var error: String?
-    @State private var choosingMap = false
 
-    private let installedMapPackMaps: [GameMap] = {
+    // The base game's maps and the installed map packs', by name.
+    private let availableMaps: [GameMap] = {
         let zone = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("zone/Common")
-        return mapPackMaps.filter {
+        let installedMapPackMaps = mapPackMaps.filter {
             FileManager.default.fileExists(atPath: zone.appendingPathComponent("\($0.id).ff").path)
         }
+        return (gameMaps + installedMapPackMaps).sorted { $0.name < $1.name }
     }()
-    private var availableMaps: [GameMap] { gameMaps + installedMapPackMaps }
 
     private var selectedMode: GameMode { gameModes.first { $0.id == mode } ?? gameModes[0] }
 
@@ -155,14 +155,11 @@ struct LauncherView: View {
             Form {
                 Section("Match") {
                     // The whole row opens the map mosaic.
-                    Button { choosingMap = true } label: {
+                    Button { showMapPicker() } label: {
                         HStack(spacing: 8) {
                             Text("Map")
                             Spacer()
                             Text(availableMaps.first { $0.id == map }?.name ?? "Random")
-                            MapPicture(id: map)
-                                .frame(width: 36, height: 36)
-                                .clipShape(RoundedRectangle(cornerRadius: 5))
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -237,21 +234,18 @@ struct LauncherView: View {
         } message: {
             Text(error ?? "")
         }
-        .sheet(isPresented: $choosingMap) {
-            MapPickerView(selection: $map, maps: gameMaps, mapPackMaps: installedMapPackMaps)
-        }
         .onAppear {
             // A map pack's map that is no longer installed.
             if map != "random" && !availableMaps.contains(where: { $0.id == map }) {
                 map = "mp_nuked"
             }
             // KB_LAUNCHER_TEST=<dir>: save the window as <dir>/launcher.png, then Play. With
-            // KB_LAUNCHER_TEST_MAP=<map id> it first opens the map mosaic, saves it as <dir>/maps.png
-            // and chooses that map.
+            // KB_LAUNCHER_TEST_PICK=<x>,<y> it first opens the map mosaic, saves it as <dir>/maps.png
+            // and clicks it at that pixel of maps.png.
             let environment = ProcessInfo.processInfo.environment
             if let dir = environment["KB_LAUNCHER_TEST"] {
-                let testMap = environment["KB_LAUNCHER_TEST_MAP"]
-                let mainWindow = { NSApp.windows.first { $0.isVisible && $0.sheetParent == nil } }
+                let pick = environment["KB_LAUNCHER_TEST_PICK"]?.split(separator: ",").compactMap { Double($0) }
+                let launcherWindow = { NSApp.windows.first { $0.isVisible && !($0 is MapPickerWindow) } }
                 func save(_ window: NSWindow?, _ name: String) {
                     if let window, let image = windowImage(window) {
                         let rep = NSBitmapImageRep(cgImage: image)
@@ -259,20 +253,61 @@ struct LauncherView: View {
                             .write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
                     }
                 }
-                if testMap != nil {
-                    choosingMap = true
+                if pick != nil {
+                    NSApp.activate(ignoringOtherApps: true)
+                    DispatchQueue.main.async { showMapPicker() }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    if let testMap {
-                        save(mainWindow()?.attachedSheet, "maps.png")
-                        map = testMap
-                        choosingMap = false
+                    if let pick, pick.count == 2, let picker = MapPickerWindow.current {
+                        save(picker, "maps.png")
+                        click(picker, x: pick[0], y: pick[1])
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + (testMap == nil ? 0 : 1)) {
-                        save(mainWindow(), "launcher.png")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (pick == nil ? 0 : 1)) {
+                        save(launcherWindow(), "launcher.png")
                         start(match: true)
                     }
                 }
+            }
+        }
+    }
+
+    // The map mosaic, in a window of its own (wider than the launcher, for bigger pictures),
+    // its top on the launcher's top, centred on it and kept on the screen.
+    private func showMapPicker() {
+        if let open = MapPickerWindow.current {
+            open.makeKeyAndOrderFront(nil)
+            return
+        }
+        let launcher = NSApp.windows.first { $0.isVisible && !($0 is MapPickerWindow) }
+        let screen = (launcher?.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        // Up to 7 columns (4 rows for all 27 tiles), fewer on a narrow screen.
+        let columns = max(3, min(7, Int((screen.width - 40) / (MapTile.size + 10))))
+        let window = MapPickerWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "Choose a Map"
+        window.isReleasedWhenClosed = false
+        let host = NSHostingController(rootView: MapPickerView(selection: map, maps: availableMaps, columns: columns) { [weak window] id in
+            map = id
+            window?.close()
+        })
+        window.contentViewController = host
+        window.setContentSize(host.view.fittingSize)
+        let size = window.frame.size
+        let anchor = launcher?.frame ?? screen
+        window.setFrameOrigin(NSPoint(x: min(max(anchor.midX - size.width / 2, screen.minX), screen.maxX - size.width),
+                                      y: min(max(anchor.maxY - size.height, screen.minY), screen.maxY - size.height)))
+        MapPickerWindow.current = window
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    // A left click at a pixel of the window's picture (as windowImage saves it: top left origin), for KB_LAUNCHER_TEST_PICK.
+    private func click(_ window: NSWindow, x: Double, y: Double) {
+        let scale = window.backingScaleFactor
+        let location = NSPoint(x: x / scale, y: window.frame.height - y / scale)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                              context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                window.sendEvent(event)
             }
         }
     }
@@ -377,51 +412,42 @@ struct MapPicture: View {
     }
 }
 
-// The map mosaic: a tile per map (Random first, then the map packs' installed maps under their
-// own heading); a click chooses that map and closes it.
-struct MapPickerView: View {
-    @Binding var selection: String
-    let maps: [GameMap]
-    let mapPackMaps: [GameMap]
-    @Environment(\.dismiss) private var dismiss
+// The map mosaic's window; Escape closes it. `current` keeps the open one.
+final class MapPickerWindow: NSWindow {
+    static var current: MapPickerWindow?
 
-    private let columns = Array(repeating: GridItem(.fixed(96), spacing: 8), count: 4)
+    override func cancelOperation(_ sender: Any?) { close() }
+
+    override func close() {
+        super.close()
+        MapPickerWindow.current = nil
+    }
+}
+
+// The map mosaic: a tile per map, Random first, then every map by name; a click chooses it.
+struct MapPickerView: View {
+    let selection: String
+    let maps: [GameMap]
+    let columns: Int
+    let choose: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Choose a Map").font(.headline)
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            // All 27 tiles fit in the launcher window's height, so no scrolling.
-            LazyVGrid(columns: columns, spacing: 8) {
-                tile(id: "random", name: "Random")
-                ForEach(maps) { tile(id: $0.id, name: $0.name) }
-            }
-            if !mapPackMaps.isEmpty {
-                Text("Map Packs")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(mapPackMaps) { tile(id: $0.id, name: $0.name) }
-                }
-            }
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(MapTile.size), spacing: 10), count: columns), spacing: 10) {
+            tile(id: "random", name: "Random")
+            ForEach(maps) { tile(id: $0.id, name: $0.name) }
         }
-        .padding(16)
-        .frame(width: 440)
+        .padding(20)
+        .fixedSize()
     }
 
     private func tile(id: String, name: String) -> some View {
-        MapTile(id: id, name: name, selected: selection == id) {
-            selection = id
-            dismiss()
-        }
+        MapTile(id: id, name: name, selected: selection == id) { choose(id) }
     }
 }
 
 struct MapTile: View {
+    static let size: CGFloat = 150     // points: 300 pixels on a Retina screen, from the 240-pixel pictures
+
     let id: String
     let name: String
     let selected: Bool
@@ -432,27 +458,27 @@ struct MapTile: View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
                 MapPicture(id: id)
-                    .frame(width: 96, height: 96)
+                    .frame(width: MapTile.size, height: MapTile.size)
                 LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
                 Text(name)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .padding(6)
+                    .padding(8)
             }
-            .frame(width: 96, height: 96)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: MapTile.size, height: MapTile.size)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(selected ? Color.accentColor : Color.white.opacity(hovering ? 0.7 : 0),
-                                  lineWidth: selected ? 3 : 2)
+                                  lineWidth: selected ? 4 : 2)
             }
             .overlay(alignment: .topTrailing) {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: 20))
                         .foregroundStyle(.white, Color.accentColor)
-                        .padding(5)
+                        .padding(6)
                 }
             }
             .contentShape(Rectangle())
