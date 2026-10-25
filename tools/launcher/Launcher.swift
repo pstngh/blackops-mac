@@ -11,6 +11,8 @@
 // kb_infiniteClip (the player's magazines never empty). Save logs (off by default): the game's
 // output into blackops.log next to the app, and the game's own main/console_mp.log and
 // main/games_mp.log (kb_logFiles); off, the game writes no log file.
+// The map is chosen from a mosaic of the maps' pictures, the ones the game's own map menu
+// shows; build.sh copies them from the game folder into the app (game art, not in git).
 //
 // Build: tools/launcher/build.sh <game dir>
 import AppKit
@@ -19,42 +21,56 @@ import SwiftUI
 struct GameMap: Identifiable, Hashable {
     let id: String
     let name: String
+    let picture: String     // the image of the game's map menu (mp/mapstable.csv's material), in main/*.iwd
 }
 
 // The base game's maps, with their in-game names.
 let gameMaps: [GameMap] = [
-    GameMap(id: "mp_array", name: "Array"),
-    GameMap(id: "mp_cracked", name: "Cracked"),
-    GameMap(id: "mp_crisis", name: "Crisis"),
-    GameMap(id: "mp_firingrange", name: "Firing Range"),
-    GameMap(id: "mp_duga", name: "Grid"),
-    GameMap(id: "mp_hanoi", name: "Hanoi"),
-    GameMap(id: "mp_cairo", name: "Havana"),
-    GameMap(id: "mp_havoc", name: "Jungle"),
-    GameMap(id: "mp_cosmodrome", name: "Launch"),
-    GameMap(id: "mp_nuked", name: "Nuketown"),
-    GameMap(id: "mp_radiation", name: "Radiation"),
-    GameMap(id: "mp_mountain", name: "Summit"),
-    GameMap(id: "mp_villa", name: "Villa"),
-    GameMap(id: "mp_russianbase", name: "WMD"),
+    GameMap(id: "mp_array", name: "Array", picture: "menu_mp_map_select_array_final"),
+    GameMap(id: "mp_cracked", name: "Cracked", picture: "menu_mp_map_select_cracked_final"),
+    GameMap(id: "mp_crisis", name: "Crisis", picture: "menu_mp_map_select_crisis_final"),
+    GameMap(id: "mp_firingrange", name: "Firing Range", picture: "menu_mp_map_select_firing_range_final"),
+    GameMap(id: "mp_duga", name: "Grid", picture: "menu_mp_map_select_duga_final"),
+    GameMap(id: "mp_hanoi", name: "Hanoi", picture: "menu_mp_map_select_hanoi_final"),
+    GameMap(id: "mp_cairo", name: "Havana", picture: "menu_mp_map_select_havana_final"),
+    GameMap(id: "mp_havoc", name: "Jungle", picture: "menu_mp_map_select_havoc_final"),
+    GameMap(id: "mp_cosmodrome", name: "Launch", picture: "menu_mp_map_select_cosmo_final"),
+    GameMap(id: "mp_nuked", name: "Nuketown", picture: "menu_mp_map_select_nuked_final"),
+    GameMap(id: "mp_radiation", name: "Radiation", picture: "menu_mp_map_select_radiation_final"),
+    GameMap(id: "mp_mountain", name: "Summit", picture: "menu_mp_map_select_mount_final"),
+    GameMap(id: "mp_villa", name: "Villa", picture: "menu_mp_map_select_villa_final"),
+    GameMap(id: "mp_russianbase", name: "WMD", picture: "menu_mp_map_select_russian_base_final"),
 ]
 
 // The map packs' maps (First Strike, Escalation, Annihilation), listed when the game
-// folder has their zone file.
+// folder has their zone file. Hotel's picture is the map pack's (patch_mp names the cut
+// base-game map's, a daytime pool).
 let mapPackMaps: [GameMap] = [
-    GameMap(id: "mp_berlinwall2", name: "Berlin Wall"),
-    GameMap(id: "mp_gridlock", name: "Convoy"),
-    GameMap(id: "mp_discovery", name: "Discovery"),
-    GameMap(id: "mp_drivein", name: "Drive-In"),
-    GameMap(id: "mp_area51", name: "Hangar 18"),
-    GameMap(id: "mp_golfcourse", name: "Hazard"),
-    GameMap(id: "mp_hotel", name: "Hotel"),
-    GameMap(id: "mp_kowloon", name: "Kowloon"),
-    GameMap(id: "mp_silo", name: "Silo"),
-    GameMap(id: "mp_stadium", name: "Stadium"),
-    GameMap(id: "mp_outskirts", name: "Stockpile"),
-    GameMap(id: "mp_zoo", name: "Zoo"),
+    GameMap(id: "mp_berlinwall2", name: "Berlin Wall", picture: "menu_mp_map_select_berwall2_final"),
+    GameMap(id: "mp_gridlock", name: "Convoy", picture: "menu_mp_map_select_gridlock_final"),
+    GameMap(id: "mp_discovery", name: "Discovery", picture: "menu_mp_map_select_discovery2_final"),
+    GameMap(id: "mp_drivein", name: "Drive-In", picture: "menu_mp_map_select_drivein_final"),
+    GameMap(id: "mp_area51", name: "Hangar 18", picture: "menu_mp_map_select_area51_final"),
+    GameMap(id: "mp_golfcourse", name: "Hazard", picture: "menu_mp_map_select_golfcourse_final"),
+    GameMap(id: "mp_hotel", name: "Hotel", picture: "menu_mp_map_select_hot2_final"),
+    GameMap(id: "mp_kowloon", name: "Kowloon", picture: "menu_mp_map_select_kow_final"),
+    GameMap(id: "mp_silo", name: "Silo", picture: "menu_mp_map_select_silo_final"),
+    GameMap(id: "mp_stadium", name: "Stadium", picture: "menu_mp_map_select_stad_final"),
+    GameMap(id: "mp_outskirts", name: "Stockpile", picture: "menu_mp_map_select_outskirts_final"),
+    GameMap(id: "mp_zoo", name: "Zoo", picture: "menu_mp_map_select_zoo_final"),
 ]
+
+// Random's tile ("Location classified").
+let randomPicture = "menu_mp_map_select_random_big"
+
+// The pictures by map id (and "random"): Contents/Resources/maps/<id>.png, which build.sh makes.
+let mapPictures: [String: NSImage] = {
+    var pictures: [String: NSImage] = [:]
+    for url in Bundle.main.urls(forResourcesWithExtension: "png", subdirectory: "maps") ?? [] {
+        pictures[url.deletingPathExtension().lastPathComponent] = NSImage(contentsOf: url)
+    }
+    return pictures
+}()
 
 struct GameMode: Identifiable, Hashable {
     let id: String          // g_gametype
@@ -87,6 +103,15 @@ let maxBots = 16
 struct LauncherApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        // `BlackOpsLauncher --map-pictures`: each map's id and picture, for build.sh to copy the pictures in.
+        if CommandLine.arguments.dropFirst().first == "--map-pictures" {
+            for map in gameMaps + mapPackMaps { print(map.id, map.picture) }
+            print("random", randomPicture)
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         Window("Black Ops", id: "launcher") {
             LauncherView()
@@ -113,6 +138,7 @@ struct LauncherView: View {
     @AppStorage("neverReload") private var neverReload = true      // kb_infiniteClip
     @AppStorage("saveLogs") private var saveLogs = false           // blackops.log, kb_logFiles
     @State private var error: String?
+    @State private var choosingMap = false
 
     private let installedMapPackMaps: [GameMap] = {
         let zone = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("zone/Common")
@@ -128,15 +154,22 @@ struct LauncherView: View {
         VStack(spacing: 0) {
             Form {
                 Section("Match") {
-                    Picker("Map", selection: $map) {
-                        Text("Random").tag("random")
-                        Divider()
-                        ForEach(gameMaps) { Text($0.name).tag($0.id) }
-                        if !installedMapPackMaps.isEmpty {
-                            Divider()
-                            ForEach(installedMapPackMaps) { Text($0.name).tag($0.id) }
+                    // The whole row opens the map mosaic.
+                    Button { choosingMap = true } label: {
+                        HStack(spacing: 8) {
+                            Text("Map")
+                            Spacer()
+                            Text(availableMaps.first { $0.id == map }?.name ?? "Random")
+                            MapPicture(id: map)
+                                .frame(width: 36, height: 36)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     Picker("Mode", selection: $mode) {
                         ForEach(gameModes) { Text($0.name).tag($0.id) }
                     }
@@ -204,20 +237,41 @@ struct LauncherView: View {
         } message: {
             Text(error ?? "")
         }
+        .sheet(isPresented: $choosingMap) {
+            MapPickerView(selection: $map, maps: gameMaps, mapPackMaps: installedMapPackMaps)
+        }
         .onAppear {
             // A map pack's map that is no longer installed.
             if map != "random" && !availableMaps.contains(where: { $0.id == map }) {
                 map = "mp_nuked"
             }
-            // KB_LAUNCHER_TEST=<dir>: save the window as <dir>/launcher.png, then Play.
-            if let dir = ProcessInfo.processInfo.environment["KB_LAUNCHER_TEST"] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    if let window = NSApp.windows.first, let image = windowImage(window) {
+            // KB_LAUNCHER_TEST=<dir>: save the window as <dir>/launcher.png, then Play. With
+            // KB_LAUNCHER_TEST_MAP=<map id> it first opens the map mosaic, saves it as <dir>/maps.png
+            // and chooses that map.
+            let environment = ProcessInfo.processInfo.environment
+            if let dir = environment["KB_LAUNCHER_TEST"] {
+                let testMap = environment["KB_LAUNCHER_TEST_MAP"]
+                let mainWindow = { NSApp.windows.first { $0.isVisible && $0.sheetParent == nil } }
+                func save(_ window: NSWindow?, _ name: String) {
+                    if let window, let image = windowImage(window) {
                         let rep = NSBitmapImageRep(cgImage: image)
                         try? rep.representation(using: .png, properties: [:])?
-                            .write(to: URL(fileURLWithPath: dir).appendingPathComponent("launcher.png"))
+                            .write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
                     }
-                    start(match: true)
+                }
+                if testMap != nil {
+                    choosingMap = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    if let testMap {
+                        save(mainWindow()?.attachedSheet, "maps.png")
+                        map = testMap
+                        choosingMap = false
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (testMap == nil ? 0 : 1)) {
+                        save(mainWindow(), "launcher.png")
+                        start(match: true)
+                    }
                 }
             }
         }
@@ -297,5 +351,114 @@ struct LauncherView: View {
             return
         }
         NSApp.terminate(nil)
+    }
+}
+
+// A map's picture filling its frame; without one (an app built without the game's pictures) a
+// gray tile with a symbol.
+struct MapPicture: View {
+    let id: String
+
+    var body: some View {
+        if let picture = mapPictures[id] {
+            Image(nsImage: picture)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFill()
+                .background(Color.black)
+        } else {
+            ZStack {
+                Color.gray.opacity(0.35)
+                Image(systemName: id == "random" ? "shuffle" : "map")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+// The map mosaic: a tile per map (Random first, then the map packs' installed maps under their
+// own heading); a click chooses that map and closes it.
+struct MapPickerView: View {
+    @Binding var selection: String
+    let maps: [GameMap]
+    let mapPackMaps: [GameMap]
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = Array(repeating: GridItem(.fixed(96), spacing: 8), count: 4)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Choose a Map").font(.headline)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            // All 27 tiles fit in the launcher window's height, so no scrolling.
+            LazyVGrid(columns: columns, spacing: 8) {
+                tile(id: "random", name: "Random")
+                ForEach(maps) { tile(id: $0.id, name: $0.name) }
+            }
+            if !mapPackMaps.isEmpty {
+                Text("Map Packs")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(mapPackMaps) { tile(id: $0.id, name: $0.name) }
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 440)
+    }
+
+    private func tile(id: String, name: String) -> some View {
+        MapTile(id: id, name: name, selected: selection == id) {
+            selection = id
+            dismiss()
+        }
+    }
+}
+
+struct MapTile: View {
+    let id: String
+    let name: String
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                MapPicture(id: id)
+                    .frame(width: 96, height: 96)
+                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
+                Text(name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(6)
+            }
+            .frame(width: 96, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(selected ? Color.accentColor : Color.white.opacity(hovering ? 0.7 : 0),
+                                  lineWidth: selected ? 3 : 2)
+            }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white, Color.accentColor)
+                        .padding(5)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(name)
     }
 }

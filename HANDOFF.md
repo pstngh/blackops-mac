@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-24, session 48)
+## Status (2026-10-24, session 49)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -699,6 +699,12 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   code, so session 39's "no fault found" was this. Now mapped by name (right MOUSE2, middle MOUSE3, X1/X2 MOUSE4/5), and
   kb_consoleCommands runs quit and kill without the / too. Reinstalled (build_macos/make_portable_s48b.log; the revert
   folder still holds the files from before session 48).
+- **Launcher map mosaic** (session 49, the user: "i would like the laucher to have a map picker that has the image of
+  the map, so maybe a button i click to see a mosaic of all maps and then i choose by clicking on it"): the Map row shows
+  the chosen map's name and picture; a click opens a sheet with a tile per map (Random, the 14 maps, then the installed
+  map packs' 12 under "Map Packs"), the game's own map-menu pictures, and a click on a tile chooses it. On branch
+  feat/launcher-map-picker (Decisions session 49). Installed in the game folder (tools/launcher/build.sh: icon and
+  identifier kept, 27 pictures); the previous launcher is in build_macos/launcher_s49/revert.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1660,6 +1666,30 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 49)
+
+- **The pictures**: mp/mapstable.csv names each map's menu material (`menu_mp_<map>_map_select_final`); the material's
+  image, read from common_mp.ff and patch_mp.ff (zlib, the image name follows the material's), is
+  `menu_mp_map_select_<x>_final` (256x256 DXT5 in main/iw_05.iwd and iw_25.iwd; `cairo` is havana, `havoc` havoc, not
+  the cut map jungle's, `cosmodrome` cosmo, `mountain` mount, `kowloon` kow, `stadium` stad, `berlinwall2` berwall2,
+  `discovery` discovery2). Hotel: patch_mp's mp_hotel material names `hotel_final`, the cut base-game map's daytime pool
+  without the frame the others have; the map pack's is `hot2_final` (night, searchlights), which the launcher shows.
+  Random: `menu_mp_map_select_random_big` ("Location classified"). The `_final` pictures have a transparent rounded
+  edge of 4-8 pixels; build.sh crops them to the middle 15/16 (240x240).
+- **Game art stays out of git**, as with the icon (session 32): the image names are in Launcher.swift (`GameMap.picture`)
+  and `BlackOpsLauncher --map-pictures` prints them; build.sh converts them from the game folder's main/*.iwd with
+  tools/iwi_to_png.py (~1 s) into Contents/Resources/maps/<map id>.png (2 MB). A game folder without archives reuses the
+  installed app's pictures; with neither, the tiles are gray with a symbol.
+- **Layout**: tiles of 96 points (192 pixels on Retina from the 240 crop), 4 columns, so the sheet is the launcher's
+  width and all 27 fit in its height (819 points) without scrolling; the name sits on a dark gradient at the tile's
+  bottom, the chosen map has an accent border and a check, a hovered one a white border; Cancel or Escape closes it.
+  The whole Map row is the button (the label stays centred; LabeledContent put it at the top of the taller row).
+- **Checked** (scratch game folder /tmp/claude-501/kbg, a copy of the app with another CFBundleIdentifier):
+  `KB_LAUNCHER_TEST_MAP=mp_cairo` opened the mosaic (all 27 tiles, Nuketown checked), chose Havana, and Play started
+  `blackops ... +map mp_cairo`; `KB_LAUNCHER_TEST_MAP=random` showed Random in the row and started a random installed map
+  (mp_berlinwall2). build.sh in a folder without main/ kept the installed app's 27 pictures; in an empty folder the app
+  has none and shows the gray tiles (no map packs listed: no zone). Clicking a tile by hand isn't tested here (no input).
 
 ## Decisions (session 48)
 

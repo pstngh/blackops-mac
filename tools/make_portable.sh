@@ -85,7 +85,8 @@ left=$( { external_deps "$game/blackops"; for name in "${copied[@]}"; do externa
 echo "installed $game/blackops and ${#copied[@]} libraries in $lib: ${copied[*]}"
 
 # The launcher app (tools/launcher: map, mode and bots, then Play), with its icon when the build
-# folder has the picture (launcher_icon.png; game art, so not in git).
+# folder has the picture (launcher_icon.png; game art, so not in git) and the maps' pictures from
+# the game folder's archives.
 if command -v swiftc >/dev/null; then
     "$(dirname "$0")/launcher/build.sh" "$game" "$build/launcher_icon.png"
 fi

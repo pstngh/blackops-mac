@@ -34,7 +34,8 @@ every build.
 
 ## Play
 
-Open `Black Ops Launcher.app` in the game folder, pick a map, a mode and the bots, and press Play.
+Open `Black Ops Launcher.app` in the game folder, pick a map (click the Map row to see every map's picture and click
+one), a mode and the bots, and press Play.
 
 ## Gameplay changes
 

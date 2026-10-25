@@ -60,7 +60,9 @@ crashed the old code within a minute on mp_nuked with bots. Use it on mp_nuked w
 The game folder's `Black Ops Launcher.app` (tools/launcher, built by
 make_portable.sh or `tools/launcher/build.sh <game dir> [icon picture]`; its icon is made by
 tools/launcher/make_icon.swift from `build_macos/launcher_icon.png`, game art kept out of git; the app keeps
-the picture in Contents/Resources and a rebuild without one reuses it: HANDOFF, Decisions session 32) starts matches with the
+the picture in Contents/Resources and a rebuild without one reuses it: HANDOFF, Decisions session 32; the map is chosen from a
+mosaic of the game's map-menu pictures, which build.sh copies from the game folder's main/*.iwd into Contents/Resources/maps,
+game art too, reused the same way: HANDOFF, Decisions session 49) starts matches with the
 PC managed bots instead: `+set sv_botsAllowMovement 1 +set sv_botsPressAttackBtn 1
 +set sv_botsPressMeleeBtn 1 +set scr_bots_managed_spawn 1 +set
 scr_bots_managed_allies 3 +set scr_bots_managed_axis 4 +set scr_bot_difficulty
@@ -68,7 +70,8 @@ normal` (easy/normal/hard/fu; the bots arrive ~10 s in), `+set kb_damagePercent 
 kb_infiniteClip 0/1` ("Never reload") and `+set kb_logFiles 0/1` ("Save logs", off by default: off, the game's output
 goes nowhere and it writes no main/console_mp.log or main/games_mp.log; on, the output goes to `blackops.log` next to the
 app; kb_logFiles is 1 in a game started by hand), all at every start. `KB_LAUNCHER_TEST=<dir>`
-makes the app save its window as `<dir>/launcher.png` and press Play itself; run it
+makes the app save its window as `<dir>/launcher.png` and press Play itself (with `KB_LAUNCHER_TEST_MAP=<map id>`
+it first opens the map mosaic, saves it as `<dir>/maps.png` and chooses that map); run it
 in a scratch copy of the game folder (`main/` a real folder of links to the archives, as the game writes logs and
 screenshots into `<folder>/main`; links to `zone`, `lib` and a copy of
 `blackops`), as the app starts the `blackops` next to it with that folder's profile.

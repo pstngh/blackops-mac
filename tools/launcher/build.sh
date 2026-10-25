@@ -3,7 +3,8 @@
 # blackops that tools/make_portable.sh installs there. With a picture (a square PNG; the
 # user's is build_macos/launcher_icon.png, kept out of git: game art), the app gets an icon
 # made from it (make_icon.swift), and keeps the picture in Contents/Resources, so the game
-# folder carries it: without a picture, a rebuild reuses the one the installed app has.
+# folder carries it: without a picture, a rebuild reuses the one the installed app has. The
+# map mosaic's pictures come from the game folder's archives the same way (below).
 #
 # usage: tools/launcher/build.sh <game dir> [icon picture]
 set -euo pipefail
@@ -56,6 +57,31 @@ if [ -n "$icon" ] && [ -f "$icon" ]; then
     "$work/make_icon" "$icon" "$bundle/Contents/Resources/AppIcon.icns"
     cp "$icon" "$bundle/Contents/Resources/launcher_icon.png"
     /usr/libexec/PlistBuddy -c 'Add :CFBundleIconFile string AppIcon' "$bundle/Contents/Info.plist"
+fi
+# The map mosaic's pictures (game art too): the pictures of the game's map menu, which the launcher
+# lists (--map-pictures), from the game folder's main/*.iwd, as Contents/Resources/maps/<map id>.png.
+# The map menu's have a transparent rounded edge, cut off here. Without the archives a rebuild reuses
+# the installed app's pictures.
+mkdir -p "$work/maps"
+"$work/BlackOpsLauncher" --map-pictures > "$work/map_pictures.txt"
+if ls "$game"/main/*.iwd > /dev/null 2>&1; then
+    python3 "$here/../iwi_to_png.py" "$game" "$work/pictures" $(cut -d' ' -f2 "$work/map_pictures.txt") > /dev/null
+    while read -r id picture; do
+        [ -f "$work/pictures/$picture.png" ] || continue
+        cp "$work/pictures/$picture.png" "$work/maps/$id.png"
+        case $picture in
+            *_final)
+                size=$(sips -g pixelWidth "$work/maps/$id.png" | awk '/pixelWidth/ { print $2 }')
+                sips --cropToHeightWidth $((size * 15 / 16)) $((size * 15 / 16)) "$work/maps/$id.png" > /dev/null ;;
+        esac
+    done < "$work/map_pictures.txt"
+fi
+if [ -z "$(ls "$work/maps")" ] && [ -d "$app/Contents/Resources/maps" ]; then
+    cp "$app/Contents/Resources/maps/"*.png "$work/maps/"
+fi
+if [ -n "$(ls "$work/maps")" ]; then
+    mkdir -p "$bundle/Contents/Resources/maps"
+    cp "$work/maps/"*.png "$bundle/Contents/Resources/maps/"
 fi
 if ! err=$(codesign --force --sign - "$bundle" 2>&1); then
     echo "$err" >&2
