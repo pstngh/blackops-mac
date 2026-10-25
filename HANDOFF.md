@@ -1,7 +1,7 @@
 # HANDOFF — native macOS (Apple Silicon) port
 
 Branch `mac-port` of https://github.com/pstngh/blackops-mac (named kisakblack-mac until 2026-10-15). Local checkout:
-`/Users/pstn/Documents/kisakblack-mac`. Game data: `/Users/pstn/Documents/Games/codbo`
+`/Volumes/1TB BLUE/blackops-mac` (the user's external SSD, since session 50). Game data: `/Users/pstn/Documents/Games/codbo`
 (Steam Black Ops: `main/*.iwd`, `zone/Common`, `zone/English`). Build, run and
 debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.md.
 
@@ -10,7 +10,7 @@ debugging commands are in CLAUDE.md; the 64-bit design and rules in docs/64bit.m
 A native arm64 macOS build of the multiplayer executable: no Rosetta, no Wine.
 Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port.
 
-## Status (2026-10-24, session 49)
+## Status (2026-10-25, session 50)
 
 - **Builds and links**: `build_macos/blackops`, Mach-O arm64, and the ASan build
   `build_asan`. Every changed file passes the i386 syntax check (gfx_gl/ and
@@ -715,6 +715,10 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   ever played, and macOS links the system zlib (twice as fast: a start into Hanoi with 7 bots 6.5-7.1 s -> 5.05 s to the
   match, warm disk cache). Decisions session 49. Installed (make_portable.sh, build_macos/make_portable_s49b.log;
   the previous `blackops`, lib/ and launcher in build_macos/loadtimes_s49/revert).
+- **Work on the external SSD** (session 50, the user: "i wanna do more work, but id like it to be done on my external
+  SSD, to not bloat up my internal disk"): the checkout is now `/Volumes/1TB BLUE/blackops-mac` and test runs go in
+  `/Volumes/1TB BLUE/blackops-work` (a scratch game folder, kbg, and the timing tools). Rebuilt and checked there.
+  Decisions session 50.
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1676,6 +1680,36 @@ Pre-existing (wrong on every build):
   string copies through a struct pointer.
 - `mem_fixed.cpp` (HU_SCHEME_FIXED) keeps its header in pointer slots with i386
   sizes; nothing creates a hunk user with that scheme.
+
+## Decisions (session 50)
+
+- **Where**: the user's external SSD, `/Volumes/1TB BLUE` (APFS over USB, so links, executable bits and codesign work as
+  on the internal disk; 43 GB free then). The checkout was copied with rsync, without the build objects, to
+  `/Volumes/1TB BLUE/blackops-mac`, next to the user's other projects there (openmohaa-metal, gtav). build_macos was
+  configured again, as a CMake cache names its source folder (a full build: 36 s); its other folders (shaderlib, the
+  install and revert folders, the logs) came along. The old checkout, ~/Documents/blackops-mac, was in iCloud Drive
+  (Desktop and Documents sync), which uploaded the build folder too and left conflict copies in it
+  ("build 2.ninja", "compile_commands 2.json"). After a comparison (rsync: only the files changed since differ, the
+  same branches, no stash) it went to the Trash at the user's word (`mv` into ~/.Trash: Finder's delete of the iCloud
+  folder timed out); the space comes back when the Trash is emptied.
+- **The work folder**: `/Volumes/1TB BLUE/blackops-work` (README.txt there). `kbg/` replaces /tmp/claude-501/kbg (links to
+  the game folder's main/*.iwd, zone, lib, kb_shaders and localization.txt; its own players/ starts empty). `tools/` has
+  session 49's timing scripts with paths relative to it: `ab.sh <binary> <label>` copies a build into kbg, starts Hanoi
+  with the launcher's 7 bots and quits a second into the match (log in `logs/`, then "common, map, active, exit");
+  `run_timed.sh` (timestamped output, `script` retried on "tcgetattr"); `winwatch`/`winlist` (the game's windows with
+  alpha > 0.05). Screenshots, samples and logs of later sessions go here, not in /tmp or the session scratchpad.
+- **Checked**: three starts into Hanoi from kbg with the SSD build: a fresh profile 11.4 s to the match (every pipeline
+  compiled, mp_hanoi.bin written, 12 MB), then 7.4 s and 5.4 s (common_mp 1.2 s, the map 1.6 s, the quit 2.1 s), as on
+  the internal disk in session 49 (5.05-5.3 s). The space in the path: the search path, the pipeline cache and the stats
+  all under it, and the log has only the usual lines (the 82 "Could not load" of every start).
+- **The DLC backup** (`codbo_wwii_guns_backup`, the zombie maps for kb_dlc_weapons.ff) is on the SSD, no longer next to
+  the game folder, so make_portable.sh's default misses it (session 49's install kept the installed zone:
+  make_portable_s49b.log); installs pass `--dlc-sources "/Volumes/1TB BLUE/codbo_wwii_guns_backup"`. `--sources` checked
+  it has them.
+- **Left on the internal disk**: the game folder (~/Documents/Games/codbo, 4.1 GB with the 831 MB pipeline cache; the
+  user's install), Homebrew, the system's Metal shader cache (/var/folders/.../C/com.apple.metal, 2.8 GB, which macOS
+  manages), and the agent's own transcripts and scratchpad. Session 49's scratch files in /tmp/claude-501 (4 GB: the
+  screenshots, the copy of the user's pipeline cache) were deleted.
 
 ## Decisions (session 49)
 

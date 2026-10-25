@@ -26,8 +26,16 @@ and the gfx_gl/ files (they include the macOS GLEW header).
 Game data: /Users/pstn/Documents/Games/codbo. From that directory:
 
 ```sh
-/Users/pstn/Documents/kisakblack-mac/build_macos/blackops +set dedicated 1 +set developer 1
+"/Volumes/1TB BLUE/blackops-mac/build_macos/blackops" +set dedicated 1 +set developer 1
 ```
+
+The checkout and the work live on the user's external SSD, to keep the internal disk free (HANDOFF,
+Decisions session 50): the checkout is `/Volumes/1TB BLUE/blackops-mac`, and test runs go in
+`/Volumes/1TB BLUE/blackops-work` (README.txt there): `kbg/` is a scratch game folder (links to the game
+folder's archives, zone, lib and shaders; its own `blackops`, `players/` and logs), `tools/` holds a timed
+start (`ab.sh <binary> <label>`, into `../logs`) and a window watcher. Screenshots, samples, logs and other
+scratch folders go there too, not in /tmp or the session scratchpad (both on the internal disk). The space
+in the path works for the game and the tools; quote it.
 
 The game folder (base path `fs_b`, zones, and everything the game writes: config,
 stats, logs, screenshots) is the executable's directory when `main/` and `zone/`
@@ -240,9 +248,10 @@ mp/weaponOptions.csv from tools/dlc_weapons_*, the Thompson's suppressor (`thomp
 silencer on both Thompson models, the Black Ops-era suppressed Thompson shots), and 7 suppressed shot sounds; ~10 s, in
 build_macos/dlc_weapons) from the World at War zombie maps; `--sources <game dir>` checks a folder has them. The user's
 game folder has no zombie zones since session 36 (HANDOFF, Decisions session 36): they come from the backup folder
-/Users/pstn/Documents/Games/codbo_wwii_guns_backup (README.txt there; read only) with `--extra-sources <dir>`, which
+/Volumes/1TB BLUE/codbo_wwii_guns_backup (README.txt there; read only) with `--extra-sources <dir>`, which
 make_portable.sh passes (`--dlc-sources <dir>`, by default the `codbo_wwii_guns_backup` next to the game folder;
-without one it keeps the installed zone; HANDOFF, Decisions session 38). The game loads it at startup after common_mp; to try a
+without one it keeps the installed zone; HANDOFF, Decisions session 38). The backup is no longer next to the user's
+game folder, so installs into it pass `--dlc-sources "/Volumes/1TB BLUE/codbo_wwii_guns_backup"`. The game loads it at startup after common_mp; to try a
 new one, link it as `zone/Common/kb_dlc_weapons.ff` of a scratch game folder (links to `main`,
 `zone/English` and every `zone/Common` file). Create a Class from KB_MENU_CMDS: HANDOFF, Decisions
 session 27 (the console sequences). A zone with weapons outside the weapon table (`loadzone`, then
