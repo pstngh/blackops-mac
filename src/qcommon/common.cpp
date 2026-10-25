@@ -29,6 +29,9 @@
 #include "dvar_cmds.h"
 #include <win32/win_shared.h>
 #include "com_clients.h"
+#if !defined(_WIN32) && !defined(KISAK_DEDICATED)
+#include <platform/sdl/sdl_display.h>   // Sys_HideGameWindow
+#endif
 #include <client/cl_keys.h>
 #include <win32/win_local.h>
 #include <client/splitscreen.h>
@@ -772,6 +775,11 @@ void __cdecl    Com_Quit_f()
     int localClientNum; // [esp+0h] [ebp-4h]
 
     Com_Printf(0, "quitting...\n");
+#if !defined(_WIN32) && !defined(KISAK_DEDICATED)
+    // The window goes at once, not after the shutdown below (sound, the server, the Metal
+    // pipeline cache file: seconds of a black window).
+    Sys_HideGameWindow();
+#endif
     R_PopRemoteScreenUpdate();
     Com_SyncThreads();
     Sys_EnterCriticalSection(CRITSECT_COM_ERROR);
@@ -2518,6 +2526,10 @@ void __cdecl Com_UnloadLevelFastFiles()
     }
 }
 
+// Set by the renderer for the start of a map's load: the Metal backend opens the map's pipeline
+// cache file then (HANDOFF, Decisions session 49). Main thread, with the map's name.
+void (*g_kbRendererLevelStart)(const char *mapName);
+
 void __cdecl Com_LoadLevelFastFiles(char *mapName)
 {
     int ControllerIndex; // eax
@@ -2529,6 +2541,8 @@ void __cdecl Com_LoadLevelFastFiles(char *mapName)
     int zoneCount; // [esp+104h] [ebp-4h]
 
     zoneCount = 0;
+    if ( g_kbRendererLevelStart )
+        g_kbRendererLevelStart(mapName);
     DB_ResetZoneSize(0);
     UI_SetLoadingScreenMaterial(mapName);
     Com_sprintf(levelPatchZoneName, 0x40u, "%s_patch", mapName);

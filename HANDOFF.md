@@ -707,6 +707,14 @@ Apple Silicon has no 32-bit mode, so this is also the engine's first 64-bit port
   the game's own map-menu pictures, and a click on a tile chooses it. On branch
   feat/launcher-map-picker (Decisions session 49). Installed in the game folder (tools/launcher/build.sh: icon and
   identifier kept, 27 pictures); the previous launcher is in build_macos/launcher_s49/revert.
+- **Load and quit times** (session 49, the user: "theres a long loading and quitting black screen. any thing we can do
+  about that? to speend them up"): the start sat 29 s on a black window opening the user's whole pipeline cache (23 maps,
+  831 MB) before anything else; now 0.2-0.5 s (menus.bin, and each map's file behind its loading screen). A quit hides
+  the window at once (0.1-0.25 s; the shutdown, 1-5 s with the cache file's write, goes on unseen), the cache file is
+  rewritten only when something in it compiled, a start into a map skips the second's wait for streamed sounds when none
+  ever played, and macOS links the system zlib (twice as fast: a start into Hanoi with 7 bots 6.5-7.1 s -> 5.05 s to the
+  match, warm disk cache). Decisions session 49. Installed (make_portable.sh, build_macos/make_portable_s49b.log;
+  the previous `blackops`, lib/ and launcher in build_macos/loadtimes_s49/revert).
 - Diagnostics: `KB_FPS=<seconds>` (1 if empty) prints fps, frame time average and
   maximum, the buffer swap's average time, and per frame the draw calls, StretchRect
   blits, buffer uploads (count, KB) and buffer storage orphaned by DISCARD locks, to
@@ -1697,6 +1705,40 @@ Pre-existing (wrong on every build):
   `blackops ... +map mp_kowloon`. The first (sheet) version: choosing Random started a random installed map
   (mp_berlinwall2); build.sh in a folder without main/ kept the installed app's 27 pictures; in an empty folder the app
   has none and shows the gray tiles (no map packs listed: no zone). Escape closing the window isn't tested.
+
+- **Load and quit, measured** (scratch folder, launcher-style start: TDM, 7 managed bots, the user's cache copied in): the
+  black window at start was MetalPipelineCache::open making an MTLBinaryArchive of every map's file (~35 ms a MB): 29 s
+  for the user's 831 MB (3 files, 32 MB, took 0.46 s in the scratch profile, which hid it). The loading screen itself is
+  drawn from the second frame (screenshots). The quit spent 1 s in SND_Shutdown's `Sleep(1000)` and 1-4 s writing the
+  map's cache file (0.8-1.3 s per ~300 pipelines; the user's files are 25-60 MB), all on a black window.
+- **The pipeline cache, per map**: open() checks the stamp and opens only menus.bin; Com_LoadLevelFastFiles calls
+  `g_kbRendererLevelStart` (common.cpp, null without the Metal device), whose beginMap drops the last map's file at once and
+  opens the new one on the writer queue (Hanoi's 57 MB: 2.1 s, done before common_mp finished loading; the queue also
+  orders it after a write of the same file). Lookups take the files under a mutex. endMap keeps the file when no pipeline
+  or function compiled ("<map>.bin kept, N pipelines all from the files"); a map that compiled anything is written as before
+  (what it drew; its file can shrink and regrow, as before).
+- **Quit**: Com_Quit_f calls Sys_HideGameWindow first (sdl_window.cpp; the window as KB_GLNoteWindowSize saw it, cleared when
+  a renderer destroys it; not on Windows or the dedicated build). SDL_HideWindow alone changes nothing on screen while the
+  main thread is busy: macOS applies the order-out (a fade to alpha 0; the window stays in the window list until the
+  process ends) at a run loop turn, so a 20 ms CFRunLoopRunInMode follows. Checked with a watcher of the on-screen windows'
+  alpha (CGWindowList): gone 0.11-0.25 s after `quit`, the process 1-5 s later.
+- **FS_Restart's second** (`NET_Sleep(1000)` after SND_StopSounds, so streamed sounds stop reading before
+  SND_StreamCloseFiles closes their files; the readers hold no stream mutex): skipped when SND_StreamFilesIdle (no stream
+  opened since the files last closed, none in use), asked after SND_StopSounds, which waits for the sound thread (so the
+  streams its queued commands opened count): then the stream thread never had a request. A start straight into a map
+  (the launcher's Play) skips it; a map change in a match waits as before (checked: Nuketown -> Cracked, 1.00 s gap).
+- **zlib**: the zone loader waits on the render thread for each texture (Sys_WaitResourcesFlushedEvent, ~2.8 s of a load),
+  which inflates it from main/*.iwd with src/zlib, 1.2.3: 1.7 s of inflate_fast in a 9 s sample. The system's zlib 1.2.12
+  inflates the game's textures at 662 MB/s against 345 (888 textures, 274 MB). macos.cmake marks src/zlib's sources header
+  only, defines KISAK_SYSTEM_ZLIB and links `z`; src/zlib/zlib.h then includes the system header first (its z_stream has
+  the `reserved` field the bundled one dropped, so inflateInit's size check matches the library). Linux and Windows keep
+  src/zlib. Alternating 3 starts each, warm disk cache: common_mp 1.8-2.0 s -> 1.1 s, mp_hanoi 2.0-2.3 s -> 1.4 s, the match
+  at 6.5-7.1 s -> 5.05 s. Textures and the world render as before (screenshots: class menu icons, Nuketown).
+- **Checked**: scratch folder runs above (menu start and quit, Hanoi, Nuketown -> Cracked with streams playing), check_file.py
+  natively and `--i386` (common.cpp, com_files.cpp, snd_stream.cpp clean; sdl_window.cpp and glcontext_sdl.cpp only the
+  known SDL/GLU header artefacts). Later runs were slowed by another program of the user's (2 cores) and Spotlight
+  indexing after the install: 7-11 s to the match and slow quits right after spawning (the render thread still compiling
+  shaders; the quit waits for it in Com_SyncThreads).
 
 ## Decisions (session 48)
 

@@ -187,6 +187,7 @@ void Com_LoadUiFastFile();
 void __cdecl Com_LoadMapLoadingScreenFastFile(const char *mapName);
 void __cdecl Com_UnloadLevelFastFiles();
 void __cdecl Com_LoadLevelFastFiles(char *mapName);
+extern void (*g_kbRendererLevelStart)(const char *mapName);   // the renderer, at a map's load (Metal pipeline cache)
 char *__cdecl Com_GetLevelSharedFastFile(char *mapName);
 void Com_LoadCommonFastFile();
 bool Com_KbAddDlcWeaponsZone(struct XZoneInfo *zoneInfo);

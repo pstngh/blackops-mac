@@ -1,4 +1,5 @@
 #include "snd_stream.h"
+#include <atomic>
 #include <qcommon/threads.h>
 #include <universal/physicalmemory.h>
 #include <tl/tl_system.h>
@@ -11,6 +12,8 @@ char *g_snd_stream_buffer;
 snd_stream *g_snd_streams;
 snd_buffer *g_snd_buffers;
 volatile unsigned int g_snd_stream_time;
+// Streams opened since the stream files were last closed (SND_StreamFilesIdle).
+static std::atomic<unsigned> g_kbStreamsOpened;
 snd_stream_file g_snd_stream_files[10];
 snd_pack_file g_snd_pack_files[8];
 
@@ -159,6 +162,7 @@ void __cdecl SND_StreamCloseFiles()
             if ( g_snd_stream_files[j].handle )
                 Snd_FileClose(&g_snd_stream_files[j]);
         }
+        g_kbStreamsOpened = 0;
         for ( k = 0; k < 10; ++k )
         {
             p_mutex = &g_snd_streams[k].mutex;
@@ -174,6 +178,23 @@ void __cdecl SND_StreamCloseFiles()
             //}
         }
     }
+}
+
+// No stream opened since the stream files were last closed, and none in use: the stream thread
+// has had no request, so nothing reads the files (FS_Restart then skips its second's wait).
+bool SND_StreamFilesIdle()
+{
+    if ( !g_snd_streams || g_kbStreamsOpened )
+        return !g_snd_streams;
+    for ( unsigned int i = 0; i < 10; ++i )
+    {
+        g_snd_streams[i].mutex.Lock();
+        const bool inUse = g_snd_streams[i].in_use != 0;
+        g_snd_streams[i].mutex.Unlock();
+        if ( inUse )
+            return false;
+    }
+    return true;
 }
 
 void __cdecl Snd_StreamOpen(
@@ -254,6 +275,7 @@ void __cdecl Snd_StreamOpen(
     s->prime_size = prime_size;
     s->looping = looping;
     s->in_use = 1;
+    ++g_kbStreamsOpened;
     s->prime_data = prime_data;
     if ( s->prime_size )
     {

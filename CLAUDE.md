@@ -11,6 +11,9 @@ cmake -S . -B build_macos -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build_macos            # -> build_macos/blackops
 ```
 
+The macOS build links the system zlib (twice as fast inflating the game's archives); src/zlib
+is the Linux and Windows builds' (HANDOFF, Decisions session 49).
+
 The Windows (MSVC x86) and Linux (GCC i386) builds must keep working. They can't
 be built here, so check every changed file with
 `python3 tools/check_file.py build_macos --i386 <files>` as well as without
@@ -274,8 +277,10 @@ batch, default 64; a size not used before) gives a cold one to measure with.
 completions, a draw's waits, first uses and frames over 15 ms with the pipelines built in them
 and their ms (timestamps);
 `KB_MTL_COMPILES=<n>` sets the batches Metal compiles at once (default cores - 2). The
-pipeline cache (HANDOFF, Decisions session 20): `players/metal_pipelines/<map>.bin` under fs_h,
-the pipelines each map drew the last time, written at the map's end; a scratch profile starts
+pipeline cache (HANDOFF, Decisions sessions 20 and 49): `players/metal_pipelines/<map>.bin` under fs_h,
+the pipelines each map drew the last time, written at the map's end only when something in it compiled;
+menus.bin opens at startup, a map's file as its load starts (Com_LoadLevelFastFiles), behind the loading
+screen (opening all of them at startup took the user 29 s); a scratch profile starts
 without it, `bench_views.py --home <dir>` keeps one between runs; off under
 `MTL_SHADER_VALIDATION` (Metal's GPU validation crashes reading binary archives).
 `KB_DUMP_MSL=<dir>` writes each translated shader. The shader library (HANDOFF, Decisions

@@ -122,7 +122,10 @@ MetalWindow::~MetalWindow() {
         MetalWindow *w = static_cast<MetalWindow *>(p);
         w->layer = nil;
         if (w->view) SDL_Metal_DestroyView(w->view);
-        if (w->sdlWindow) SDL_DestroyWindow(static_cast<SDL_Window *>(w->sdlWindow));
+        if (w->sdlWindow) {
+            Sys_NoteGameWindow(nullptr);
+            SDL_DestroyWindow(static_cast<SDL_Window *>(w->sdlWindow));
+        }
     }, this);
 }
 

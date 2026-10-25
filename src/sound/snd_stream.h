@@ -113,6 +113,7 @@ void __cdecl Snd_StreamReset(snd_stream *stream);
 void __cdecl Snd_StreamInit();
 void __cdecl Snd_StreamFini();
 void __cdecl SND_StreamCloseFiles();
+bool SND_StreamFilesIdle();   // no stream opened since the files last closed, none in use
 void __cdecl Snd_StreamOpen(
                 unsigned int index,
                 char *filename,

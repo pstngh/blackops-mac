@@ -23,6 +23,12 @@ if (CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
 endif()
 
 target_compile_definitions(${BIN_NAME} PRIVATE KISAK_MP GL_SILENCE_DEPRECATION)
+
+# zlib: the system's, not src/zlib (1.2.3): it inflates the game's archives twice as fast
+# (662 against 345 MB/s on its textures), on the render thread's critical path at a map load
+# (HANDOFF, Decisions session 49). src/zlib/zlib.h includes the system header.
+set_source_files_properties(${KISAK_ZLIB_C} PROPERTIES HEADER_FILE_ONLY ON)
+target_compile_definitions(${BIN_NAME} PRIVATE KISAK_SYSTEM_ZLIB)
 target_compile_options(${BIN_NAME} PRIVATE
     # The decompiled code type-puns through pointer casts (`*(float *)&i64`) and
     # relies on wrapping signed arithmetic, as MSVC compiled it.
@@ -58,6 +64,7 @@ target_link_libraries(${BIN_NAME} PRIVATE
     "-framework Foundation"
     pthread
     m
+    z
 )
 
 set_target_properties(${BIN_NAME} PROPERTIES

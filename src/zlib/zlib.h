@@ -28,6 +28,13 @@
   (zlib format), rfc1951.txt (deflate format) and rfc1952.txt (gzip format).
 */
 
+/* KISAK_SYSTEM_ZLIB (the macOS build, cmake/macos.cmake): the system's zlib, which inflates the
+   game's archives twice as fast as this 1.2.3; its own header, so that z_stream is the library's
+   (this one has no reserved field, as Black Ops' had none). It defines ZLIB_H: the rest is skipped. */
+#ifdef KISAK_SYSTEM_ZLIB
+#include <zlib.h>
+#endif
+
 #ifndef ZLIB_H
 #define ZLIB_H
 

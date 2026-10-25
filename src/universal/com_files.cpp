@@ -2724,7 +2724,11 @@ void __cdecl FS_Restart(int localClientNum, int checksumFeed)
     if (!IsDedicatedServer())
     {
         SND_StopSounds(SND_EVERY_SINGLE_ONE_DONT_ASK_ANY_QUESTIONS);
-        NET_Sleep(1000);
+        // The second lets streamed sounds stop reading their files before they close; with no
+        // stream opened since they last closed (a start straight into a map) nothing reads them.
+        // (The stop waits for the sound thread, so the streams its earlier commands opened count.)
+        if (!SND_StreamFilesIdle())
+            NET_Sleep(1000);
         SND_StreamCloseFiles();
     }
 

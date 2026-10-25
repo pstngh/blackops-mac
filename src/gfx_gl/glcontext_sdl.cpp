@@ -117,6 +117,7 @@ void KB_GLNoteWindowSize(SDL_Window *win) {
     wasFullscreen = fullscreen;
     lastDisplay = display;
     Sys_NoteGameWindowDisplay(display);
+    if (win) Sys_NoteGameWindow(win);
     g_drawableWidth = w;
     g_drawableHeight = h;
     g_windowWidth = pw;
@@ -257,7 +258,7 @@ private:
 
     void destroy() {
         if (ctx_) SDL_GL_DeleteContext(ctx_);
-        if (win_) SDL_DestroyWindow(win_);
+        if (win_) { Sys_NoteGameWindow(nullptr); SDL_DestroyWindow(win_); }
     }
 
     // Main thread: size the window so its pixels are the back buffer's (size_), at

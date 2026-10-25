@@ -36,6 +36,15 @@ static bool MTL_TakeLevelEnd(std::string *map) {
     *map = g_kbLevelEndMap;
     return true;
 }
+// The start of a map's load (Com_LoadLevelFastFiles, main thread): its pipeline cache file opens
+// behind the loading screen.
+extern void (*g_kbRendererLevelStart)(const char *mapName);
+static std::mutex g_kbLevelStartMu;
+static MetalPipelineCache *g_kbLevelStartCache;
+static void MTL_LevelStart(const char *mapName) {
+    std::lock_guard<std::mutex> g(g_kbLevelStartMu);
+    if (g_kbLevelStartCache && mapName && *mapName) g_kbLevelStartCache->beginMap(mapName);
+}
 
 // The Objective-C runtime's autorelease pool calls (what @autoreleasepool compiles to):
 // a pool spans each command buffer, as the engine's render thread has none. Pools nest:
@@ -231,6 +240,11 @@ MetalDevice::MetalDevice(MetalWindow *win, id<MTLDevice> dev, const D3DPRESENT_P
 
     pipelineCache_.open(dev);
     g_kbRendererLevelEnd = MTL_LevelEnd;
+    {
+        std::lock_guard<std::mutex> g(g_kbLevelStartMu);
+        g_kbLevelStartCache = &pipelineCache_;
+    }
+    g_kbRendererLevelStart = MTL_LevelStart;
 
     createBackBuffer();
     Rebind(rt_[0], bbSurface_);
@@ -243,6 +257,11 @@ MetalDevice::MetalDevice(MetalWindow *win, id<MTLDevice> dev, const D3DPRESENT_P
 MetalDevice::~MetalDevice() {
     finishGPU();
     g_kbRendererLevelEnd = nullptr;
+    g_kbRendererLevelStart = nullptr;
+    {
+        std::lock_guard<std::mutex> g(g_kbLevelStartMu);
+        g_kbLevelStartCache = nullptr;
+    }
     std::string map;
     pipelineCache_.endMap(MTL_TakeLevelEnd(&map) ? map : std::string("menus"));
     pipelineCache_.finish();

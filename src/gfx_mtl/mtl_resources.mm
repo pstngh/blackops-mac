@@ -658,11 +658,31 @@ id<MTLLibrary> MetalShaderCompiler::library(const std::shared_ptr<MetalShaderBat
 
 // ---- The pipeline cache ---------------------------------------------------------------
 
+// A map's file name: its name with anything but letters, digits, _ and - as _.
+static std::string PipelineFileName(const std::string &map) {
+    std::string name;
+    for (char c : map) name += isalnum((unsigned char)c) || c == '_' || c == '-' ? c : '_';
+    return name.empty() ? std::string("unnamed") : name;
+}
+
+// A file as an archive to look in; one that can't be read is deleted (it refills).
+static id<MTLBinaryArchive> OpenPipelineFile(id<MTLDevice> dev, NSString *path) {
+    MTLBinaryArchiveDescriptor *ad = [MTLBinaryArchiveDescriptor new];
+    ad.url = [NSURL fileURLWithPath:path];
+    NSError *e = nil;
+    id<MTLBinaryArchive> a = [dev newBinaryArchiveWithDescriptor:ad error:&e];
+    if (!a) {
+        fprintf(stderr, "[mtl] pipeline cache: %s can't be read (%s): deleted, it refills\n", path.UTF8String,
+                e.localizedDescription.UTF8String);
+        [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+    }
+    return a;
+}
+
 void MetalPipelineCache::open(id<MTLDevice> dev) {
     dev_ = dev;
     files_ = @[];
     writer_ = dispatch_queue_create("kb.pipelinecache", DISPATCH_QUEUE_SERIAL);
-    NSError *e = nil;
     const char *sv = getenv("MTL_SHADER_VALIDATION");
     if (sv && strcmp(sv, "0")) {
         // Metal's GPU validation crashes reading any binary archive (-[_MTLBinaryArchive
@@ -687,7 +707,7 @@ void MetalPipelineCache::open(id<MTLDevice> dev) {
         fclose(f);
         while (!made.empty() && (made.back() == '\n' || made.back() == '\r')) made.pop_back();
     }
-    NSMutableArray *files = [NSMutableArray array];
+    unsigned count = 0;
     double bytes = 0;
     for (NSString *n in names) {
         if (![n hasSuffix:@".bin"]) continue;
@@ -697,39 +717,68 @@ void MetalPipelineCache::open(id<MTLDevice> dev) {
             [fm removeItemAtPath:path error:nil];
             continue;
         }
-        MTLBinaryArchiveDescriptor *ad = [MTLBinaryArchiveDescriptor new];
-        ad.url = [NSURL fileURLWithPath:path];
-        if (id<MTLBinaryArchive> a = [dev newBinaryArchiveWithDescriptor:ad error:&e]) {
-            [files addObject:a];
-            bytes += [[fm attributesOfItemAtPath:path error:nil] fileSize];
-        } else {
-            fprintf(stderr, "[mtl] pipeline cache: %s can't be read (%s): deleted, it refills\n", path.UTF8String,
-                    e.localizedDescription.UTF8String);
-            [fm removeItemAtPath:path error:nil];
-        }
+        ++count;
+        bytes += [[fm attributesOfItemAtPath:path error:nil] fileSize];
     }
     if (made != stamp_ && !made.empty())
         fprintf(stderr, "[mtl] pipeline cache: %s was made on %s, this is %s: deleted, it refills\n", dir_.c_str(),
                 made.c_str(), stamp_.c_str());
+    NSString *menus = [dir stringByAppendingPathComponent:@"menus.bin"];
+    if (made == stamp_ && [fm fileExistsAtPath:menus]) menusFile_ = OpenPipelineFile(dev, menus);
+    setMapFile(nil);
+    fprintf(stderr, "[mtl] pipeline cache: %s, %u files, %.1f MB (menus.bin open; a map's file opens as the map "
+                    "loads)\n", dir_.c_str(), count, bytes / 1048576.0);
+}
+
+NSArray *MetalPipelineCache::files() {
+    std::lock_guard<std::mutex> g(filesMu_);
+    return files_;
+}
+
+void MetalPipelineCache::setMapFile(id<MTLBinaryArchive> file) {
+    std::lock_guard<std::mutex> g(filesMu_);
+    mapFile_ = file;
+    NSMutableArray *files = [NSMutableArray array];
+    if (menusFile_) [files addObject:menusFile_];
+    if (mapFile_) [files addObject:mapFile_];
     files_ = files;
-    fprintf(stderr, "[mtl] pipeline cache: %s, %lu files, %.1f MB\n", dir_.c_str(), (unsigned long)files.count,
-            bytes / 1048576.0);
+}
+
+void MetalPipelineCache::beginMap(const std::string &map) {
+    if (dir_.empty()) return;
+    // The last map's file goes now: until this one is open, what it lacks compiles (and is written at the end).
+    setMapFile(nil);
+    const std::string path = dir_ + "/" + PipelineFileName(map) + ".bin";
+    dispatch_async(writer_, ^{
+        if (access(path.c_str(), R_OK) != 0) return;
+        const double t0 = Seconds();
+        if (id<MTLBinaryArchive> a = OpenPipelineFile(dev_, @(path.c_str()))) {
+            setMapFile(a);
+            struct stat st = {};
+            stat(path.c_str(), &st);
+            fprintf(stderr, "[mtl] pipeline cache: opened %s, %.1f MB, %.0f ms\n", path.c_str(), st.st_size / 1048576.0,
+                    (Seconds() - t0) * 1000.0);
+        }
+    });
 }
 
 id<MTLFunction> MetalPipelineCache::function(id<MTLLibrary> lib, MTLFunctionDescriptor *fd, NSError **e) {
-    if (files_.count) {
-        fd.binaryArchives = files_;
+    NSArray *files = this->files();
+    if (files.count) {
+        fd.binaryArchives = files;
         fd.options = MTLFunctionOptionFailOnBinaryArchiveMiss;
         id<MTLFunction> fn = [lib newFunctionWithDescriptor:fd error:nil];
         fd.options = MTLFunctionOptionNone;
         if (fn) { ++mapFunctionHits_; return fn; }
     }
+    ++mapFunctionMisses_;
     return [lib newFunctionWithDescriptor:fd error:e];
 }
 
 id<MTLRenderPipelineState> MetalPipelineCache::pipeline(MTLRenderPipelineDescriptor *pd, NSError **e) {
-    if (files_.count) {
-        pd.binaryArchives = files_;
+    NSArray *files = this->files();
+    if (files.count) {
+        pd.binaryArchives = files;
         if (id<MTLRenderPipelineState> p = [dev_ newRenderPipelineStateWithDescriptor:pd
                                                                                options:MTLPipelineOptionFailOnBinaryArchiveMiss
                                                                             reflection:nil error:nil]) {
@@ -747,13 +796,21 @@ void MetalPipelineCache::use(MTLRenderPipelineDescriptor *pd, MTLFunctionDescrip
 }
 
 // The finished map's archive is written by the writer queue, to a temporary file renamed when
-// complete (a crash mid-write leaves the old file); the next map gets a new archive.
+// complete (a crash mid-write leaves the old file); the next map gets a new archive. Nothing
+// compiled in this map: the files had all of it, and its file stays.
 void MetalPipelineCache::endMap(const std::string &map) {
     mapPipelines_ = (unsigned)map_.size();
-    if (dir_.empty() || map_.empty()) { map_.clear(); ++epoch; return; }
-    std::string name;
-    for (char c : map) name += isalnum((unsigned char)c) || c == '_' || c == '-' ? c : '_';
-    if (name.empty()) name = "unnamed";
+    const bool nothingNew = mapMisses_ == 0 && mapFunctionMisses_ == 0;
+    if (dir_.empty() || map_.empty() || nothingNew) {
+        if (!dir_.empty() && !map_.empty())
+            fprintf(stderr, "[mtl] pipeline cache: %s.bin kept, %u pipelines all from the files\n",
+                    PipelineFileName(map).c_str(), mapPipelines_);
+        map_.clear();
+        mapPipelines_ = mapHits_ = mapMisses_ = mapFunctionHits_ = mapFunctionMisses_ = 0;
+        ++epoch;
+        return;
+    }
+    const std::string name = PipelineFileName(map);
     char counts[160];
     snprintf(counts, sizeof(counts), "%u pipelines (%u built from the files, %u compiled; %u pixel functions from the files)",
              mapPipelines_, mapHits_, mapMisses_, mapFunctionHits_);
@@ -790,7 +847,7 @@ void MetalPipelineCache::endMap(const std::string &map) {
                     st.st_size / 1048576.0, (Seconds() - t0) * 1000.0);
         }
     });
-    mapPipelines_ = mapHits_ = mapMisses_ = mapFunctionHits_ = 0;
+    mapPipelines_ = mapHits_ = mapMisses_ = mapFunctionHits_ = mapFunctionMisses_ = 0;
     ++epoch;
 }
 

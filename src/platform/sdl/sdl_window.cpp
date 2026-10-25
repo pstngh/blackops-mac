@@ -19,6 +19,9 @@
 // with window-relative positions (ClientToScreen is the identity here).
 #include <SDL2/SDL.h>
 #include <windows.h>
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#endif
 #include <atomic>
 #include "sdl_display.h"
 #include "sdl_mainthread.h"
@@ -112,6 +115,20 @@ HMONITOR MonitorFromPoint(POINT pt, DWORD) {
 }
 
 void Sys_NoteGameWindowDisplay(int display) { g_gameWindowDisplay = display > 0 ? display : 0; }
+
+static SDL_Window *g_gameWindow;
+void Sys_NoteGameWindow(SDL_Window *win) { g_gameWindow = win; }
+void Sys_HideGameWindow() {
+    Sys_RunOnMainThread([](void *) {
+        if (!g_gameWindow) return;
+        SDL_HideWindow(g_gameWindow);
+#ifdef __APPLE__
+        // macOS puts the change on screen as the main run loop turns (Core Animation commits
+        // then), which the shutdown wouldn't let it do.
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.02, false);
+#endif
+    }, nullptr);
+}
 
 // The game window's (the screenshot code sizes its capture by this monitor).
 HMONITOR MonitorFromWindow(HWND, DWORD)  { return DisplayMonitor(g_gameWindowDisplay); }

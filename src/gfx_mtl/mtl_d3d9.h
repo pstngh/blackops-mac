@@ -404,15 +404,18 @@ private:
 // archives the game fills itself as it plays, with the compiled code of the pipelines and of
 // the pixel functions specialised for the alpha test, so that later runs skip those compiles
 // (~0.4 ms each when the system's shader cache still has them; when it has dropped them, after
-// another map, the frames where 10-100 pipelines are first used in a match took 20-390 ms). The files
-// are opened at startup and only looked in; what a map draws goes into a new archive, written
-// as that map's file at its end (or "menus" at a quit from the menus), so each file holds what
-// its map drew the last time it was played. (Metal can't write an archive that was read from a
-// file once something is added to it: "expecting 'fragment' stage".) A finished map's pipelines
-// are added to an archive and written by a queue of their own (0.8-1.3 s for ~300 pipelines:
-// not on the render thread). Files made on another macOS build or chip (stamp.txt) are deleted
-// and refilled, with a log line. Off under MTL_SHADER_VALIDATION (Metal's GPU validation crashes
-// reading binary archives). Render thread, but for those writes.
+// another map, the frames where 10-100 pipelines are first used in a match took 20-390 ms). Only
+// looked in: menus.bin from startup, and a map's file from the start of its load (opened by the
+// queue below behind the loading screen, in place of the previous map's); opening every file at
+// startup took 29 s for the user's 23 maps (831 MB, ~35 ms a MB). What a map draws goes into a new
+// archive, written as that map's file at its end (or "menus" at a quit from the menus), unless
+// everything it drew came from the files: then the file stays as it is (a write took 1 s for
+// 8 MB, and the user's are 25-60 MB). (Metal can't write an archive that was read from a file
+// once something is added to it: "expecting 'fragment' stage".) A finished map's pipelines are
+// added to an archive and written by a queue of their own (0.8-1.3 s for ~300 pipelines: not on
+// the render thread). Files made on another macOS build or chip (stamp.txt) are deleted and
+// refilled, with a log line. Off under MTL_SHADER_VALIDATION (Metal's GPU validation crashes
+// reading binary archives). Render thread, but for beginMap and the queue.
 class MetalPipelineCache {
 public:
     void open(id<MTLDevice> dev);
@@ -421,18 +424,24 @@ public:
     id<MTLRenderPipelineState> pipeline(MTLRenderPipelineDescriptor *pd, NSError **e);
     // A pipeline drawn in this map, with its pixel function (fd and lib, or nil): into its file.
     void use(MTLRenderPipelineDescriptor *pd, MTLFunctionDescriptor *fd, id<MTLLibrary> lib);
+    // Main thread, as a map starts loading (`map`: its name): opens its file, in place of the last map's.
+    void beginMap(const std::string &map);
     // Writes this map's file (`map`: the engine's map name, or "menus"); the next map starts anew.
     void endMap(const std::string &map);
     void finish();                           // waits for the files being written
     unsigned epoch = 1;                      // a pipeline's use() is due again when this changes
     unsigned pipelineHits = 0;               // this run, for KB_FPS
 private:
+    NSArray *files();                        // the open files, for a lookup
+    void setMapFile(id<MTLBinaryArchive> file);
     id<MTLDevice> dev_;
-    NSArray *files_;                         // id<MTLBinaryArchive>, read at startup
+    std::mutex filesMu_;                     // files_ and mapFile_ (beginMap's queue swaps them)
+    NSArray *files_;                         // id<MTLBinaryArchive>: menus.bin and mapFile_
+    id<MTLBinaryArchive> menusFile_, mapFile_;
     struct Use { MTLRenderPipelineDescriptor *pd; MTLFunctionDescriptor *fd; id<MTLLibrary> lib; };
     std::vector<Use> map_;                   // what this map drew
     std::string dir_, stamp_;
-    unsigned mapPipelines_ = 0, mapHits_ = 0, mapFunctionHits_ = 0, mapMisses_ = 0;
+    unsigned mapPipelines_ = 0, mapHits_ = 0, mapFunctionHits_ = 0, mapMisses_ = 0, mapFunctionMisses_ = 0;
     dispatch_queue_t writer_;
 };
 
